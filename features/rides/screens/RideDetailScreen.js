@@ -15,40 +15,57 @@ import {
 } from 'react-native';
 import useAppStore from '../../../core/store/index';
 
-const categoryEmojis = {
+const driverCategoryEmojis = {
   airport: '✈️',
-  grocery: '🛒',
+  university: '🎓',
   temple: '🛕',
-  event: '🎉',
   general: '🚗',
 };
 
-const categoryLabels = {
+const driverCategoryLabels = {
   airport: 'Airport Ride',
-  grocery: 'Grocery Run',
-  temple: 'Temple Visit',
-  event: 'Event Ride',
+  university: 'University Ride',
+  temple: 'Temple Ride',
   general: 'General Ride',
+};
+
+const requestCategoryEmojis = {
+  airport: '✈️',
+  university: '🎓',
+  temple: '🛕',
+  general: '🙋',
+};
+
+const requestCategoryLabels = {
+  airport: 'Airport Request',
+  university: 'University Request',
+  temple: 'Temple Request',
+  general: 'Ride Request',
 };
 
 export default function RideDetailScreen({ route, navigation }) {
   const { ride } = route.params;
   const user = useAppStore((state) => state.user);
   const isDriver = user?.id === ride.driver_id;
+  const isRequest = ride.ride_type === 'request';
+  const isRequester = user?.id === ride.requester_id;
   const rideDate = new Date(ride.ride_date);
+
+  const categoryEmojis = isRequest ? requestCategoryEmojis : driverCategoryEmojis;
+  const categoryLabels = isRequest ? requestCategoryLabels : driverCategoryLabels;
 
   function handleCall() {
     Alert.alert(
-      'Contact Driver',
-      'To get the driver\'s contact, send them a message first.',
+      isRequest ? 'Contact Rider' : 'Contact Driver',
+      'To get their contact, send them a message first.',
       [{ text: 'OK' }]
     );
   }
 
   function handleWhatsApp() {
     Alert.alert(
-      'Contact Driver',
-      'To get the driver\'s WhatsApp, send them a message first.',
+      isRequest ? 'Contact Rider' : 'Contact Driver',
+      'To get their WhatsApp, send them a message first.',
       [{ text: 'OK' }]
     );
   }
@@ -65,12 +82,18 @@ export default function RideDetailScreen({ route, navigation }) {
     <ScrollView style={styles.container}>
 
       {/* Banner */}
-      <View style={styles.banner}>
+      <View style={[
+        styles.banner,
+        { backgroundColor: isRequest ? '#F5EEF8' : '#E8F8F0' }
+      ]}>
         <Text style={styles.bannerEmoji}>
-          {categoryEmojis[ride.category] || '🚗'}
+          {categoryEmojis[ride.category] || (isRequest ? '🙋' : '🚗')}
         </Text>
-        <Text style={styles.bannerLabel}>
-          {categoryLabels[ride.category] || 'Ride'}
+        <Text style={[
+          styles.bannerLabel,
+          { color: isRequest ? '#9B59B6' : '#27AE60' }
+        ]}>
+          {categoryLabels[ride.category] || (isRequest ? 'Ride Request' : 'Ride Offer')}
         </Text>
       </View>
 
@@ -112,22 +135,32 @@ export default function RideDetailScreen({ route, navigation }) {
             <Text style={styles.detailValue}>
               {rideDate.toLocaleTimeString([], {
                 hour: '2-digit',
-                minute: '2-digit'
+                minute: '2-digit',
               })}
             </Text>
           </View>
           <View style={styles.detailCard}>
-            <Text style={styles.detailEmoji}>👤</Text>
-            <Text style={styles.detailLabel}>Seats</Text>
+            <Text style={styles.detailEmoji}>
+              {isRequest ? '👥' : '👤'}
+            </Text>
+            <Text style={styles.detailLabel}>
+              {isRequest ? 'People' : 'Seats'}
+            </Text>
             <Text style={styles.detailValue}>
-              {ride.seats_available} left
+              {isRequest
+                ? `${ride.seats_available} ${ride.seats_available === 1 ? 'person' : 'people'}`
+                : `${ride.seats_available} left`}
             </Text>
           </View>
           <View style={styles.detailCard}>
             <Text style={styles.detailEmoji}>💵</Text>
             <Text style={styles.detailLabel}>Cost</Text>
             <Text style={[styles.detailValue, { color: '#27AE60' }]}>
-              {ride.cost_share ? `$${ride.cost_share}` : 'Free'}
+              {ride.cost_share
+                ? `$${ride.cost_share}`
+                : isRequest
+                ? 'Open'
+                : 'Free'}
             </Text>
           </View>
         </View>
@@ -142,20 +175,26 @@ export default function RideDetailScreen({ route, navigation }) {
         {/* Notes */}
         {ride.notes && (
           <>
-            <Text style={styles.sectionTitle}>Driver Notes</Text>
+            <Text style={styles.sectionTitle}>
+              {isRequest ? 'Rider Notes' : 'Driver Notes'}
+            </Text>
             <View style={styles.notesCard}>
               <Text style={styles.notesText}>{ride.notes}</Text>
             </View>
           </>
         )}
 
-        {/* Contact Buttons */}
-        {!isDriver && (
+        {/* Contact Buttons — show for non-owners */}
+        {!isDriver && !isRequester && (
           <>
-            <Text style={styles.sectionTitle}>Contact Driver</Text>
+            <Text style={styles.sectionTitle}>
+              {isRequest ? 'Contact Rider' : 'Contact Driver'}
+            </Text>
             <View style={styles.contactButtons}>
               <TouchableOpacity
-                style={[styles.contactButton, { backgroundColor: '#2ECC71' }]}
+                style={[styles.contactButton, {
+                  backgroundColor: isRequest ? '#9B59B6' : '#2ECC71'
+                }]}
                 onPress={handleCall}
               >
                 <Text style={styles.contactButtonText}>📞 Call</Text>
@@ -177,10 +216,19 @@ export default function RideDetailScreen({ route, navigation }) {
         )}
 
         {/* Driver Badge */}
-        {isDriver && (
-          <View style={styles.driverBadge}>
-            <Text style={styles.driverBadgeText}>
+        {isDriver && !isRequest && (
+          <View style={styles.ownerBadge}>
+            <Text style={styles.ownerBadgeText}>
               🚗 You are the driver for this ride
+            </Text>
+          </View>
+        )}
+
+        {/* Requester Badge */}
+        {isRequester && isRequest && (
+          <View style={[styles.ownerBadge, { backgroundColor: '#F5EEF8' }]}>
+            <Text style={[styles.ownerBadgeText, { color: '#9B59B6' }]}>
+              🙋 You posted this ride request
             </Text>
           </View>
         )}
@@ -203,7 +251,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F9FA',
   },
   banner: {
-    backgroundColor: '#E8F8F0',
     padding: 30,
     alignItems: 'center',
     gap: 8,
@@ -214,7 +261,6 @@ const styles = StyleSheet.create({
   bannerLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#27AE60',
   },
   content: {
     padding: 20,
@@ -285,7 +331,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   detailValue: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: '#1A1A1A',
     textAlign: 'center',
@@ -337,14 +383,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  driverBadge: {
+  ownerBadge: {
     backgroundColor: '#E8F8F0',
     borderRadius: 10,
     padding: 14,
     alignItems: 'center',
     marginBottom: 16,
   },
-  driverBadgeText: {
+  ownerBadgeText: {
     color: '#27AE60',
     fontWeight: '600',
     fontSize: 14,

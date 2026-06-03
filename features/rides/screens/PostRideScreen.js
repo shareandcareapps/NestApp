@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { createRide } from '../services/ridesService';
 import useAppStore from '../../../core/store/index';
+import { DatePicker, TimePicker } from '../../../core/components/DateTimePicker';
 
 // ─── Category Config ───────────────────────────
 const CATEGORIES = [
@@ -30,8 +31,8 @@ export default function PostRideScreen({ navigation }) {
   const [postType, setPostType] = useState('offer');
   const [fromLocation, setFromLocation] = useState('');
   const [toLocation, setToLocation] = useState('');
-  const [rideDate, setRideDate] = useState('');
-  const [rideTime, setRideTime] = useState('');
+  const [rideDate, setRideDate] = useState(null);
+  const [rideTime, setRideTime] = useState(null);
   const [seats, setSeats] = useState('1');
   const [costShare, setCostShare] = useState('');
   const [pricingType, setPricingType] = useState('per_mile');
@@ -57,8 +58,12 @@ export default function PostRideScreen({ navigation }) {
       Alert.alert('Error', 'Please enter drop location');
       return;
     }
-    if (!rideDate || !rideTime) {
-      Alert.alert('Error', 'Please enter date and time');
+    if (!rideDate) {
+      Alert.alert('Error', 'Please select a date');
+      return;
+    }
+    if (!rideTime) {
+      Alert.alert('Error', 'Please select a time');
       return;
     }
     if (!category) {
@@ -66,11 +71,14 @@ export default function PostRideScreen({ navigation }) {
       return;
     }
 
-    const combinedDateTime = new Date(`${rideDate}T${rideTime}`);
-    if (isNaN(combinedDateTime.getTime())) {
-      Alert.alert('Error', 'Please enter valid date (YYYY-MM-DD) and time (HH:MM)');
-      return;
-    }
+    // Combine date and time into one DateTime
+    const combinedDateTime = new Date(
+      rideDate.getFullYear(),
+      rideDate.getMonth(),
+      rideDate.getDate(),
+      rideTime.getHours(),
+      rideTime.getMinutes(),
+    );
 
     // Calculate final cost
     let finalCost = null;
@@ -203,24 +211,20 @@ export default function PostRideScreen({ navigation }) {
           onChangeText={setToLocation}
         />
 
-        {/* Date */}
-        <Text style={styles.label}>Date * (YYYY-MM-DD)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. 2026-06-10"
-          placeholderTextColor="#999"
+        {/* Date Picker */}
+        <Text style={styles.label}>Date *</Text>
+        <DatePicker
           value={rideDate}
-          onChangeText={setRideDate}
+          onChange={setRideDate}
+          label="date"
         />
 
-        {/* Time */}
-        <Text style={styles.label}>Time * (HH:MM)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. 08:30"
-          placeholderTextColor="#999"
+        {/* Time Picker */}
+        <Text style={styles.label}>Time *</Text>
+        <TimePicker
           value={rideTime}
-          onChangeText={setRideTime}
+          onChange={setRideTime}
+          label="time"
         />
 
         {/* Seats — only for drivers */}
