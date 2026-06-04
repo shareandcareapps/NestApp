@@ -58,7 +58,7 @@ function RideCard({ item, onPress, colors }) {
         )}
         <View style={[styles.pill, { backgroundColor: colors.successBackground, borderColor: '#2ECC71' }]}>
           <Text style={[styles.cashPillText, { color: colors.successText }]}>
-            {item.cost_share ? `$${item.cost_share} cash` : isRequest ? 'Price open' : 'Free'}
+            {item.cost_share ? `$${item.cost_share} / person` : isRequest ? 'Price open' : 'Free'}
           </Text>
         </View>
       </View>

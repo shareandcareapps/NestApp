@@ -128,7 +128,7 @@ export default function RideDetailScreen({ route, navigation }) {
             {
               emoji: '💵',
               label: 'Cost',
-              value: ride.cost_share ? `$${ride.cost_share}` : isRequest ? 'Open' : 'Free',
+              value: ride.cost_share ? `$${ride.cost_share}/person` : isRequest ? 'Open' : 'Free',
               color: colors.successText,
             },
           ].map((detail) => (
