@@ -1,408 +1,155 @@
 // features/rides/screens/RideDetailScreen.js
-// RIDES FEATURE — Ride detail screen
-// GOLDEN RULE 1: Never imports from other features
-// GOLDEN RULE 3: All data calls go through ridesService only
-
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  Linking,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import useAppStore from '../../../core/store/index';
+import { useTheme } from '../../../core/theme/ThemeContext';
 
-const driverCategoryEmojis = {
-  airport: '✈️',
-  university: '🎓',
-  temple: '🛕',
-  general: '🚗',
-};
-
-const driverCategoryLabels = {
-  airport: 'Airport Ride',
-  university: 'University Ride',
-  temple: 'Temple Ride',
-  general: 'General Ride',
-};
-
-const requestCategoryEmojis = {
-  airport: '✈️',
-  university: '🎓',
-  temple: '🛕',
-  general: '🙋',
-};
-
-const requestCategoryLabels = {
-  airport: 'Airport Request',
-  university: 'University Request',
-  temple: 'Temple Request',
-  general: 'Ride Request',
-};
+const driverCategoryEmojis = { airport: '✈️', university: '🎓', temple: '🛕', general: '🚗' };
+const driverCategoryLabels = { airport: 'Airport Ride', university: 'University Ride', temple: 'Temple Ride', general: 'General Ride' };
+const requestCategoryEmojis = { airport: '✈️', university: '🎓', temple: '🛕', general: '🙋' };
+const requestCategoryLabels = { airport: 'Airport Request', university: 'University Request', temple: 'Temple Request', general: 'Ride Request' };
 
 export default function RideDetailScreen({ route, navigation }) {
   const { ride } = route.params;
   const user = useAppStore((state) => state.user);
+  const colors = useTheme();
   const isDriver = user?.id === ride.driver_id;
   const isRequest = ride.ride_type === 'request';
   const isRequester = user?.id === ride.requester_id;
   const rideDate = new Date(ride.ride_date);
-
   const categoryEmojis = isRequest ? requestCategoryEmojis : driverCategoryEmojis;
   const categoryLabels = isRequest ? requestCategoryLabels : driverCategoryLabels;
 
-  function handleCall() {
-    Alert.alert(
-      isRequest ? 'Contact Rider' : 'Contact Driver',
-      'To get their contact, send them a message first.',
-      [{ text: 'OK' }]
-    );
-  }
-
-  function handleWhatsApp() {
-    Alert.alert(
-      isRequest ? 'Contact Rider' : 'Contact Driver',
-      'To get their WhatsApp, send them a message first.',
-      [{ text: 'OK' }]
-    );
-  }
-
-  function handleMessage() {
-    Alert.alert(
-      'Coming Soon',
-      'In-app messaging will be available soon!',
-      [{ text: 'OK' }]
-    );
+  async function handleMessage() {
+    try {
+      const { getOrCreateConversation } = require('../../../features/messages/services/messagesService');
+      const otherUserId = isRequest ? ride.requester_id : ride.driver_id;
+      const conversation = await getOrCreateConversation(user.id, otherUserId);
+      navigation.navigate('Messages', { screen: 'Chat', params: { conversation, otherProfile: { full_name: isRequest ? 'Rider' : 'Driver' } } });
+    } catch (error) {
+      Alert.alert('Error', 'Could not open chat. Please try again.');
+    }
   }
 
   return (
-    <ScrollView style={styles.container}>
-
-      {/* Banner */}
-      <View style={[
-        styles.banner,
-        { backgroundColor: isRequest ? '#F5EEF8' : '#E8F8F0' }
-      ]}>
-        <Text style={styles.bannerEmoji}>
-          {categoryEmojis[ride.category] || (isRequest ? '🙋' : '🚗')}
-        </Text>
-        <Text style={[
-          styles.bannerLabel,
-          { color: isRequest ? '#9B59B6' : '#27AE60' }
-        ]}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.banner, { backgroundColor: isRequest ? '#F5EEF8' : colors.successBackground }]}>
+        <Text style={styles.bannerEmoji}>{categoryEmojis[ride.category] || (isRequest ? '🙋' : '🚗')}</Text>
+        <Text style={[styles.bannerLabel, { color: isRequest ? '#9B59B6' : colors.successText }]}>
           {categoryLabels[ride.category] || (isRequest ? 'Ride Request' : 'Ride Offer')}
         </Text>
       </View>
-
       <View style={styles.content}>
-
-        {/* Route Card */}
-        <View style={styles.routeCard}>
+        <View style={[styles.routeCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.routeRow}>
             <View style={styles.routePoint}>
-              <View style={[styles.dot, { backgroundColor: '#2ECC71' }]} />
+              <View style={[styles.dot, { backgroundColor: colors.success }]} />
               <View style={styles.routeInfo}>
-                <Text style={styles.routeLabel}>FROM</Text>
-                <Text style={styles.routeText}>{ride.from_location}</Text>
+                <Text style={[styles.routeLabel, { color: colors.textLight }]}>FROM</Text>
+                <Text style={[styles.routeText, { color: colors.textPrimary }]}>{ride.from_location}</Text>
               </View>
             </View>
-            <View style={styles.routeLine} />
+            <View style={[styles.routeLine, { backgroundColor: colors.border }]} />
             <View style={styles.routePoint}>
-              <View style={[styles.dot, { backgroundColor: '#E63946' }]} />
+              <View style={[styles.dot, { backgroundColor: colors.primary }]} />
               <View style={styles.routeInfo}>
-                <Text style={styles.routeLabel}>TO</Text>
-                <Text style={styles.routeText}>{ride.to_location}</Text>
+                <Text style={[styles.routeLabel, { color: colors.textLight }]}>TO</Text>
+                <Text style={[styles.routeText, { color: colors.textPrimary }]}>{ride.to_location}</Text>
               </View>
             </View>
           </View>
         </View>
-
-        {/* Details Grid */}
         <View style={styles.detailsGrid}>
-          <View style={styles.detailCard}>
-            <Text style={styles.detailEmoji}>📅</Text>
-            <Text style={styles.detailLabel}>Date</Text>
-            <Text style={styles.detailValue}>
-              {rideDate.toLocaleDateString()}
-            </Text>
-          </View>
-          <View style={styles.detailCard}>
-            <Text style={styles.detailEmoji}>🕐</Text>
-            <Text style={styles.detailLabel}>Time</Text>
-            <Text style={styles.detailValue}>
-              {rideDate.toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </Text>
-          </View>
-          <View style={styles.detailCard}>
-            <Text style={styles.detailEmoji}>
-              {isRequest ? '👥' : '👤'}
-            </Text>
-            <Text style={styles.detailLabel}>
-              {isRequest ? 'People' : 'Seats'}
-            </Text>
-            <Text style={styles.detailValue}>
-              {isRequest
-                ? `${ride.seats_available} ${ride.seats_available === 1 ? 'person' : 'people'}`
-                : `${ride.seats_available} left`}
-            </Text>
-          </View>
-          <View style={styles.detailCard}>
-            <Text style={styles.detailEmoji}>💵</Text>
-            <Text style={styles.detailLabel}>Cost</Text>
-            <Text style={[styles.detailValue, { color: '#27AE60' }]}>
-              {ride.cost_share
-                ? `$${ride.cost_share}`
-                : isRequest
-                ? 'Open'
-                : 'Free'}
-            </Text>
-          </View>
+          {[
+            { emoji: '📅', label: 'Date', value: rideDate.toLocaleDateString() },
+            { emoji: '🕐', label: 'Time', value: rideDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
+            { emoji: isRequest ? '👥' : '👤', label: isRequest ? 'People' : 'Seats', value: isRequest ? `${ride.seats_available} ${ride.seats_available === 1 ? 'person' : 'people'}` : `${ride.seats_available} left` },
+            { emoji: '💵', label: 'Cost', value: ride.cost_share ? `$${ride.cost_share}` : isRequest ? 'Open' : 'Free', color: colors.successText },
+          ].map((detail) => (
+            <View key={detail.label} style={[styles.detailCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={styles.detailEmoji}>{detail.emoji}</Text>
+              <Text style={[styles.detailLabel, { color: colors.textLight }]}>{detail.label}</Text>
+              <Text style={[styles.detailValue, { color: detail.color || colors.textPrimary }]}>{detail.value}</Text>
+            </View>
+          ))}
         </View>
-
-        {/* Cash Notice */}
-        <View style={styles.cashNotice}>
-          <Text style={styles.cashNoticeText}>
-            💵 Payment is cash only — pay the driver directly
-          </Text>
+        <View style={[styles.cashNotice, { backgroundColor: colors.successBackground }]}>
+          <Text style={[styles.cashNoticeText, { color: colors.successText }]}>💵 Payment is cash only — pay the driver directly</Text>
         </View>
-
-        {/* Notes */}
         {ride.notes && (
           <>
-            <Text style={styles.sectionTitle}>
-              {isRequest ? 'Rider Notes' : 'Driver Notes'}
-            </Text>
-            <View style={styles.notesCard}>
-              <Text style={styles.notesText}>{ride.notes}</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{isRequest ? 'Rider Notes' : 'Driver Notes'}</Text>
+            <View style={[styles.notesCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.notesText, { color: colors.textSecondary }]}>{ride.notes}</Text>
             </View>
           </>
         )}
-
-        {/* Contact Buttons — show for non-owners */}
         {!isDriver && !isRequester && (
           <>
-            <Text style={styles.sectionTitle}>
-              {isRequest ? 'Contact Rider' : 'Contact Driver'}
-            </Text>
-            <View style={styles.contactButtons}>
-              <TouchableOpacity
-                style={[styles.contactButton, {
-                  backgroundColor: isRequest ? '#9B59B6' : '#2ECC71'
-                }]}
-                onPress={handleCall}
-              >
-                <Text style={styles.contactButtonText}>📞 Call</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.contactButton, { backgroundColor: '#25D366' }]}
-                onPress={handleWhatsApp}
-              >
-                <Text style={styles.contactButtonText}>💬 WhatsApp</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.contactButton, { backgroundColor: '#1D3557' }]}
-                onPress={handleMessage}
-              >
-                <Text style={styles.contactButtonText}>✉️ Message</Text>
-              </TouchableOpacity>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{isRequest ? 'Contact Rider' : 'Contact Driver'}</Text>
+            <TouchableOpacity
+              style={[styles.messageButton, { backgroundColor: isRequest ? '#9B59B6' : '#2ECC71' }]}
+              onPress={handleMessage}
+            >
+              <Text style={styles.messageButtonText}>💬 Send Message</Text>
+            </TouchableOpacity>
+            <View style={[styles.privacyNotice, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+              <Text style={[styles.privacyText, { color: colors.textSecondary }]}>
+                🔒 Messages are private — you can share contact details inside the chat
+              </Text>
             </View>
           </>
         )}
-
-        {/* Driver Badge */}
         {isDriver && !isRequest && (
-          <View style={styles.ownerBadge}>
-            <Text style={styles.ownerBadgeText}>
-              🚗 You are the driver for this ride
-            </Text>
+          <View style={[styles.ownerBadge, { backgroundColor: colors.successBackground }]}>
+            <Text style={[styles.ownerBadgeText, { color: colors.successText }]}>🚗 You are the driver for this ride</Text>
           </View>
         )}
-
-        {/* Requester Badge */}
         {isRequester && isRequest && (
           <View style={[styles.ownerBadge, { backgroundColor: '#F5EEF8' }]}>
-            <Text style={[styles.ownerBadgeText, { color: '#9B59B6' }]}>
-              🙋 You posted this ride request
-            </Text>
+            <Text style={[styles.ownerBadgeText, { color: '#9B59B6' }]}>🙋 You posted this ride request</Text>
           </View>
         )}
-
-        {/* Safety Notice */}
-        <View style={styles.safetyBox}>
-          <Text style={styles.safetyText}>
+        <View style={[styles.safetyBox, { backgroundColor: colors.warningBackground }]}>
+          <Text style={[styles.safetyText, { color: colors.warningText }]}>
             🛡️ Safety tip: Share your ride details with a friend or family member before getting in.
           </Text>
         </View>
-
       </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  banner: {
-    padding: 30,
-    alignItems: 'center',
-    gap: 8,
-  },
-  bannerEmoji: {
-    fontSize: 48,
-  },
-  bannerLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  content: {
-    padding: 20,
-  },
-  routeCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 0.5,
-    borderColor: '#E0E0E0',
-    marginBottom: 16,
-  },
-  routeRow: {
-    gap: 12,
-  },
-  routePoint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  dot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  routeInfo: {
-    flex: 1,
-  },
-  routeLabel: {
-    fontSize: 9,
-    color: '#999',
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
-  routeText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1A1A1A',
-    marginTop: 2,
-  },
-  routeLine: {
-    width: 2,
-    height: 16,
-    backgroundColor: '#E0E0E0',
-    marginLeft: 5,
-  },
-  detailsGrid: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
-  },
-  detailCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 10,
-    alignItems: 'center',
-    borderWidth: 0.5,
-    borderColor: '#E0E0E0',
-  },
-  detailEmoji: {
-    fontSize: 20,
-    marginBottom: 4,
-  },
-  detailLabel: {
-    fontSize: 10,
-    color: '#999',
-    marginBottom: 2,
-  },
-  detailValue: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#1A1A1A',
-    textAlign: 'center',
-  },
-  cashNotice: {
-    backgroundColor: '#E8F8F0',
-    borderRadius: 10,
-    padding: 12,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  cashNoticeText: {
-    fontSize: 13,
-    color: '#27AE60',
-    fontWeight: '500',
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#1A1A1A',
-    marginBottom: 10,
-  },
-  notesCard: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 14,
-    borderWidth: 0.5,
-    borderColor: '#E0E0E0',
-    marginBottom: 16,
-  },
-  notesText: {
-    fontSize: 14,
-    color: '#444',
-    lineHeight: 20,
-  },
-  contactButtons: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
-  },
-  contactButton: {
-    flex: 1,
-    borderRadius: 10,
-    padding: 12,
-    alignItems: 'center',
-  },
-  contactButtonText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  ownerBadge: {
-    backgroundColor: '#E8F8F0',
-    borderRadius: 10,
-    padding: 14,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  ownerBadgeText: {
-    color: '#27AE60',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  safetyBox: {
-    backgroundColor: '#FFF9E6',
-    borderRadius: 10,
-    padding: 12,
-  },
-  safetyText: {
-    fontSize: 12,
-    color: '#856404',
-    lineHeight: 18,
-  },
+  container: { flex: 1 },
+  banner: { padding: 30, alignItems: 'center', gap: 8 },
+  bannerEmoji: { fontSize: 48 },
+  bannerLabel: { fontSize: 14, fontWeight: '600' },
+  content: { padding: 20 },
+  routeCard: { borderRadius: 12, padding: 16, borderWidth: 0.5, marginBottom: 16 },
+  routeRow: { gap: 12 },
+  routePoint: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  dot: { width: 12, height: 12, borderRadius: 6 },
+  routeInfo: { flex: 1 },
+  routeLabel: { fontSize: 9, fontWeight: '600', letterSpacing: 0.5 },
+  routeText: { fontSize: 16, fontWeight: '600', marginTop: 2 },
+  routeLine: { width: 2, height: 16, marginLeft: 5 },
+  detailsGrid: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  detailCard: { flex: 1, borderRadius: 10, padding: 10, alignItems: 'center', borderWidth: 0.5 },
+  detailEmoji: { fontSize: 20, marginBottom: 4 },
+  detailLabel: { fontSize: 10, marginBottom: 2 },
+  detailValue: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
+  cashNotice: { borderRadius: 10, padding: 12, alignItems: 'center', marginBottom: 16 },
+  cashNoticeText: { fontSize: 13, fontWeight: '500' },
+  sectionTitle: { fontSize: 15, fontWeight: '600', marginBottom: 10 },
+  notesCard: { borderRadius: 10, padding: 14, borderWidth: 0.5, marginBottom: 16 },
+  notesText: { fontSize: 14, lineHeight: 20 },
+  messageButton: { borderRadius: 12, padding: 15, alignItems: 'center', marginBottom: 10 },
+  messageButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  privacyNotice: { borderRadius: 10, padding: 12, marginBottom: 16, borderWidth: 0.5 },
+  privacyText: { fontSize: 12, textAlign: 'center', lineHeight: 18 },
+  ownerBadge: { borderRadius: 10, padding: 14, alignItems: 'center', marginBottom: 16 },
+  ownerBadgeText: { fontWeight: '600', fontSize: 14 },
+  safetyBox: { borderRadius: 10, padding: 12 },
+  safetyText: { fontSize: 12, lineHeight: 18 },
 });

@@ -1,8 +1,6 @@
 // core/store/index.js
 // CORE FILE — DO NOT MODIFY STRUCTURE
 // Global shared state — all features READ from here
-// Features NEVER store shared data inside themselves
-// Rule: If two features need the same data — it lives HERE
 
 import { create } from 'zustand';
 
@@ -23,6 +21,11 @@ const useAppStore = create((set) => ({
 
   setLoading: (isLoading) => set({ isLoading }),
   setCurrentCity: (city) => set({ currentCity: city }),
+
+  // ─── Theme ────────────────────────────────────
+  // 'light', 'dark', 'auto'
+  themeMode: 'auto',
+  setThemeMode: (themeMode) => set({ themeMode }),
 
   // ─── Notifications ────────────────────────────
   unreadMessages: 0,

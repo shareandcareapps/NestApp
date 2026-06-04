@@ -18,8 +18,8 @@ import {
 import { createRide } from '../services/ridesService';
 import useAppStore from '../../../core/store/index';
 import { DatePicker, TimePicker } from '../../../core/components/DateTimePicker';
+import { useTheme } from '../../../core/theme/ThemeContext';
 
-// ─── Category Config ───────────────────────────
 const CATEGORIES = [
   { id: 'airport', label: 'Airport', emoji: '✈️' },
   { id: 'university', label: 'University', emoji: '🎓' },
@@ -34,6 +34,7 @@ export default function PostRideScreen({ navigation }) {
   const [rideDate, setRideDate] = useState(null);
   const [rideTime, setRideTime] = useState(null);
   const [seats, setSeats] = useState('1');
+  const [peopleCount, setPeopleCount] = useState('1');
   const [costShare, setCostShare] = useState('');
   const [pricingType, setPricingType] = useState('per_mile');
   const [totalMiles, setTotalMiles] = useState('');
@@ -41,6 +42,7 @@ export default function PostRideScreen({ navigation }) {
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const user = useAppStore((state) => state.user);
+  const colors = useTheme();
 
   function calculateCostPerPerson() {
     if (pricingType === 'per_mile' && totalMiles && seats) {
@@ -50,28 +52,12 @@ export default function PostRideScreen({ navigation }) {
   }
 
   async function handlePost() {
-    if (!fromLocation) {
-      Alert.alert('Error', 'Please enter pickup location');
-      return;
-    }
-    if (!toLocation) {
-      Alert.alert('Error', 'Please enter drop location');
-      return;
-    }
-    if (!rideDate) {
-      Alert.alert('Error', 'Please select a date');
-      return;
-    }
-    if (!rideTime) {
-      Alert.alert('Error', 'Please select a time');
-      return;
-    }
-    if (!category) {
-      Alert.alert('Error', 'Please select a ride type');
-      return;
-    }
+    if (!fromLocation) { Alert.alert('Error', 'Please enter pickup location'); return; }
+    if (!toLocation) { Alert.alert('Error', 'Please enter drop location'); return; }
+    if (!rideDate) { Alert.alert('Error', 'Please select a date'); return; }
+    if (!rideTime) { Alert.alert('Error', 'Please select a time'); return; }
+    if (!category) { Alert.alert('Error', 'Please select a ride type'); return; }
 
-    // Combine date and time into one DateTime
     const combinedDateTime = new Date(
       rideDate.getFullYear(),
       rideDate.getMonth(),
@@ -80,12 +66,9 @@ export default function PostRideScreen({ navigation }) {
       rideTime.getMinutes(),
     );
 
-    // Calculate final cost
     let finalCost = null;
     if (pricingType === 'per_mile' && totalMiles && seats) {
-      finalCost = parseFloat(
-        (parseFloat(totalMiles) / parseInt(seats)).toFixed(2)
-      );
+      finalCost = parseFloat((parseFloat(totalMiles) / parseInt(seats)).toFixed(2));
     } else if (pricingType === 'fixed' && costShare) {
       finalCost = parseFloat(costShare);
     }
@@ -99,7 +82,7 @@ export default function PostRideScreen({ navigation }) {
         from_location: fromLocation,
         to_location: toLocation,
         ride_date: combinedDateTime.toISOString(),
-        seats_available: parseInt(seats) || 1,
+        seats_available: postType === 'offer' ? parseInt(seats) || 1 : parseInt(peopleCount) || 1,
         cost_share: finalCost,
         category,
         notes,
@@ -107,9 +90,7 @@ export default function PostRideScreen({ navigation }) {
       });
       Alert.alert(
         postType === 'offer' ? 'Ride Posted!' : 'Request Posted!',
-        postType === 'offer'
-          ? 'Your ride offer has been posted.'
-          : 'Your ride request has been posted. Drivers will contact you.',
+        postType === 'offer' ? 'Your ride offer has been posted.' : 'Your ride request has been posted. Drivers will contact you.',
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (error) {
@@ -121,70 +102,65 @@ export default function PostRideScreen({ navigation }) {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.inner}>
 
-        {/* Post Type — Driver or Rider */}
-        <Text style={styles.label}>I am a... *</Text>
+        {/* Post Type */}
+        <Text style={[styles.label, { color: colors.textPrimary }]}>I am a... *</Text>
         <View style={styles.postTypeRow}>
           <TouchableOpacity
-            style={[
-              styles.postTypeCard,
-              postType === 'offer' && styles.postTypeCardActive,
-            ]}
+            style={[styles.postTypeCard, {
+              backgroundColor: colors.surface,
+              borderColor: postType === 'offer' ? '#2ECC71' : colors.border,
+              borderWidth: postType === 'offer' ? 2 : 0.5,
+              backgroundColor: postType === 'offer' ? colors.successBackground : colors.surface,
+            }]}
             onPress={() => setPostType('offer')}
           >
             <Text style={styles.postTypeEmoji}>🚗</Text>
-            <Text style={[
-              styles.postTypeLabel,
-              postType === 'offer' && styles.postTypeLabelActive,
-            ]}>Driver</Text>
-            <Text style={styles.postTypeSubLabel}>
-              I have seats available
+            <Text style={[styles.postTypeLabel, { color: postType === 'offer' ? '#27AE60' : colors.textSecondary }]}>
+              Driver
             </Text>
+            <Text style={[styles.postTypeSubLabel, { color: colors.textLight }]}>I have seats available</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[
-              styles.postTypeCard,
-              postType === 'request' && styles.postTypeCardActiveRequest,
-            ]}
+            style={[styles.postTypeCard, {
+              borderColor: postType === 'request' ? '#9B59B6' : colors.border,
+              borderWidth: postType === 'request' ? 2 : 0.5,
+              backgroundColor: postType === 'request' ? '#F5EEF8' : colors.surface,
+            }]}
             onPress={() => setPostType('request')}
           >
             <Text style={styles.postTypeEmoji}>🙋</Text>
-            <Text style={[
-              styles.postTypeLabel,
-              postType === 'request' && styles.postTypeLabelActiveRequest,
-            ]}>Rider</Text>
-            <Text style={styles.postTypeSubLabel}>
-              I need a ride
+            <Text style={[styles.postTypeLabel, { color: postType === 'request' ? '#9B59B6' : colors.textSecondary }]}>
+              Rider
             </Text>
+            <Text style={[styles.postTypeSubLabel, { color: colors.textLight }]}>I need a ride</Text>
           </TouchableOpacity>
         </View>
 
         {/* Cash Notice */}
-        <View style={styles.cashNotice}>
-          <Text style={styles.cashNoticeText}>
+        <View style={[styles.cashNotice, { backgroundColor: colors.successBackground }]}>
+          <Text style={[styles.cashNoticeText, { color: colors.successText }]}>
             💵 All rides are cash-based — payment directly between driver and rider
           </Text>
         </View>
 
         {/* Ride Type */}
-        <Text style={styles.label}>Ride Type *</Text>
+        <Text style={[styles.label, { color: colors.textPrimary }]}>Ride Type *</Text>
         <View style={styles.categoryRow}>
           {CATEGORIES.map((cat) => (
             <TouchableOpacity
               key={cat.id}
-              style={[
-                styles.categoryCard,
-                category === cat.id && styles.categoryCardActive,
-              ]}
+              style={[styles.categoryCard, {
+                backgroundColor: category === cat.id ? colors.successBackground : colors.surface,
+                borderColor: category === cat.id ? '#2ECC71' : colors.border,
+                borderWidth: category === cat.id ? 2 : 0.5,
+              }]}
               onPress={() => setCategory(cat.id)}
             >
               <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
-              <Text style={[
-                styles.categoryLabel,
-                category === cat.id && styles.categoryLabelActive,
-              ]}>
+              <Text style={[styles.categoryLabel, { color: category === cat.id ? '#27AE60' : colors.textSecondary }]}>
                 {cat.label}
               </Text>
             </TouchableOpacity>
@@ -192,49 +168,41 @@ export default function PostRideScreen({ navigation }) {
         </View>
 
         {/* From */}
-        <Text style={styles.label}>From (Pickup Location) *</Text>
+        <Text style={[styles.label, { color: colors.textPrimary }]}>From (Pickup Location) *</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
           placeholder="e.g. Clayton, St. Louis"
-          placeholderTextColor="#999"
+          placeholderTextColor={colors.textLight}
           value={fromLocation}
           onChangeText={setFromLocation}
         />
 
         {/* To */}
-        <Text style={styles.label}>To (Drop Location) *</Text>
+        <Text style={[styles.label, { color: colors.textPrimary }]}>To (Drop Location) *</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
           placeholder="e.g. STL Lambert Airport"
-          placeholderTextColor="#999"
+          placeholderTextColor={colors.textLight}
           value={toLocation}
           onChangeText={setToLocation}
         />
 
         {/* Date Picker */}
-        <Text style={styles.label}>Date *</Text>
-        <DatePicker
-          value={rideDate}
-          onChange={setRideDate}
-          label="date"
-        />
+        <Text style={[styles.label, { color: colors.textPrimary }]}>Date *</Text>
+        <DatePicker value={rideDate} onChange={setRideDate} label="date" />
 
         {/* Time Picker */}
-        <Text style={styles.label}>Time *</Text>
-        <TimePicker
-          value={rideTime}
-          onChange={setRideTime}
-          label="time"
-        />
+        <Text style={[styles.label, { color: colors.textPrimary }]}>Time *</Text>
+        <TimePicker value={rideTime} onChange={setRideTime} label="time" />
 
-        {/* Seats — only for drivers */}
+        {/* Seats — drivers only */}
         {postType === 'offer' && (
           <>
-            <Text style={styles.label}>Seats Available *</Text>
+            <Text style={[styles.label, { color: colors.textPrimary }]}>Seats Available *</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
               placeholder="e.g. 2"
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.textLight}
               value={seats}
               onChangeText={setSeats}
               keyboardType="numeric"
@@ -242,73 +210,78 @@ export default function PostRideScreen({ navigation }) {
           </>
         )}
 
-        {/* Pricing — for drivers only */}
+        {/* People Count — riders only */}
+        {postType === 'request' && (
+          <>
+            <Text style={[styles.label, { color: colors.textPrimary }]}>Number of People *</Text>
+            <View style={styles.peopleRow}>
+              {['1', '2', '3', '4', '5', '6'].map((num) => (
+                <TouchableOpacity
+                  key={num}
+                  style={[styles.peopleCard, {
+                    backgroundColor: peopleCount === num ? '#F5EEF8' : colors.surface,
+                    borderColor: peopleCount === num ? '#9B59B6' : colors.border,
+                    borderWidth: peopleCount === num ? 2 : 0.5,
+                  }]}
+                  onPress={() => setPeopleCount(num)}
+                >
+                  <Text style={styles.peopleEmoji}>
+                    {num === '1' ? '🧑' : num === '2' ? '👥' : '👨‍👩‍👧'}
+                  </Text>
+                  <Text style={[styles.peopleLabel, { color: peopleCount === num ? '#9B59B6' : colors.textSecondary }]}>
+                    {num} {num === '1' ? 'person' : 'people'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* Pricing — drivers only */}
         {postType === 'offer' && (
           <>
-            <Text style={styles.label}>Pricing Type *</Text>
+            <Text style={[styles.label, { color: colors.textPrimary }]}>Pricing Type *</Text>
             <View style={styles.pricingRow}>
-              <TouchableOpacity
-                style={[
-                  styles.pricingCard,
-                  pricingType === 'per_mile' && styles.pricingCardActive,
-                ]}
-                onPress={() => setPricingType('per_mile')}
-              >
-                <Text style={styles.pricingEmoji}>📏</Text>
-                <Text style={[
-                  styles.pricingLabel,
-                  pricingType === 'per_mile' && styles.pricingLabelActive,
-                ]}>Per Mile</Text>
-                <Text style={styles.pricingSubLabel}>$1/mile ÷ riders</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.pricingCard,
-                  pricingType === 'fixed' && styles.pricingCardActive,
-                ]}
-                onPress={() => setPricingType('fixed')}
-              >
-                <Text style={styles.pricingEmoji}>💵</Text>
-                <Text style={[
-                  styles.pricingLabel,
-                  pricingType === 'fixed' && styles.pricingLabelActive,
-                ]}>Fixed</Text>
-                <Text style={styles.pricingSubLabel}>Set your price</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.pricingCard,
-                  pricingType === 'free' && styles.pricingCardActive,
-                ]}
-                onPress={() => setPricingType('free')}
-              >
-                <Text style={styles.pricingEmoji}>🎁</Text>
-                <Text style={[
-                  styles.pricingLabel,
-                  pricingType === 'free' && styles.pricingLabelActive,
-                ]}>Free</Text>
-                <Text style={styles.pricingSubLabel}>No charge</Text>
-              </TouchableOpacity>
+              {[
+                { id: 'per_mile', emoji: '📏', label: 'Per Mile', sub: '$1/mile ÷ riders' },
+                { id: 'fixed', emoji: '💵', label: 'Fixed', sub: 'Set your price' },
+                { id: 'free', emoji: '🎁', label: 'Free', sub: 'No charge' },
+              ].map((p) => (
+                <TouchableOpacity
+                  key={p.id}
+                  style={[styles.pricingCard, {
+                    backgroundColor: pricingType === p.id ? colors.successBackground : colors.surface,
+                    borderColor: pricingType === p.id ? '#2ECC71' : colors.border,
+                    borderWidth: pricingType === p.id ? 2 : 0.5,
+                  }]}
+                  onPress={() => setPricingType(p.id)}
+                >
+                  <Text style={styles.pricingEmoji}>{p.emoji}</Text>
+                  <Text style={[styles.pricingLabel, { color: pricingType === p.id ? '#27AE60' : colors.textSecondary }]}>
+                    {p.label}
+                  </Text>
+                  <Text style={[styles.pricingSubLabel, { color: colors.textLight }]}>{p.sub}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
 
-            {/* Per Mile Input */}
             {pricingType === 'per_mile' && (
               <>
-                <Text style={styles.label}>Total Miles *</Text>
+                <Text style={[styles.label, { color: colors.textPrimary }]}>Total Miles *</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
                   placeholder="e.g. 21"
-                  placeholderTextColor="#999"
+                  placeholderTextColor={colors.textLight}
                   value={totalMiles}
                   onChangeText={setTotalMiles}
                   keyboardType="numeric"
                 />
                 {totalMiles && seats ? (
-                  <View style={styles.calculationBox}>
-                    <Text style={styles.calculationText}>
+                  <View style={[styles.calculationBox, { backgroundColor: colors.successBackground }]}>
+                    <Text style={[styles.calculationText, { color: colors.successText }]}>
                       📏 {totalMiles} miles × $1 = ${totalMiles} total
                     </Text>
-                    <Text style={styles.calculationResult}>
+                    <Text style={[styles.calculationResult, { color: colors.successText }]}>
                       💵 ${calculateCostPerPerson()} per person
                     </Text>
                   </View>
@@ -316,14 +289,13 @@ export default function PostRideScreen({ navigation }) {
               </>
             )}
 
-            {/* Fixed Price Input */}
             {pricingType === 'fixed' && (
               <>
-                <Text style={styles.label}>Cost per Person (USD) *</Text>
+                <Text style={[styles.label, { color: colors.textPrimary }]}>Cost per Person (USD) *</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
                   placeholder="e.g. 15"
-                  placeholderTextColor="#999"
+                  placeholderTextColor={colors.textLight}
                   value={costShare}
                   onChangeText={setCostShare}
                   keyboardType="numeric"
@@ -333,20 +305,20 @@ export default function PostRideScreen({ navigation }) {
           </>
         )}
 
-        {/* Budget — for riders */}
+        {/* Budget — riders only */}
         {postType === 'request' && (
           <>
-            <Text style={styles.label}>Your Budget per Person (USD)</Text>
+            <Text style={[styles.label, { color: colors.textPrimary }]}>Your Budget per Person (USD)</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
               placeholder="e.g. 15 (leave empty to discuss with driver)"
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.textLight}
               value={costShare}
               onChangeText={setCostShare}
               keyboardType="numeric"
             />
-            <View style={styles.infoBox}>
-              <Text style={styles.infoText}>
+            <View style={[styles.infoBox, { backgroundColor: colors.infoBackground }]}>
+              <Text style={[styles.infoText, { color: colors.secondary }]}>
                 💡 Leave budget empty if you want to discuss price with the driver directly.
               </Text>
             </View>
@@ -354,15 +326,11 @@ export default function PostRideScreen({ navigation }) {
         )}
 
         {/* Notes */}
-        <Text style={styles.label}>Notes (optional)</Text>
+        <Text style={[styles.label, { color: colors.textPrimary }]}>Notes (optional)</Text>
         <TextInput
-          style={[styles.input, styles.textArea]}
-          placeholder={
-            postType === 'offer'
-              ? 'Any extra info for riders...'
-              : 'Any extra info for drivers...'
-          }
-          placeholderTextColor="#999"
+          style={[styles.input, styles.textArea, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
+          placeholder={postType === 'offer' ? 'Any extra info for riders...' : 'Any extra info for drivers...'}
+          placeholderTextColor={colors.textLight}
           value={notes}
           onChangeText={setNotes}
           multiline
@@ -371,10 +339,7 @@ export default function PostRideScreen({ navigation }) {
 
         {/* Post Button */}
         <TouchableOpacity
-          style={[
-            styles.postButton,
-            { backgroundColor: postType === 'offer' ? '#2ECC71' : '#9B59B6' }
-          ]}
+          style={[styles.postButton, { backgroundColor: postType === 'offer' ? '#2ECC71' : '#9B59B6' }]}
           onPress={handlePost}
           disabled={loading}
         >
@@ -388,11 +353,8 @@ export default function PostRideScreen({ navigation }) {
         </TouchableOpacity>
 
         {/* Cancel */}
-        <TouchableOpacity
-          style={styles.cancelButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.cancelButtonText}>Cancel</Text>
+        <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
+          <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>Cancel</Text>
         </TouchableOpacity>
 
       </View>
@@ -401,205 +363,38 @@ export default function PostRideScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  inner: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#1A1A1A',
-    marginBottom: 8,
-    marginTop: 16,
-  },
-  postTypeRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  postTypeCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    alignItems: 'center',
-    borderWidth: 0.5,
-    borderColor: '#E0E0E0',
-  },
-  postTypeCardActive: {
-    borderColor: '#2ECC71',
-    borderWidth: 2,
-    backgroundColor: '#E8F8F0',
-  },
-  postTypeCardActiveRequest: {
-    borderColor: '#9B59B6',
-    borderWidth: 2,
-    backgroundColor: '#F5EEF8',
-  },
-  postTypeEmoji: {
-    fontSize: 28,
-    marginBottom: 6,
-  },
-  postTypeLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-  },
-  postTypeLabelActive: {
-    color: '#27AE60',
-  },
-  postTypeLabelActiveRequest: {
-    color: '#9B59B6',
-  },
-  postTypeSubLabel: {
-    fontSize: 11,
-    color: '#999',
-    marginTop: 3,
-    textAlign: 'center',
-  },
-  cashNotice: {
-    backgroundColor: '#E8F8F0',
-    borderRadius: 10,
-    padding: 12,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  cashNoticeText: {
-    fontSize: 12,
-    color: '#27AE60',
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  categoryRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  categoryCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 10,
-    alignItems: 'center',
-    borderWidth: 0.5,
-    borderColor: '#E0E0E0',
-  },
-  categoryCardActive: {
-    borderColor: '#2ECC71',
-    borderWidth: 2,
-    backgroundColor: '#E8F8F0',
-  },
-  categoryEmoji: {
-    fontSize: 20,
-    marginBottom: 4,
-  },
-  categoryLabel: {
-    fontSize: 9,
-    color: '#666',
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  categoryLabelActive: {
-    color: '#27AE60',
-  },
-  input: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 15,
-    borderWidth: 0.5,
-    borderColor: '#E0E0E0',
-    color: '#1A1A1A',
-  },
-  textArea: {
-    height: 80,
-    textAlignVertical: 'top',
-  },
-  pricingRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  pricingCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 10,
-    alignItems: 'center',
-    borderWidth: 0.5,
-    borderColor: '#E0E0E0',
-  },
-  pricingCardActive: {
-    borderColor: '#2ECC71',
-    borderWidth: 2,
-    backgroundColor: '#E8F8F0',
-  },
-  pricingEmoji: {
-    fontSize: 20,
-    marginBottom: 4,
-  },
-  pricingLabel: {
-    fontSize: 11,
-    color: '#666',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  pricingLabelActive: {
-    color: '#27AE60',
-  },
-  pricingSubLabel: {
-    fontSize: 9,
-    color: '#999',
-    textAlign: 'center',
-    marginTop: 2,
-  },
-  calculationBox: {
-    backgroundColor: '#E8F8F0',
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 8,
-    gap: 4,
-  },
-  calculationText: {
-    fontSize: 13,
-    color: '#27AE60',
-  },
-  calculationResult: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#27AE60',
-  },
-  infoBox: {
-    backgroundColor: '#E8F4FD',
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 8,
-  },
-  infoText: {
-    fontSize: 13,
-    color: '#1D3557',
-    lineHeight: 18,
-  },
-  postButton: {
-    borderRadius: 12,
-    padding: 15,
-    alignItems: 'center',
-    marginTop: 24,
-  },
-  postButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  cancelButton: {
-    borderRadius: 12,
-    padding: 15,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  cancelButtonText: {
-    color: '#666',
-    fontSize: 15,
-  },
+  container: { flex: 1 },
+  inner: { padding: 20, paddingBottom: 40 },
+  label: { fontSize: 13, fontWeight: '500', marginBottom: 8, marginTop: 16 },
+  postTypeRow: { flexDirection: 'row', gap: 10 },
+  postTypeCard: { flex: 1, borderRadius: 12, padding: 14, alignItems: 'center' },
+  postTypeEmoji: { fontSize: 28, marginBottom: 6 },
+  postTypeLabel: { fontSize: 14, fontWeight: '600' },
+  postTypeSubLabel: { fontSize: 11, marginTop: 3, textAlign: 'center' },
+  cashNotice: { borderRadius: 10, padding: 12, alignItems: 'center', marginTop: 16 },
+  cashNoticeText: { fontSize: 12, fontWeight: '500', textAlign: 'center' },
+  categoryRow: { flexDirection: 'row', gap: 8 },
+  categoryCard: { flex: 1, borderRadius: 10, padding: 10, alignItems: 'center' },
+  categoryEmoji: { fontSize: 20, marginBottom: 4 },
+  categoryLabel: { fontSize: 9, fontWeight: '500', textAlign: 'center' },
+  input: { borderRadius: 10, padding: 12, fontSize: 15, borderWidth: 0.5 },
+  textArea: { height: 80, textAlignVertical: 'top' },
+  peopleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  peopleCard: { width: '30%', borderRadius: 10, padding: 10, alignItems: 'center' },
+  peopleEmoji: { fontSize: 20, marginBottom: 4 },
+  peopleLabel: { fontSize: 10, fontWeight: '500', textAlign: 'center' },
+  pricingRow: { flexDirection: 'row', gap: 8 },
+  pricingCard: { flex: 1, borderRadius: 10, padding: 10, alignItems: 'center' },
+  pricingEmoji: { fontSize: 20, marginBottom: 4 },
+  pricingLabel: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
+  pricingSubLabel: { fontSize: 9, textAlign: 'center', marginTop: 2 },
+  calculationBox: { borderRadius: 10, padding: 12, marginTop: 8, gap: 4 },
+  calculationText: { fontSize: 13 },
+  calculationResult: { fontSize: 15, fontWeight: '700' },
+  infoBox: { borderRadius: 10, padding: 12, marginTop: 8 },
+  infoText: { fontSize: 13, lineHeight: 18 },
+  postButton: { borderRadius: 12, padding: 15, alignItems: 'center', marginTop: 24 },
+  postButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  cancelButton: { borderRadius: 12, padding: 15, alignItems: 'center', marginTop: 10 },
+  cancelButtonText: { fontSize: 15 },
 });

@@ -1,7 +1,6 @@
 // features/classifieds/services/listingsService.js
 // CLASSIFIEDS FEATURE — Data layer
 // GOLDEN RULE 3: Only this file talks to the listings table
-// No other feature should ever import this file
 
 import { supabase } from '../../../core/database/index';
 
@@ -20,6 +19,22 @@ export async function getListings(category = null) {
 
   const { data, error } = await query;
   if (error) throw error;
+
+  // Fetch profiles separately for each listing
+  if (data && data.length > 0) {
+    const enriched = await Promise.all(
+      data.map(async (listing) => {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id, full_name, avatar_url')
+          .eq('id', listing.user_id)
+          .single();
+        return { ...listing, poster: profile };
+      })
+    );
+    return enriched;
+  }
+
   return data;
 }
 
@@ -27,14 +42,7 @@ export async function getListings(category = null) {
 export async function getListingById(id) {
   const { data, error } = await supabase
     .from('listings')
-    .select(`
-      *,
-      profiles (
-        full_name,
-        phone,
-        avatar_url
-      )
-    `)
+    .select('*')
     .eq('id', id)
     .single();
 
@@ -86,7 +94,7 @@ export async function deleteListing(id) {
 export async function searchListings(query, category = null) {
   let dbQuery = supabase
     .from('listings')
-    .select(`*`)
+    .select('*')
     .eq('is_active', true)
     .or(`title.ilike.%${query}%,description.ilike.%${query}%`)
     .order('is_boosted', { ascending: false })
@@ -98,5 +106,17 @@ export async function searchListings(query, category = null) {
 
   const { data, error } = await dbQuery;
   if (error) throw error;
+  return data;
+}
+
+// ─── Fetch profile for a user ──────────────────
+export async function getProfile(userId) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, avatar_url')
+    .eq('id', userId)
+    .single();
+
+  if (error) return null;
   return data;
 }

@@ -1,19 +1,24 @@
 // core/navigation/index.js
 // CORE FILE — DO NOT MODIFY STRUCTURE
-// Handles two states:
-// 1. User not logged in → show Auth screens
-// 2. User logged in → show Main app tabs
-import RidesNavigator from '../../features/rides/index';
-import NewsNavigator from '../../features/news/index';
-import ClassifiedsNavigator from '../../features/classifieds/index';
+
 import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  ActivityIndicator,
+  TouchableOpacity,
+} from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import { View, Text, ActivityIndicator } from 'react-native';
 import { supabase } from '../database/index';
 import useAppStore from '../store/index';
 import LoginScreen from '../auth/screens/LoginScreen';
 import SignupScreen from '../auth/screens/SignupScreen';
+import SettingsScreen from '../screens/SettingsScreen';
+import ClassifiedsNavigator from '../../features/classifieds/index';
+import RidesNavigator from '../../features/rides/index';
+import NewsNavigator from '../../features/news/index';
+import MessagesNavigator from '../../features/messages/index';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -27,43 +32,40 @@ const colors = {
   border: '#E0E0E0',
   textLight: '#999999',
   textWhite: '#FFFFFF',
-  textSecondary: '#666666',
-  classifieds: '#E63946',
-  rides: '#2ECC71',
-  news: '#3498DB',
-  messages: '#9B59B6',
 };
 
-// ─── Placeholder Screens ──────────────────────
-function PlaceholderScreen({ title, color }) {
+// ─── Avatar Button ─────────────────────────────
+function AvatarButton({ onPress, name }) {
+  const initials = name
+    ? name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
+    : '?';
+
+  const avatarColors = [
+    '#E63946', '#2ECC71', '#3498DB', '#9B59B6', '#F39C12',
+  ];
+  const colorIndex = name ? name.charCodeAt(0) % avatarColors.length : 0;
+
   return (
-    <View style={{
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.background,
-    }}>
-      <Text style={{
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: color || colors.primary,
-      }}>
-        {title}
+    <TouchableOpacity
+      onPress={onPress}
+      style={{
+        marginRight: 14,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: avatarColors[colorIndex],
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: 'rgba(255,255,255,0.4)',
+      }}
+    >
+      <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>
+        {initials}
       </Text>
-      <Text style={{
-        fontSize: 14,
-        color: colors.textSecondary,
-        marginTop: 8,
-      }}>
-        Coming soon...
-      </Text>
-    </View>
+    </TouchableOpacity>
   );
 }
-
-// ─── Feature Screens (placeholders for now) ───
-const MessagesScreen = () =>
-  <PlaceholderScreen title="Messages" color={colors.messages} />;
 
 // ─── Tab Icon ─────────────────────────────────
 function TabIcon({ name }) {
@@ -77,7 +79,28 @@ function TabIcon({ name }) {
 }
 
 // ─── Main App Tabs ────────────────────────────
-function MainTabs() {
+function MainTabs({ navigation }) {
+  const user = useAppStore((state) => state.user);
+  const [profileName, setProfileName] = useState('');
+
+  useEffect(() => {
+    loadProfileName();
+  }, []);
+
+  async function loadProfileName() {
+    if (!user) return;
+    const { data } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user.id)
+      .single();
+    if (data?.full_name) setProfileName(data.full_name);
+  }
+
+  function openSettings() {
+    navigation.navigate('Settings');
+  }
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -104,28 +127,70 @@ function MainTabs() {
           fontWeight: '500',
           fontSize: 17,
         },
+        headerRight: () => (
+          <AvatarButton
+            onPress={openSettings}
+            name={profileName}
+          />
+        ),
       })}
     >
       <Tab.Screen
-  name="Classifieds"
-  component={ClassifiedsNavigator}
-  options={{ headerShown: false }}
-/>
+        name="Classifieds"
+        component={ClassifiedsNavigator}
+        options={{
+          headerShown: true,
+          title: 'Classifieds',
+        }}
+      />
       <Tab.Screen
-  name="Rides"
-  component={RidesNavigator}
-  options={{ headerShown: false }}
-/>
+        name="Rides"
+        component={RidesNavigator}
+        options={{
+          headerShown: true,
+          title: 'Shared Rides',
+        }}
+      />
       <Tab.Screen
-  name="News"
-  component={NewsNavigator}
-  options={{ headerShown: false }}
-/>
+        name="News"
+        component={NewsNavigator}
+        options={{
+          headerShown: true,
+          title: 'Community News',
+        }}
+      />
       <Tab.Screen
         name="Messages"
-        component={MessagesScreen}
+        component={MessagesNavigator}
+        options={{
+          headerShown: true,
+          title: 'Messages',
+        }}
       />
     </Tab.Navigator>
+  );
+}
+
+// ─── Main App Stack (includes Settings) ───────
+function MainApp() {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen
+        name="Tabs"
+        component={MainTabs}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+  name="Settings"
+  component={SettingsScreen}
+  options={({ navigation }) => ({
+    title: 'Profile & Settings',
+    headerStyle: { backgroundColor: '#1D3557' },
+    headerTintColor: '#fff',
+    headerTitleStyle: { fontWeight: '500' },
+  })}
+/>
+    </Stack.Navigator>
   );
 }
 
@@ -167,7 +232,6 @@ export default function RootNavigator() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is already logged in
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         setUser(session.user);
@@ -176,7 +240,6 @@ export default function RootNavigator() {
       setLoading(false);
     });
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         if (session) {
@@ -196,7 +259,7 @@ export default function RootNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {isAuthenticated ? (
-        <Stack.Screen name="Main" component={MainTabs} />
+        <Stack.Screen name="Main" component={MainApp} />
       ) : (
         <Stack.Screen name="Auth" component={AuthStack} />
       )}
