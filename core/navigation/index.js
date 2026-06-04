@@ -1,22 +1,20 @@
 // core/navigation/index.js
-// CORE FILE — DO NOT MODIFY STRUCTURE
-import EditProfileScreen from '../screens/EditProfileScreen';
-import MyListingsScreen from '../screens/MyListingsScreen';
-import MyRidesScreen from '../screens/MyRidesScreen';
 import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  ActivityIndicator,
-  TouchableOpacity,
+  View, Text, ActivityIndicator, TouchableOpacity,
 } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../database/index';
 import useAppStore from '../store/index';
 import LoginScreen from '../auth/screens/LoginScreen';
 import SignupScreen from '../auth/screens/SignupScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import EditProfileScreen from '../screens/EditProfileScreen';
+import MyListingsScreen from '../screens/MyListingsScreen';
+import MyRidesScreen from '../screens/MyRidesScreen';
+import HomeScreen from '../screens/HomeScreen';
 import ClassifiedsNavigator from '../../features/classifieds/index';
 import RidesNavigator from '../../features/rides/index';
 import NewsNavigator from '../../features/news/index';
@@ -25,27 +23,20 @@ import MessagesNavigator from '../../features/messages/index';
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-// ─── Colors ───────────────────────────────────
 const colors = {
   primary: '#E63946',
   secondary: '#1D3557',
-  background: '#F8F9FA',
   surface: '#FFFFFF',
   border: '#E0E0E0',
   textLight: '#999999',
-  textWhite: '#FFFFFF',
 };
 
-// ─── Avatar Button ─────────────────────────────
 function AvatarButton({ onPress, name }) {
   const initials = name
     ? name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
     : '?';
-  const avatarColors = [
-    '#E63946', '#2ECC71', '#3498DB', '#9B59B6', '#F39C12',
-  ];
+  const avatarColors = ['#E63946', '#2ECC71', '#3498DB', '#9B59B6', '#F39C12'];
   const colorIndex = name ? name.charCodeAt(0) % avatarColors.length : 0;
-
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -68,25 +59,11 @@ function AvatarButton({ onPress, name }) {
   );
 }
 
-// ─── Tab Icon ─────────────────────────────────
-function TabIcon({ name }) {
-  const icons = {
-    Classifieds: '🏠',
-    Rides: '🚗',
-    News: '📰',
-    Messages: '💬',
-  };
-  return <Text style={{ fontSize: 20 }}>{icons[name]}</Text>;
-}
-
-// ─── Main App Tabs ────────────────────────────
 function MainTabs({ navigation }) {
   const user = useAppStore((state) => state.user);
   const [profileName, setProfileName] = useState('');
 
-  useEffect(() => {
-    loadProfileName();
-  }, [user]);
+  useEffect(() => { loadProfileName(); }, [user]);
 
   async function loadProfileName() {
     if (!user) return;
@@ -104,7 +81,7 @@ function MainTabs({ navigation }) {
 
   const sharedHeaderOptions = {
     headerStyle: { backgroundColor: colors.secondary },
-    headerTintColor: colors.textWhite,
+    headerTintColor: '#fff',
     headerTitleStyle: { fontWeight: '500', fontSize: 17 },
     headerRight: () => (
       <AvatarButton onPress={openSettings} name={profileName} />
@@ -114,60 +91,71 @@ function MainTabs({ navigation }) {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        tabBarIcon: () => <TabIcon name={route.name} />,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textLight,
         tabBarStyle: {
-  backgroundColor: colors.surface,
-  borderTopColor: colors.border,
-  borderTopWidth: 0.5,
-  height: 84,
-  paddingBottom: 28,
-  paddingTop: 8,
-},
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+          borderTopWidth: 0.5,
+          height: 84,
+          paddingBottom: 28,
+          paddingTop: 8,
+        },
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '500',
         },
+        tabBarIcon: ({ color, size, focused }) => {
+          const icons = {
+            Home: focused ? 'home' : 'home-outline',
+            Classifieds: focused ? 'grid' : 'grid-outline',
+            Rides: focused ? 'car' : 'car-outline',
+            News: focused ? 'newspaper' : 'newspaper-outline',
+            Messages: focused ? 'chatbubble' : 'chatbubble-outline',
+          };
+          return (
+            <Ionicons
+              name={icons[route.name]}
+              size={22}
+              color={color}
+            />
+          );
+        },
       })}
     >
       <Tab.Screen
-        name="Classifieds"
-        component={ClassifiedsNavigator}
+        name="Home"
+        component={HomeScreen}
         options={{
           ...sharedHeaderOptions,
-          title: 'Classifieds',
+          title: 'NestApp',
+          headerTitleAlign: 'center',
         }}
+      />
+      <Tab.Screen
+        name="Classifieds"
+        component={ClassifiedsNavigator}
+        options={{ headerShown: false }}
       />
       <Tab.Screen
         name="Rides"
         component={RidesNavigator}
-        options={{
-          ...sharedHeaderOptions,
-          title: 'Shared Rides',
-        }}
+        options={{ headerShown: false }}
       />
       <Tab.Screen
         name="News"
         component={NewsNavigator}
-        options={{
-          ...sharedHeaderOptions,
-          title: 'Community News',
-        }}
+        options={{ headerShown: false }}
       />
       <Tab.Screen
         name="Messages"
         component={MessagesNavigator}
-        options={{
-          ...sharedHeaderOptions,
-          title: 'Messages',
-        }}
+        options={{ headerShown: false }}
       />
     </Tab.Navigator>
   );
 }
 
-// ─── Main App Stack ────────────────────────────
 function MainApp() {
   return (
     <Stack.Navigator>
@@ -177,50 +165,49 @@ function MainApp() {
         options={{ headerShown: false }}
       />
       <Stack.Screen
-  name="Settings"
-  component={SettingsScreen}
-  options={{
-    title: 'Profile & Settings',
-    headerStyle: { backgroundColor: '#1D3557' },
-    headerTintColor: '#fff',
-    headerTitleStyle: { fontWeight: '500' },
-  }}
-/>
-<Stack.Screen
-  name="EditProfile"
-  component={EditProfileScreen}
-  options={{
-    title: 'Edit Profile',
-    headerStyle: { backgroundColor: '#1D3557' },
-    headerTintColor: '#fff',
-    headerTitleStyle: { fontWeight: '500' },
-  }}
-/>
-<Stack.Screen
-  name="MyListings"
-  component={MyListingsScreen}
-  options={{
-    title: 'My Listings',
-    headerStyle: { backgroundColor: '#1D3557' },
-    headerTintColor: '#fff',
-    headerTitleStyle: { fontWeight: '500' },
-  }}
-/>
-<Stack.Screen
-  name="MyRides"
-  component={MyRidesScreen}
-  options={{
-    title: 'My Rides',
-    headerStyle: { backgroundColor: '#1D3557' },
-    headerTintColor: '#fff',
-    headerTitleStyle: { fontWeight: '500' },
-  }}
-/>
+        name="Settings"
+        component={SettingsScreen}
+        options={{
+          title: 'Profile & Settings',
+          headerStyle: { backgroundColor: '#1D3557' },
+          headerTintColor: '#fff',
+          headerTitleStyle: { fontWeight: '500' },
+        }}
+      />
+      <Stack.Screen
+        name="EditProfile"
+        component={EditProfileScreen}
+        options={{
+          title: 'Edit Profile',
+          headerStyle: { backgroundColor: '#1D3557' },
+          headerTintColor: '#fff',
+          headerTitleStyle: { fontWeight: '500' },
+        }}
+      />
+      <Stack.Screen
+        name="MyListings"
+        component={MyListingsScreen}
+        options={{
+          title: 'My Listings',
+          headerStyle: { backgroundColor: '#1D3557' },
+          headerTintColor: '#fff',
+          headerTitleStyle: { fontWeight: '500' },
+        }}
+      />
+      <Stack.Screen
+        name="MyRides"
+        component={MyRidesScreen}
+        options={{
+          title: 'My Rides',
+          headerStyle: { backgroundColor: '#1D3557' },
+          headerTintColor: '#fff',
+          headerTitleStyle: { fontWeight: '500' },
+        }}
+      />
     </Stack.Navigator>
   );
 }
 
-// ─── Auth Stack ───────────────────────────────
 function AuthStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -230,21 +217,13 @@ function AuthStack() {
   );
 }
 
-// ─── Loading Screen ───────────────────────────
 function LoadingScreen() {
   return (
     <View style={{
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
+      flex: 1, alignItems: 'center', justifyContent: 'center',
       backgroundColor: '#1D3557',
     }}>
-      <Text style={{
-        fontSize: 36,
-        fontWeight: 'bold',
-        color: '#fff',
-        marginBottom: 20,
-      }}>
+      <Text style={{ fontSize: 36, fontWeight: 'bold', color: '#fff', marginBottom: 20 }}>
         NestApp
       </Text>
       <ActivityIndicator color="#E63946" size="large" />
@@ -252,31 +231,21 @@ function LoadingScreen() {
   );
 }
 
-// ─── Root Navigator ───────────────────────────
 export default function RootNavigator() {
   const { isAuthenticated, setUser, setSession, clearAuth } = useAppStore();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setUser(session.user);
-        setSession(session);
-      }
+      if (session) { setUser(session.user); setSession(session); }
       setLoading(false);
     });
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        if (session) {
-          setUser(session.user);
-          setSession(session);
-        } else {
-          clearAuth();
-        }
+        if (session) { setUser(session.user); setSession(session); }
+        else { clearAuth(); }
       }
     );
-
     return () => subscription.unsubscribe();
   }, []);
 

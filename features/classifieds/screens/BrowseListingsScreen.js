@@ -2,18 +2,19 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, ActivityIndicator, RefreshControl,
+  TextInput, ActivityIndicator, RefreshControl, SafeAreaView,
 } from 'react-native';
 import { getListings, searchListings } from '../services/listingsService';
 import useAppStore from '../../../core/store/index';
 import { useTheme } from '../../../core/theme/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
 
 const CATEGORIES = [
-  { id: null, label: 'All', emoji: '🔍' },
-  { id: 'accommodation', label: 'Housing', emoji: '🏠' },
-  { id: 'jobs', label: 'Jobs', emoji: '💼' },
-  { id: 'buysell', label: 'Buy/Sell', emoji: '🛍️' },
-  { id: 'food', label: 'Food', emoji: '🍱' },
+  { id: null, label: 'All', icon: 'search-outline' },
+  { id: 'accommodation', label: 'Housing', icon: 'business-outline' },
+  { id: 'jobs', label: 'Jobs', icon: 'briefcase-outline' },
+  { id: 'buysell', label: 'Buy/Sell', icon: 'pricetag-outline' },
+  { id: 'food', label: 'Food', icon: 'restaurant-outline' },
 ];
 
 function ListingCard({ item, onPress, colors }) {
@@ -107,15 +108,21 @@ export default function BrowseListingsScreen({ navigation }) {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.searchContainer, { backgroundColor: colors.secondary }]}>
-        <TextInput
-          style={[styles.searchInput, { color: colors.textWhite }]}
-          placeholder="Search listings..."
-          placeholderTextColor="rgba(255,255,255,0.5)"
-          value={searchQuery}
-          onChangeText={handleSearch}
-        />
-      </View>
+
+      {/* SafeAreaView wraps only the header so status bar is never overlapped */}
+      <SafeAreaView style={{ backgroundColor: colors.secondary }}>
+        <View style={[styles.searchContainer, { backgroundColor: colors.secondary }]}>
+          <TextInput
+            style={[styles.searchInput, { color: colors.textWhite }]}
+            placeholder="Search listings..."
+            placeholderTextColor="rgba(255,255,255,0.5)"
+            value={searchQuery}
+            onChangeText={handleSearch}
+          />
+        </View>
+      </SafeAreaView>
+
+      {/* Category Filter Row */}
       <View style={[styles.categoryContainer, {
         backgroundColor: colors.surface,
         borderBottomColor: colors.border,
@@ -123,13 +130,14 @@ export default function BrowseListingsScreen({ navigation }) {
         {CATEGORIES.map((cat) => (
           <TouchableOpacity
             key={cat.label}
-            style={[
-              styles.categoryButton,
-              selectedCategory === cat.id && { backgroundColor: colors.primary + '15' },
-            ]}
+            style={[styles.categoryButton, selectedCategory === cat.id && { backgroundColor: colors.primary + '15' }]}
             onPress={() => setSelectedCategory(cat.id)}
           >
-            <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
+            <Ionicons
+              name={cat.icon}
+              size={18}
+              color={selectedCategory === cat.id ? colors.primary : colors.textLight}
+            />
             <Text style={[
               styles.categoryLabel,
               { color: selectedCategory === cat.id ? colors.primary : colors.textLight },
@@ -140,6 +148,8 @@ export default function BrowseListingsScreen({ navigation }) {
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* Content */}
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -170,14 +180,17 @@ export default function BrowseListingsScreen({ navigation }) {
           }
         />
       )}
+
+      {/* Post Button */}
       <TouchableOpacity
-  style={[styles.postButton, { backgroundColor: colors.primary }]}
-  onPress={() => navigation.navigate('PostListing', {
-    preselectedCategory: selectedCategory
-  })}
->
-  <Text style={styles.postButtonText}>+ Post Listing</Text>
-</TouchableOpacity>
+        style={[styles.postButton, { backgroundColor: colors.primary }]}
+        onPress={() => navigation.navigate('PostListing', {
+          preselectedCategory: selectedCategory
+        })}
+      >
+        <Text style={styles.postButtonText}>+ Post Listing</Text>
+      </TouchableOpacity>
+
     </View>
   );
 }
@@ -189,7 +202,7 @@ const styles = StyleSheet.create({
   categoryContainer: { flexDirection: 'row', padding: 10, borderBottomWidth: 0.5 },
   categoryButton: { flex: 1, alignItems: 'center', padding: 6, borderRadius: 8 },
   categoryEmoji: { fontSize: 18 },
-  categoryLabel: { fontSize: 10, marginTop: 2, textAlign: 'center', numberOfLines: 1 },
+  categoryLabel: { fontSize: 10, marginTop: 2, textAlign: 'center' },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadingText: { marginTop: 10, fontSize: 14 },
   emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },

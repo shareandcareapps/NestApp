@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { getNews } from '../services/newsService';
 import { useTheme } from '../../../core/theme/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
 
 const CATEGORIES = [
   { id: null, label: 'All' },
@@ -75,19 +76,19 @@ export default function NewsFeedScreen({ navigation }) {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.filterContainer, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         {CATEGORIES.map((cat) => (
-          <TouchableOpacity
-            key={cat.label}
-            style={[styles.filterButton, {
-              backgroundColor: selectedCategory === cat.id ? '#3498DB' : colors.surfaceSecondary,
-              borderColor: selectedCategory === cat.id ? '#3498DB' : colors.border,
-            }]}
-            onPress={() => setSelectedCategory(cat.id)}
-          >
-            <Text style={[styles.filterLabel, { color: selectedCategory === cat.id ? '#fff' : colors.textSecondary }]}>
-              {cat.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+  <TouchableOpacity
+    key={cat.label}
+    style={[styles.filterButton, {
+      backgroundColor: selectedCategory === cat.id ? '#3498DB' : colors.surfaceSecondary,
+      borderColor: selectedCategory === cat.id ? '#3498DB' : colors.border,
+    }]}
+    onPress={() => setSelectedCategory(cat.id)}
+  >
+    <Text style={[styles.filterLabel, { color: selectedCategory === cat.id ? '#fff' : colors.textSecondary }]}>
+      {cat.label}
+    </Text>
+  </TouchableOpacity>
+))}
       </View>
       {loading ? (
         <View style={styles.loadingContainer}>

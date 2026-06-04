@@ -6,13 +6,14 @@ import {
 } from 'react-native';
 import { getRides } from '../services/ridesService';
 import { useTheme } from '../../../core/theme/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
 
 const CATEGORIES = [
-  { id: null, label: 'All', emoji: '🚗' },
-  { id: 'airport', label: 'Airport', emoji: '✈️' },
-  { id: 'university', label: 'University', emoji: '🎓' },
-  { id: 'temple', label: 'Temple', emoji: '🛕' },
-  { id: 'general', label: 'General', emoji: '🚗' },
+  { id: null, label: 'All', icon: 'apps-outline' },
+  { id: 'airport', label: 'Airport', icon: 'airplane-outline' },
+  { id: 'university', label: 'University', icon: 'school-outline' },
+  { id: 'temple', label: 'Temple', icon: 'business-outline' },
+  { id: 'general', label: 'General', icon: 'car-outline' },
 ];
 
 function RideCard({ item, onPress, colors }) {
@@ -28,32 +29,50 @@ function RideCard({ item, onPress, colors }) {
       }]}
       onPress={() => onPress(item)}
     >
-      <View style={[styles.typeBadge, { backgroundColor: isRequest ? '#9B59B620' : '#2ECC7120' }]}>
+      {/* Type Badge — icon + text in a proper flex row pill */}
+      <View style={[
+        styles.typeBadge,
+        { backgroundColor: isRequest ? '#9B59B620' : '#2ECC7120' }
+      ]}>
+        <Ionicons
+          name={isRequest ? 'hand-left-outline' : 'car-outline'}
+          size={11}
+          color={isRequest ? '#9B59B6' : '#27AE60'}
+          style={{ marginRight: 4 }}
+        />
         <Text style={[styles.typeBadgeText, { color: isRequest ? '#9B59B6' : '#27AE60' }]}>
-          {isRequest ? '🙋 Rider Request' : '🚗 Driver Offer'}
+          {isRequest ? 'Rider Request' : 'Driver Offer'}
         </Text>
       </View>
+
       <View style={styles.routeRow}>
         <View style={styles.locationBox}>
           <Text style={[styles.locationLabel, { color: colors.textLight }]}>FROM</Text>
           <Text style={[styles.locationText, { color: colors.textPrimary }]} numberOfLines={1}>{item.from_location}</Text>
         </View>
-        <Text style={[styles.arrow, { color: isRequest ? '#9B59B6' : '#2ECC71' }]}>→</Text>
+        <Ionicons name="arrow-forward" size={18} color={isRequest ? '#9B59B6' : '#2ECC71'} />
         <View style={styles.locationBox}>
           <Text style={[styles.locationLabel, { color: colors.textLight }]}>TO</Text>
           <Text style={[styles.locationText, { color: colors.textPrimary }]} numberOfLines={1}>{item.to_location}</Text>
         </View>
       </View>
+
       <View style={styles.detailsRow}>
         <View style={[styles.pill, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
-          <Text style={[styles.pillText, { color: colors.textSecondary }]}>📅 {isToday ? 'Today' : rideDate.toLocaleDateString()}</Text>
+          <Text style={[styles.pillText, { color: colors.textSecondary }]}>
+            📅 {isToday ? 'Today' : rideDate.toLocaleDateString()}
+          </Text>
         </View>
         <View style={[styles.pill, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
-          <Text style={[styles.pillText, { color: colors.textSecondary }]}>🕐 {rideDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+          <Text style={[styles.pillText, { color: colors.textSecondary }]}>
+            🕐 {rideDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
         </View>
         {!isRequest && (
           <View style={[styles.pill, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
-            <Text style={[styles.pillText, { color: colors.textSecondary }]}>👤 {item.seats_available} seat{item.seats_available > 1 ? 's' : ''}</Text>
+            <Text style={[styles.pillText, { color: colors.textSecondary }]}>
+              👤 {item.seats_available} seat{item.seats_available > 1 ? 's' : ''}
+            </Text>
           </View>
         )}
         <View style={[styles.pill, { backgroundColor: colors.successBackground, borderColor: '#2ECC71' }]}>
@@ -62,7 +81,12 @@ function RideCard({ item, onPress, colors }) {
           </Text>
         </View>
       </View>
-      {item.notes && <Text style={[styles.notes, { color: colors.textSecondary }]} numberOfLines={1}>💬 {item.notes}</Text>}
+
+      {item.notes && (
+        <Text style={[styles.notes, { color: colors.textSecondary }]} numberOfLines={1}>
+          💬 {item.notes}
+        </Text>
+      )}
     </TouchableOpacity>
   );
 }
@@ -97,6 +121,8 @@ export default function BrowseRidesScreen({ navigation }) {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+
+      {/* Offers / Requests Tab Row */}
       <View style={[styles.tabRow, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'offers' && { borderBottomColor: '#2ECC71' }]}
@@ -115,25 +141,35 @@ export default function BrowseRidesScreen({ navigation }) {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Category Filter Row */}
       <View style={[styles.categoryContainer, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         {CATEGORIES.map((cat) => (
           <TouchableOpacity
-            key={cat.label}
+            key={cat.id ?? 'all'}
             style={[styles.categoryButton, selectedCategory === cat.id && { backgroundColor: '#2ECC7115' }]}
             onPress={() => setSelectedCategory(cat.id)}
           >
-            <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
-            <Text style={[styles.categoryLabel, { color: selectedCategory === cat.id ? '#2ECC71' : colors.textLight }, selectedCategory === cat.id && { fontWeight: '600' }]}>
+            <Ionicons
+              name={cat.icon}
+              size={18}
+              color={selectedCategory === cat.id ? '#2ECC71' : colors.textLight}
+            />
+            <Text style={[styles.categoryLabel, { color: selectedCategory === cat.id ? '#2ECC71' : colors.textLight }]}>
               {cat.label}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* Cash Notice */}
       <View style={[styles.cashNotice, { backgroundColor: colors.successBackground }]}>
         <Text style={[styles.cashNoticeText, { color: colors.successText }]}>
           💵 All rides are cash-based — pay the driver directly
         </Text>
       </View>
+
+      {/* Content */}
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2ECC71" />
@@ -154,18 +190,25 @@ export default function BrowseRidesScreen({ navigation }) {
           data={rides}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <RideCard item={item} colors={colors} onPress={(ride) => navigation.navigate('RideDetail', { ride })} />
+            <RideCard
+              item={item}
+              colors={colors}
+              onPress={(ride) => navigation.navigate('RideDetail', { ride })}
+            />
           )}
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2ECC71" />}
         />
       )}
+
+      {/* Post Button */}
       <TouchableOpacity
         style={[styles.postButton, { backgroundColor: '#2ECC71' }]}
         onPress={() => navigation.navigate('PostRide')}
       >
         <Text style={styles.postButtonText}>+ Post</Text>
       </TouchableOpacity>
+
     </View>
   );
 }
@@ -177,7 +220,6 @@ const styles = StyleSheet.create({
   tabText: { fontSize: 13, fontWeight: '500' },
   categoryContainer: { flexDirection: 'row', padding: 10, borderBottomWidth: 0.5 },
   categoryButton: { flex: 1, alignItems: 'center', padding: 6, borderRadius: 8 },
-  categoryEmoji: { fontSize: 18 },
   categoryLabel: { fontSize: 10, marginTop: 2 },
   cashNotice: { padding: 10, alignItems: 'center' },
   cashNoticeText: { fontSize: 12, fontWeight: '500' },
@@ -189,13 +231,20 @@ const styles = StyleSheet.create({
   emptySubtitle: { fontSize: 14, marginTop: 6, textAlign: 'center' },
   listContent: { padding: 12, paddingBottom: 80 },
   card: { borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 0.5 },
-  typeBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, marginBottom: 10 },
+  typeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginBottom: 10,
+  },
   typeBadgeText: { fontSize: 11, fontWeight: '600' },
   routeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 8 },
   locationBox: { flex: 1 },
   locationLabel: { fontSize: 9, fontWeight: '600', letterSpacing: 0.5, marginBottom: 2 },
   locationText: { fontSize: 15, fontWeight: '600' },
-  arrow: { fontSize: 18, fontWeight: '700' },
   detailsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   pill: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 0.5 },
   pillText: { fontSize: 11 },
