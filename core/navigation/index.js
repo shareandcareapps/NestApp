@@ -134,39 +134,26 @@ function MainTabs({ navigation }) {
           />
         ),
       })}
-    >
-      <Tab.Screen
-        name="Classifieds"
-        component={ClassifiedsNavigator}
-        options={{
-          headerShown: true,
-          title: 'Classifieds',
-        }}
-      />
-      <Tab.Screen
-        name="Rides"
-        component={RidesNavigator}
-        options={{
-          headerShown: true,
-          title: 'Shared Rides',
-        }}
-      />
-      <Tab.Screen
-        name="News"
-        component={NewsNavigator}
-        options={{
-          headerShown: true,
-          title: 'Community News',
-        }}
-      />
-      <Tab.Screen
-        name="Messages"
-        component={MessagesNavigator}
-        options={{
-          headerShown: true,
-          title: 'Messages',
-        }}
-      />
+    ><Tab.Screen
+  name="Classifieds"
+  component={ClassifiedsNavigator}
+  options={{ headerShown: false }}
+/>
+<Tab.Screen
+  name="Rides"
+  component={RidesNavigator}
+  options={{ headerShown: false }}
+/>
+<Tab.Screen
+  name="News"
+  component={NewsNavigator}
+  options={{ headerShown: false }}
+/>
+<Tab.Screen
+  name="Messages"
+  component={MessagesNavigator}
+  options={{ headerShown: false }}
+/>
     </Tab.Navigator>
   );
 }

@@ -6,9 +6,18 @@ import useAppStore from '../../../core/store/index';
 import { useTheme } from '../../../core/theme/ThemeContext';
 
 function ConversationCard({ item, currentUserId, onPress, colors }) {
-  const otherUserId = item.participant_1 === currentUserId ? item.participant_2 : item.participant_1;
-  const name = 'Community Member';
-  const initials = 'CM';
+  const otherUserId = item.participant_1 === currentUserId
+    ? item.participant_2
+    : item.participant_1;
+
+  const name = item.otherProfile?.full_name || 'Community Member';
+  const initials = name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+
   const timeAgo = (date) => {
     const diff = new Date() - new Date(date);
     const mins = Math.floor(diff / 60000);
@@ -19,21 +28,29 @@ function ConversationCard({ item, currentUserId, onPress, colors }) {
     if (hours < 24) return `${hours}h`;
     return `${days}d`;
   };
+
   const avatarColors = ['#E63946', '#1D3557', '#2ECC71', '#3498DB', '#9B59B6', '#F39C12'];
-  const colorIndex = otherUserId.charCodeAt(0) % avatarColors.length;
+  const colorIndex = name.charCodeAt(0) % avatarColors.length;
 
   return (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}
-      onPress={() => onPress(item, { id: otherUserId, full_name: name })}
+      style={[styles.card, {
+        backgroundColor: colors.card,
+        borderBottomColor: colors.borderLight,
+      }]}
+      onPress={() => onPress(item, item.otherProfile || { id: otherUserId, full_name: name })}
     >
       <View style={[styles.avatar, { backgroundColor: avatarColors[colorIndex] }]}>
         <Text style={styles.avatarText}>{initials}</Text>
       </View>
       <View style={styles.cardContent}>
         <View style={styles.cardHeader}>
-          <Text style={[styles.cardName, { color: colors.textPrimary }]} numberOfLines={1}>{name}</Text>
-          <Text style={[styles.cardTime, { color: colors.textLight }]}>{timeAgo(item.last_message_at)}</Text>
+          <Text style={[styles.cardName, { color: colors.textPrimary }]} numberOfLines={1}>
+            {name}
+          </Text>
+          <Text style={[styles.cardTime, { color: colors.textLight }]}>
+            {timeAgo(item.last_message_at)}
+          </Text>
         </View>
         <Text style={[styles.cardLastMessage, { color: colors.textSecondary }]} numberOfLines={1}>
           {item.last_message || 'Start a conversation...'}

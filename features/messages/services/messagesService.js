@@ -41,6 +41,25 @@ export async function getConversations(userId) {
     .order('last_message_at', { ascending: false });
 
   if (error) throw error;
+
+  // Fetch other user's profile for each conversation
+  if (data && data.length > 0) {
+    const enriched = await Promise.all(
+      data.map(async (conv) => {
+        const otherUserId = conv.participant_1 === userId
+          ? conv.participant_2
+          : conv.participant_1;
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id, full_name, avatar_url')
+          .eq('id', otherUserId)
+          .single();
+        return { ...conv, otherProfile: profile };
+      })
+    );
+    return enriched;
+  }
+
   return data;
 }
 
