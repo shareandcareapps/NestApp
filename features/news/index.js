@@ -1,8 +1,4 @@
 // features/news/index.js
-// NEWS FEATURE — Entry point
-// GOLDEN RULE 1: This is the ONLY file other parts of app import from
-// Core navigation imports this file — nothing else from news
-
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import NewsFeedScreen from './screens/NewsFeedScreen';
@@ -23,7 +19,7 @@ export default function NewsNavigator() {
       <Stack.Screen
         name="NewsFeed"
         component={NewsFeedScreen}
-        options={{ title: 'Community News' }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="NewsDetail"

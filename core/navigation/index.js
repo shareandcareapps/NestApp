@@ -39,7 +39,6 @@ function AvatarButton({ onPress, name }) {
   const initials = name
     ? name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
     : '?';
-
   const avatarColors = [
     '#E63946', '#2ECC71', '#3498DB', '#9B59B6', '#F39C12',
   ];
@@ -85,7 +84,7 @@ function MainTabs({ navigation }) {
 
   useEffect(() => {
     loadProfileName();
-  }, []);
+  }, [user]);
 
   async function loadProfileName() {
     if (!user) return;
@@ -100,6 +99,15 @@ function MainTabs({ navigation }) {
   function openSettings() {
     navigation.navigate('Settings');
   }
+
+  const sharedHeaderOptions = {
+    headerStyle: { backgroundColor: colors.secondary },
+    headerTintColor: colors.textWhite,
+    headerTitleStyle: { fontWeight: '500', fontSize: 17 },
+    headerRight: () => (
+      <AvatarButton onPress={openSettings} name={profileName} />
+    ),
+  };
 
   return (
     <Tab.Navigator
@@ -119,46 +127,45 @@ function MainTabs({ navigation }) {
           fontSize: 11,
           fontWeight: '500',
         },
-        headerStyle: {
-          backgroundColor: colors.secondary,
-        },
-        headerTintColor: colors.textWhite,
-        headerTitleStyle: {
-          fontWeight: '500',
-          fontSize: 17,
-        },
-        headerRight: () => (
-          <AvatarButton
-            onPress={openSettings}
-            name={profileName}
-          />
-        ),
       })}
-    ><Tab.Screen
-  name="Classifieds"
-  component={ClassifiedsNavigator}
-  options={{ headerShown: false }}
-/>
-<Tab.Screen
-  name="Rides"
-  component={RidesNavigator}
-  options={{ headerShown: false }}
-/>
-<Tab.Screen
-  name="News"
-  component={NewsNavigator}
-  options={{ headerShown: false }}
-/>
-<Tab.Screen
-  name="Messages"
-  component={MessagesNavigator}
-  options={{ headerShown: false }}
-/>
+    >
+      <Tab.Screen
+        name="Classifieds"
+        component={ClassifiedsNavigator}
+        options={{
+          ...sharedHeaderOptions,
+          title: 'Classifieds',
+        }}
+      />
+      <Tab.Screen
+        name="Rides"
+        component={RidesNavigator}
+        options={{
+          ...sharedHeaderOptions,
+          title: 'Shared Rides',
+        }}
+      />
+      <Tab.Screen
+        name="News"
+        component={NewsNavigator}
+        options={{
+          ...sharedHeaderOptions,
+          title: 'Community News',
+        }}
+      />
+      <Tab.Screen
+        name="Messages"
+        component={MessagesNavigator}
+        options={{
+          ...sharedHeaderOptions,
+          title: 'Messages',
+        }}
+      />
     </Tab.Navigator>
   );
 }
 
-// ─── Main App Stack (includes Settings) ───────
+// ─── Main App Stack ────────────────────────────
 function MainApp() {
   return (
     <Stack.Navigator>
@@ -168,15 +175,15 @@ function MainApp() {
         options={{ headerShown: false }}
       />
       <Stack.Screen
-  name="Settings"
-  component={SettingsScreen}
-  options={({ navigation }) => ({
-    title: 'Profile & Settings',
-    headerStyle: { backgroundColor: '#1D3557' },
-    headerTintColor: '#fff',
-    headerTitleStyle: { fontWeight: '500' },
-  })}
-/>
+        name="Settings"
+        component={SettingsScreen}
+        options={{
+          title: 'Profile & Settings',
+          headerStyle: { backgroundColor: '#1D3557' },
+          headerTintColor: '#fff',
+          headerTitleStyle: { fontWeight: '500' },
+        }}
+      />
     </Stack.Navigator>
   );
 }

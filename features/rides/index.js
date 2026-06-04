@@ -1,13 +1,10 @@
 // features/rides/index.js
-// RIDES FEATURE — Entry point
-// GOLDEN RULE 1: This is the ONLY file other parts of app import from
-// Core navigation imports this file — nothing else from rides
-
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import BrowseRidesScreen from './screens/BrowseRidesScreen';
 import PostRideScreen from './screens/PostRideScreen';
 import RideDetailScreen from './screens/RideDetailScreen';
+import EditRideScreen from './screens/EditRideScreen';
 
 const Stack = createStackNavigator();
 
@@ -23,7 +20,7 @@ export default function RidesNavigator() {
       <Stack.Screen
         name="BrowseRides"
         component={BrowseRidesScreen}
-        options={{ title: 'Shared Rides' }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="PostRide"
@@ -34,6 +31,11 @@ export default function RidesNavigator() {
         name="RideDetail"
         component={RideDetailScreen}
         options={{ title: 'Ride Details' }}
+      />
+      <Stack.Screen
+        name="EditRide"
+        component={EditRideScreen}
+        options={{ title: 'Edit Ride' }}
       />
     </Stack.Navigator>
   );

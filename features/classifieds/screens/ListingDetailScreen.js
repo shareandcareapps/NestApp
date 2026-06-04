@@ -4,7 +4,7 @@ import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, Alert, Image, FlatList, Dimensions,
 } from 'react-native';
-import { getProfile } from '../services/listingsService';
+import { getProfile, deleteListing } from '../services/listingsService';
 import useAppStore from '../../../core/store/index';
 import { useTheme } from '../../../core/theme/ThemeContext';
 
@@ -35,10 +35,37 @@ export default function ListingDetailScreen({ route, navigation }) {
     try {
       const { getOrCreateConversation } = require('../../../features/messages/services/messagesService');
       const conversation = await getOrCreateConversation(user.id, listing.user_id);
-      navigation.navigate('Messages', { screen: 'Chat', params: { conversation, otherProfile: poster || { full_name: 'Community Member' } } });
+      navigation.navigate('Messages', {
+        screen: 'Chat',
+        params: { conversation, otherProfile: poster || { full_name: 'Community Member' } },
+      });
     } catch (error) {
       Alert.alert('Error', 'Could not open chat. Please try again.');
     }
+  }
+
+  async function handleDelete() {
+    Alert.alert(
+      'Delete Listing',
+      'Are you sure you want to delete this listing? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteListing(listing.id);
+              Alert.alert('Deleted', 'Your listing has been deleted.', [
+                { text: 'OK', onPress: () => navigation.goBack() }
+              ]);
+            } catch (error) {
+              Alert.alert('Error', 'Could not delete listing. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   }
 
   return (
@@ -52,7 +79,9 @@ export default function ListingDetailScreen({ route, navigation }) {
             showsHorizontalScrollIndicator={false}
             keyExtractor={(_, i) => i.toString()}
             onMomentumScrollEnd={(e) => setActiveImage(Math.round(e.nativeEvent.contentOffset.x / width))}
-            renderItem={({ item }) => <Image source={{ uri: item }} style={styles.listingImage} resizeMode="cover" />}
+            renderItem={({ item }) => (
+              <Image source={{ uri: item }} style={styles.listingImage} resizeMode="cover" />
+            )}
           />
           {images.length > 1 && (
             <View style={styles.imageDots}>
@@ -62,7 +91,9 @@ export default function ListingDetailScreen({ route, navigation }) {
             </View>
           )}
           <View style={[styles.categoryBadge, { backgroundColor: color }]}>
-            <Text style={styles.categoryBadgeText}>{categoryEmojis[listing.category]} {categoryLabels[listing.category]}</Text>
+            <Text style={styles.categoryBadgeText}>
+              {categoryEmojis[listing.category]} {categoryLabels[listing.category]}
+            </Text>
           </View>
         </View>
       ) : (
@@ -76,6 +107,7 @@ export default function ListingDetailScreen({ route, navigation }) {
           <Text style={[styles.categoryLabel, { color }]}>{categoryLabels[listing.category]}</Text>
         </View>
       )}
+
       <View style={styles.content}>
         <View style={styles.titleRow}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>{listing.title}</Text>
@@ -85,7 +117,9 @@ export default function ListingDetailScreen({ route, navigation }) {
           <Text style={[styles.metaText, { color: colors.textSecondary }]}>📍 {listing.city}, {listing.state}</Text>
           <Text style={[styles.metaText, { color: colors.textSecondary }]}>🕐 {new Date(listing.created_at).toLocaleDateString()}</Text>
         </View>
+
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
         {listing.description && (
           <>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Description</Text>
@@ -93,38 +127,70 @@ export default function ListingDetailScreen({ route, navigation }) {
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
           </>
         )}
+
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Posted By</Text>
         <View style={[styles.posterCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={[styles.avatarCircle, { backgroundColor: colors.secondary }]}>
             <Text style={styles.avatarText}>{poster?.full_name?.charAt(0)?.toUpperCase() || '?'}</Text>
           </View>
           <View style={styles.posterInfo}>
-            <Text style={[styles.posterName, { color: colors.textPrimary }]}>{poster?.full_name || 'Community Member'}</Text>
+            <Text style={[styles.posterName, { color: colors.textPrimary }]}>
+              {poster?.full_name || 'Community Member'}
+            </Text>
             <Text style={[styles.posterCity, { color: colors.textSecondary }]}>St. Louis, Missouri</Text>
           </View>
         </View>
+
+        {/* Contact Button — non owners */}
         {!isOwner && (
           <>
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Contact</Text>
-            <TouchableOpacity style={[styles.messageButton, { backgroundColor: color }]} onPress={handleMessage}>
+            <TouchableOpacity
+              style={[styles.messageButton, { backgroundColor: color }]}
+              onPress={handleMessage}
+            >
               <Text style={styles.messageButtonText}>💬 Send Message</Text>
             </TouchableOpacity>
-            <View style={[styles.privacyNotice, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+            <View style={[styles.privacyNotice, {
+              backgroundColor: colors.surfaceSecondary,
+              borderColor: colors.border,
+            }]}>
               <Text style={[styles.privacyText, { color: colors.textSecondary }]}>
                 🔒 Messages are private — you can share contact details inside the chat
               </Text>
             </View>
           </>
         )}
+
+        {/* Owner Actions */}
         {isOwner && (
           <>
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
-            <View style={[styles.ownerBox, { backgroundColor: colors.successBackground }]}>
-              <Text style={[styles.ownerBoxText, { color: colors.successText }]}>✅ This is your listing</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Manage Listing</Text>
+            <View style={styles.ownerActions}>
+              <TouchableOpacity
+                style={[styles.editButton, {
+                  backgroundColor: colors.infoBackground,
+                  borderColor: colors.info,
+                }]}
+                onPress={() => navigation.navigate('EditListing', { listing })}
+              >
+                <Text style={[styles.editButtonText, { color: colors.info }]}>✏️ Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.deleteButton, {
+                  backgroundColor: colors.errorBackground,
+                  borderColor: colors.error,
+                }]}
+                onPress={handleDelete}
+              >
+                <Text style={[styles.deleteButtonText, { color: colors.error }]}>🗑️ Delete</Text>
+              </TouchableOpacity>
             </View>
           </>
         )}
+
         <View style={[styles.safetyBox, { backgroundColor: colors.warningBackground }]}>
           <Text style={[styles.safetyText, { color: colors.warningText }]}>
             🛡️ Safety tip: Always meet in public places. Never send money before seeing the item or property in person.
@@ -168,8 +234,11 @@ const styles = StyleSheet.create({
   messageButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   privacyNotice: { borderRadius: 10, padding: 12, marginTop: 10, borderWidth: 0.5 },
   privacyText: { fontSize: 12, textAlign: 'center', lineHeight: 18 },
-  ownerBox: { borderRadius: 10, padding: 12, alignItems: 'center' },
-  ownerBoxText: { fontWeight: '600', fontSize: 14 },
+  ownerActions: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  editButton: { flex: 1, borderRadius: 10, padding: 14, alignItems: 'center', borderWidth: 0.5 },
+  editButtonText: { fontSize: 14, fontWeight: '600' },
+  deleteButton: { flex: 1, borderRadius: 10, padding: 14, alignItems: 'center', borderWidth: 0.5 },
+  deleteButtonText: { fontSize: 14, fontWeight: '600' },
   safetyBox: { borderRadius: 10, padding: 12, marginTop: 16 },
   safetyText: { fontSize: 12, lineHeight: 18 },
 });
