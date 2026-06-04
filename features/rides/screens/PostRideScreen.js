@@ -329,7 +329,7 @@ export default function PostRideScreen({ navigation }) {
         <Text style={[styles.label, { color: colors.textPrimary }]}>Notes (optional)</Text>
         <TextInput
           style={[styles.input, styles.textArea, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-          placeholder={postType === 'offer' ? 'Any extra info for riders...' : 'Any extra info for drivers...'}
+          placeholder={postType === 'offer' ? 'Any extra info for riders...' : 'Any info for drivers... ex. I have a lot of luggage'}
           placeholderTextColor={colors.textLight}
           value={notes}
           onChangeText={setNotes}

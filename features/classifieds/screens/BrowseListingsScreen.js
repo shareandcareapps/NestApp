@@ -10,9 +10,9 @@ import { useTheme } from '../../../core/theme/ThemeContext';
 
 const CATEGORIES = [
   { id: null, label: 'All', emoji: '🔍' },
-  { id: 'accommodation', label: 'Homes', emoji: '🏠' },
+  { id: 'accommodation', label: 'Housing', emoji: '🏠' },
   { id: 'jobs', label: 'Jobs', emoji: '💼' },
-  { id: 'buysell', label: 'Buy & Sell', emoji: '🛍️' },
+  { id: 'buysell', label: 'Buy/Sell', emoji: '🛍️' },
   { id: 'food', label: 'Food', emoji: '🍱' },
 ];
 
@@ -171,11 +171,13 @@ export default function BrowseListingsScreen({ navigation }) {
         />
       )}
       <TouchableOpacity
-        style={[styles.postButton, { backgroundColor: colors.primary }]}
-        onPress={() => navigation.navigate('PostListing')}
-      >
-        <Text style={styles.postButtonText}>+ Post Listing</Text>
-      </TouchableOpacity>
+  style={[styles.postButton, { backgroundColor: colors.primary }]}
+  onPress={() => navigation.navigate('PostListing', {
+    preselectedCategory: selectedCategory
+  })}
+>
+  <Text style={styles.postButtonText}>+ Post Listing</Text>
+</TouchableOpacity>
     </View>
   );
 }
@@ -187,7 +189,7 @@ const styles = StyleSheet.create({
   categoryContainer: { flexDirection: 'row', padding: 10, borderBottomWidth: 0.5 },
   categoryButton: { flex: 1, alignItems: 'center', padding: 6, borderRadius: 8 },
   categoryEmoji: { fontSize: 18 },
-  categoryLabel: { fontSize: 10, marginTop: 2 },
+  categoryLabel: { fontSize: 10, marginTop: 2, textAlign: 'center', numberOfLines: 1 },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadingText: { marginTop: 10, fontSize: 14 },
   emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },

@@ -101,7 +101,7 @@ export default function SettingsScreen({ navigation }) {
         <Text style={[styles.sectionTitle, { color: colors.textLight }]}>ACCOUNT</Text>
         <TouchableOpacity
           style={[styles.menuItem, { borderBottomColor: colors.borderLight }]}
-          onPress={() => Alert.alert('Coming Soon', 'Edit profile will be available soon!')}
+          onPress={() => navigation.navigate('EditProfile')}
         >
           <Text style={styles.menuItemEmoji}>👤</Text>
           <View style={styles.menuItemContent}>
@@ -112,7 +112,7 @@ export default function SettingsScreen({ navigation }) {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.menuItem, { borderBottomColor: colors.borderLight }]}
-          onPress={() => Alert.alert('Coming Soon', 'My Listings will be available soon!')}
+          onPress={() => navigation.navigate('MyListings')}
         >
           <Text style={styles.menuItemEmoji}>🏠</Text>
           <View style={styles.menuItemContent}>
@@ -123,7 +123,7 @@ export default function SettingsScreen({ navigation }) {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.menuItem, { borderBottomColor: colors.borderLight }]}
-          onPress={() => Alert.alert('Coming Soon', 'My Rides will be available soon!')}
+          onPress={() => navigation.navigate('MyRides')}
         >
           <Text style={styles.menuItemEmoji}>🚗</Text>
           <View style={styles.menuItemContent}>

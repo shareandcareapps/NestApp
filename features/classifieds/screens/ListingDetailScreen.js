@@ -135,8 +135,8 @@ export default function ListingDetailScreen({ route, navigation }) {
           </View>
           <View style={styles.posterInfo}>
             <Text style={[styles.posterName, { color: colors.textPrimary }]}>
-              {poster?.full_name || 'Community Member'}
-            </Text>
+  {poster?.username ? `@${poster.username}` : poster?.full_name || 'Community Member'}
+</Text>
             <Text style={[styles.posterCity, { color: colors.textSecondary }]}>St. Louis, Missouri</Text>
           </View>
         </View>

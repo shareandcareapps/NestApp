@@ -113,10 +113,10 @@ export async function searchListings(query, category = null) {
 export async function getProfile(userId) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, full_name, avatar_url')
+    .select('id, full_name, username, avatar_url')
     .eq('id', userId)
     .single();
-
+    
   if (error) return null;
   return data;
 }

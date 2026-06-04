@@ -1,6 +1,8 @@
 // core/navigation/index.js
 // CORE FILE — DO NOT MODIFY STRUCTURE
-
+import EditProfileScreen from '../screens/EditProfileScreen';
+import MyListingsScreen from '../screens/MyListingsScreen';
+import MyRidesScreen from '../screens/MyRidesScreen';
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -175,15 +177,45 @@ function MainApp() {
         options={{ headerShown: false }}
       />
       <Stack.Screen
-        name="Settings"
-        component={SettingsScreen}
-        options={{
-          title: 'Profile & Settings',
-          headerStyle: { backgroundColor: '#1D3557' },
-          headerTintColor: '#fff',
-          headerTitleStyle: { fontWeight: '500' },
-        }}
-      />
+  name="Settings"
+  component={SettingsScreen}
+  options={{
+    title: 'Profile & Settings',
+    headerStyle: { backgroundColor: '#1D3557' },
+    headerTintColor: '#fff',
+    headerTitleStyle: { fontWeight: '500' },
+  }}
+/>
+<Stack.Screen
+  name="EditProfile"
+  component={EditProfileScreen}
+  options={{
+    title: 'Edit Profile',
+    headerStyle: { backgroundColor: '#1D3557' },
+    headerTintColor: '#fff',
+    headerTitleStyle: { fontWeight: '500' },
+  }}
+/>
+<Stack.Screen
+  name="MyListings"
+  component={MyListingsScreen}
+  options={{
+    title: 'My Listings',
+    headerStyle: { backgroundColor: '#1D3557' },
+    headerTintColor: '#fff',
+    headerTitleStyle: { fontWeight: '500' },
+  }}
+/>
+<Stack.Screen
+  name="MyRides"
+  component={MyRidesScreen}
+  options={{
+    title: 'My Rides',
+    headerStyle: { backgroundColor: '#1D3557' },
+    headerTintColor: '#fff',
+    headerTitleStyle: { fontWeight: '500' },
+  }}
+/>
     </Stack.Navigator>
   );
 }
