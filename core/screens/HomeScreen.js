@@ -1,9 +1,12 @@
 // core/screens/HomeScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, ActivityIndicator, RefreshControl, Image,
+  Animated, Dimensions, TouchableWithoutFeedback,
 } from 'react-native';
+
+const DRAWER_WIDTH = Dimensions.get('window').width * 0.75;
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../database/index';
 import useAppStore from '../store/index';
@@ -18,13 +21,39 @@ const categoryConfig = {
 
 export default function HomeScreen({ navigation }) {
   const user = useAppStore((state) => state.user);
+  const profileName = useAppStore((state) => state.profileName);
+  const profileEmail = useAppStore((state) => state.profileEmail);
+  const setProfileName = useAppStore((state) => state.setProfileName);
+  const setProfileEmail = useAppStore((state) => state.setProfileEmail);
   const colors = useTheme();
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [profileName, setProfileName] = useState('');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
+  const drawerOpenRef = useRef(false);
+
+  function openDrawer() {
+    drawerOpenRef.current = true;
+    setDrawerOpen(true);
+    Animated.spring(drawerAnim, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }).start();
+  }
+
+  function closeDrawer() {
+    drawerOpenRef.current = false;
+    Animated.timing(drawerAnim, { toValue: -DRAWER_WIDTH, duration: 220, useNativeDriver: true }).start(() => setDrawerOpen(false));
+  }
+
+  function toggleDrawer() {
+    if (drawerOpenRef.current) closeDrawer(); else openDrawer();
+  }
 
   useEffect(() => {
+    navigation.setOptions({ headerLeft: () => (
+      <TouchableOpacity onPress={toggleDrawer} style={{ marginLeft: 14 }}>
+        <Ionicons name="menu" size={26} color="#fff" />
+      </TouchableOpacity>
+    )});
     fetchData();
   }, []);
 
@@ -50,6 +79,7 @@ export default function HomeScreen({ navigation }) {
       if (profileRes.data) {
         const raw = profileRes.data.username || profileRes.data.full_name || '';
         setProfileName(raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : '');
+        setProfileEmail(user?.email || '');
       }
     } catch (error) {
       console.error('Error fetching home data:', error);
@@ -71,7 +101,10 @@ export default function HomeScreen({ navigation }) {
     return 'Good evening';
   };
 
+  const initials = profileName ? profileName.slice(0, 2).toUpperCase() : '?';
+
   return (
+    <View style={{ flex: 1 }}>
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       refreshControl={
@@ -84,11 +117,8 @@ export default function HomeScreen({ navigation }) {
     >
       {/* Greeting */}
       <View style={[styles.heroSection, { backgroundColor: colors.surface }]}>
-        <Text style={[styles.greeting, { color: colors.textPrimary }]}>
-          {greeting()}{profileName ? `, ${profileName}` : ''} 👋
-        </Text>
-        <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-          What are you{'\n'}looking for today?
+        <Text style={[styles.welcomeText, { color: colors.textPrimary }]}>
+          Welcome back{profileName ? `,` : ''}{'\n'}{profileName ? `${profileName} 👋` : '👋'}
         </Text>
       </View>
 
@@ -97,6 +127,7 @@ export default function HomeScreen({ navigation }) {
         backgroundColor: colors.infoBackground,
         borderColor: colors.info + '30',
         marginHorizontal: 16,
+        marginTop: 8,
         marginBottom: 4,
       }]}>
         <Ionicons name="people-outline" size={20} color={colors.info} />
@@ -269,25 +300,65 @@ export default function HomeScreen({ navigation }) {
       </View>
 
     </ScrollView>
+
+      {/* Drawer backdrop */}
+      {drawerOpen && (
+        <TouchableWithoutFeedback onPress={closeDrawer}>
+          <Animated.View style={[styles.drawerBackdrop, {
+            opacity: drawerAnim.interpolate({ inputRange: [-DRAWER_WIDTH, 0], outputRange: [0, 1] }),
+          }]} />
+        </TouchableWithoutFeedback>
+      )}
+
+      {/* Drawer panel */}
+      <Animated.View style={[styles.drawer, { backgroundColor: colors.surface, transform: [{ translateX: drawerAnim }] }]}>
+        {/* Profile header */}
+        <View style={[styles.drawerHeader, { backgroundColor: colors.secondary }]}>
+          <View style={[styles.drawerAvatar, { backgroundColor: colors.primary }]}>
+            <Text style={styles.drawerAvatarText}>{initials}</Text>
+          </View>
+          <Text style={styles.drawerName}>{profileName || 'Community Member'}</Text>
+          <Text style={styles.drawerEmail}>{profileEmail}</Text>
+        </View>
+
+        {/* Menu items */}
+        {[
+          { emoji: '👤', label: 'Edit Profile', sub: 'Name, phone number', screen: 'EditProfile' },
+          { emoji: '🏠', label: 'My Listings', sub: 'View and manage your posts', screen: 'MyListings' },
+          { emoji: '🚗', label: 'My Rides', sub: 'View and manage your rides', screen: 'MyRides' },
+          { emoji: '⚙️', label: 'Settings', sub: 'Theme, preferences', screen: 'Settings' },
+        ].map((item) => (
+          <TouchableOpacity
+            key={item.screen}
+            style={[styles.drawerItem, { borderBottomColor: colors.border }]}
+            onPress={() => { closeDrawer(); navigation.navigate(item.screen); }}
+          >
+            <Text style={styles.drawerItemEmoji}>{item.emoji}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.drawerItemLabel, { color: colors.textPrimary }]}>{item.label}</Text>
+              <Text style={[styles.drawerItemSub, { color: colors.textLight }]}>{item.sub}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textLight} />
+          </TouchableOpacity>
+        ))}
+      </Animated.View>
+
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
   heroSection: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 20,
     paddingBottom: 16,
   },
-  greeting: {
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  heroTitle: {
-    fontSize: 26,
-    fontWeight: '700',
-    lineHeight: 34,
+  welcomeText: {
+    fontSize: 28,
+    fontWeight: '800',
     letterSpacing: -0.5,
+    lineHeight: 36,
   },
   quickActions: {
     padding: 16,
@@ -442,6 +513,17 @@ const styles = StyleSheet.create({
   listingTime: {
     fontSize: 10,
   },
+  drawerBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' },
+  drawer: { position: 'absolute', top: 0, bottom: 0, left: 0, width: DRAWER_WIDTH, shadowColor: '#000', shadowOffset: { width: 4, height: 0 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 8 },
+  drawerHeader: { paddingTop: 60, paddingBottom: 24, paddingHorizontal: 20 },
+  drawerAvatar: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  drawerAvatarText: { color: '#fff', fontSize: 20, fontWeight: '700' },
+  drawerName: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  drawerEmail: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 2 },
+  drawerItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 0.5, gap: 12 },
+  drawerItemEmoji: { fontSize: 20 },
+  drawerItemLabel: { fontSize: 15, fontWeight: '600' },
+  drawerItemSub: { fontSize: 12, marginTop: 1 },
   communityBox: {
     borderRadius: 12,
     padding: 14,

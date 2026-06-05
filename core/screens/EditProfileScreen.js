@@ -10,6 +10,7 @@ import { useTheme } from '../theme/ThemeContext';
 
 export default function EditProfileScreen({ navigation }) {
   const user = useAppStore((state) => state.user);
+  const setProfileName = useAppStore((state) => state.setProfileName);
   const colors = useTheme();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -77,6 +78,9 @@ export default function EditProfileScreen({ navigation }) {
         return;
       }
 
+      // Update global store so name reflects everywhere instantly
+      const raw = username || fullName || '';
+      setProfileName(raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : '');
       Alert.alert('Saved!', 'Your profile has been updated.', [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);

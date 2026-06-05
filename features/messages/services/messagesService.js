@@ -42,19 +42,28 @@ export async function getConversations(userId) {
 
   if (error) throw error;
 
-  // Fetch other user's profile for each conversation
+  // Fetch other user's profile + last message sender for each conversation
   if (data && data.length > 0) {
     const enriched = await Promise.all(
       data.map(async (conv) => {
         const otherUserId = conv.participant_1 === userId
           ? conv.participant_2
           : conv.participant_1;
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id, full_name, avatar_url')
-          .eq('id', otherUserId)
-          .single();
-        return { ...conv, otherProfile: profile };
+        const [{ data: profile }, { data: lastMsg }] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select('id, full_name, username, avatar_url')
+            .eq('id', otherUserId)
+            .single(),
+          supabase
+            .from('messages')
+            .select('sender_id')
+            .eq('conversation_id', conv.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single(),
+        ]);
+        return { ...conv, otherProfile: profile, lastSenderId: lastMsg?.sender_id || null };
       })
     );
     return enriched;
@@ -84,6 +93,7 @@ export async function sendMessage(conversationId, senderId, body) {
       conversation_id: conversationId,
       sender_id: senderId,
       body,
+      is_read: false,
     })
     .select()
     .single();
@@ -103,25 +113,42 @@ export async function sendMessage(conversationId, senderId, body) {
 }
 
 // ─── Mark messages as read ─────────────────────
+// Uses `neq(true)` to catch both is_read=false AND is_read=null
 export async function markMessagesAsRead(conversationId, userId) {
   const { error } = await supabase
     .from('messages')
     .update({ is_read: true })
     .eq('conversation_id', conversationId)
     .neq('sender_id', userId)
-    .eq('is_read', false);
+    .neq('is_read', true); // catches null and false
 
   if (error) throw error;
 }
 
-// ─── Get unread message count ──────────────────
+// ─── Get unread count per conversation ────────
+export async function getUnreadCountPerConversation(userId) {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('conversation_id')
+    .neq('is_read', true) // catches null and false
+    .neq('sender_id', userId);
+
+  if (error) return {};
+  return (data || []).reduce((acc, msg) => {
+    acc[msg.conversation_id] = true;
+    return acc;
+  }, {});
+}
+
+// ─── Get total unread conversations count ─────
 export async function getUnreadCount(userId) {
   const { data, error } = await supabase
     .from('messages')
-    .select('id', { count: 'exact' })
-    .eq('is_read', false)
+    .select('conversation_id')
+    .neq('is_read', true) // catches null and false
     .neq('sender_id', userId);
 
-  if (error) throw error;
-  return data?.length || 0;
+  if (error) return 0;
+  const unique = new Set((data || []).map(m => m.conversation_id));
+  return unique.size;
 }

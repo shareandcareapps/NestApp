@@ -63,6 +63,7 @@ function AvatarButton({ onPress, name }) {
 
 function MainTabs({ navigation }) {
   const user = useAppStore((state) => state.user);
+  const unreadMessages = useAppStore((state) => state.unreadConversationIds.length);
   const [profileName, setProfileName] = useState('');
   const theme = useTheme();
 
@@ -86,9 +87,6 @@ function MainTabs({ navigation }) {
     headerStyle: { backgroundColor: colors.secondary },
     headerTintColor: '#fff',
     headerTitleStyle: { fontWeight: '500', fontSize: 17 },
-    headerRight: () => (
-      <AvatarButton onPress={openSettings} name={profileName} />
-    ),
   };
 
   return (
@@ -182,7 +180,7 @@ function MainTabs({ navigation }) {
       <Tab.Screen
         name="Messages"
         component={MessagesNavigator}
-        options={{ headerShown: false }}
+        options={{ headerShown: false, tabBarBadge: unreadMessages > 0 ? (unreadMessages > 99 ? '99+' : unreadMessages) : undefined }}
         listeners={({ navigation, route }) => ({
           tabPress: (e) => {
             if (navigation.isFocused()) {
@@ -212,6 +210,7 @@ function MainApp() {
           headerStyle: { backgroundColor: '#1D3557' },
           headerTintColor: '#fff',
           headerTitleStyle: { fontWeight: '500' },
+          headerBackTitleVisible: false,
         }}
       />
       <Stack.Screen
@@ -222,6 +221,7 @@ function MainApp() {
           headerStyle: { backgroundColor: '#1D3557' },
           headerTintColor: '#fff',
           headerTitleStyle: { fontWeight: '500' },
+          headerBackTitleVisible: false,
         }}
       />
       <Stack.Screen
@@ -232,6 +232,7 @@ function MainApp() {
           headerStyle: { backgroundColor: '#1D3557' },
           headerTintColor: '#fff',
           headerTitleStyle: { fontWeight: '500' },
+          headerBackTitleVisible: false,
         }}
       />
       <Stack.Screen
@@ -242,6 +243,7 @@ function MainApp() {
           headerStyle: { backgroundColor: '#1D3557' },
           headerTintColor: '#fff',
           headerTitleStyle: { fontWeight: '500' },
+          headerBackTitleVisible: false,
         }}
       />
     </Stack.Navigator>

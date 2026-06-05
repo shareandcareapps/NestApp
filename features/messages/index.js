@@ -13,6 +13,7 @@ export default function MessagesNavigator() {
         headerStyle: { backgroundColor: '#1D3557' },
         headerTintColor: '#fff',
         headerTitleStyle: { fontWeight: '500' },
+        headerBackTitleVisible: false,
       }}
     >
       <Stack.Screen

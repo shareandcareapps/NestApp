@@ -18,9 +18,13 @@ const useAppStore = create((set) => ({
   // ─── App State ────────────────────────────────
   isLoading: false,
   currentCity: 'St. Louis',
+  profileName: '',
+  profileEmail: '',
 
   setLoading: (isLoading) => set({ isLoading }),
   setCurrentCity: (city) => set({ currentCity: city }),
+  setProfileName: (profileName) => set({ profileName }),
+  setProfileEmail: (profileEmail) => set({ profileEmail }),
 
   // ─── Theme ────────────────────────────────────
   // 'light', 'dark', 'auto'
@@ -29,7 +33,28 @@ const useAppStore = create((set) => ({
 
   // ─── Notifications ────────────────────────────
   unreadMessages: 0,
+  unreadConversationIds: [],
+  readConversationIds: [], // tracks conversations explicitly read this session
   setUnreadMessages: (count) => set({ unreadMessages: count }),
+  addUnreadConversation: (id) => set((state) => {
+    if (state.unreadConversationIds.includes(id)) return state;
+    const ids = [...state.unreadConversationIds, id];
+    // New message arrived — remove from readConversationIds so refresh won't suppress it
+    const readIds = state.readConversationIds.filter(r => r !== id);
+    return { unreadConversationIds: ids, unreadMessages: ids.length, readConversationIds: readIds };
+  }),
+  clearUnreadConversation: (id) => set((state) => {
+    const ids = state.unreadConversationIds.filter(c => c !== id);
+    const readIds = state.readConversationIds.includes(id)
+      ? state.readConversationIds
+      : [...state.readConversationIds, id];
+    return { unreadConversationIds: ids, unreadMessages: ids.length, readConversationIds: readIds };
+  }),
+  setInitialUnread: (ids) => set((state) => {
+    // Filter out conversations already read this session
+    const filtered = ids.filter(id => !state.readConversationIds.includes(id));
+    return { unreadConversationIds: filtered, unreadMessages: filtered.length };
+  }),
 
 }));
 
