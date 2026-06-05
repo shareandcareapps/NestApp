@@ -146,32 +146,18 @@ export default function HomeScreen({ navigation }) {
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Quick Actions</Text>
         <View style={styles.actionRow}>
           <TouchableOpacity
-            style={[styles.actionCard, { backgroundColor: '#E63946' }]}
+            style={[styles.actionCardLarge, { backgroundColor: '#E63946' }]}
             onPress={() => navigation.navigate('Classifieds', { screen: 'PostListing' })}
           >
-            <Ionicons name="add-circle-outline" size={22} color="#fff" />
-            <Text style={styles.actionLabel}>Post Listing</Text>
+            <Ionicons name="pricetag-outline" size={26} color="#fff" />
+            <Text style={styles.actionLabelLarge}>Post Listing</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.actionCard, { backgroundColor: '#1D3557' }]}
-            onPress={() => navigation.navigate('Rides')}
+            style={[styles.actionCardLarge, { backgroundColor: '#2ECC71' }]}
+            onPress={() => navigation.navigate('Rides', { screen: 'PostRide' })}
           >
-            <Ionicons name="car-outline" size={22} color="#fff" />
-            <Text style={styles.actionLabel}>Find a Ride</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionCard, { backgroundColor: '#9B59B6' }]}
-            onPress={() => navigation.navigate('Messages')}
-          >
-            <Ionicons name="chatbubble-outline" size={22} color="#fff" />
-            <Text style={styles.actionLabel}>Messages</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionCard, { backgroundColor: '#3498DB' }]}
-            onPress={() => navigation.navigate('News')}
-          >
-            <Ionicons name="newspaper-outline" size={22} color="#fff" />
-            <Text style={styles.actionLabel}>News</Text>
+            <Ionicons name="car-sport-outline" size={26} color="#fff" />
+            <Text style={styles.actionLabelLarge}>Post Ride</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -385,6 +371,20 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  actionCardLarge: {
+    flex: 1,
+    borderRadius: 14,
+    paddingVertical: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  actionLabelLarge: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
   },
   section: {
     padding: 16,

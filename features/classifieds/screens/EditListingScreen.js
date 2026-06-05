@@ -2,9 +2,12 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  ScrollView, ActivityIndicator, Alert, StyleSheet, Switch,
+  ScrollView, ActivityIndicator, Alert, StyleSheet, Switch, Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { updateListing } from '../services/listingsService';
+import useAppStore from '../../../core/store/index';
+import { supabase } from '../../../core/database/index';
 import { useTheme } from '../../../core/theme/ThemeContext';
 
 const categoryColors = {
@@ -36,8 +39,61 @@ const BUY_SELL_CATEGORIES = [
 export default function EditListingScreen({ route, navigation }) {
   const { listing } = route.params;
   const colors = useTheme();
+  const user = useAppStore((state) => state.user);
   const category = listing.category;
   const color = categoryColors[category] || '#E63946';
+
+  // ─── Photos ────────────────────────────────
+  const [images, setImages] = useState(listing.images || []);
+  const [uploading, setUploading] = useState(false);
+
+  async function pickImage() {
+    if (images.length >= 4) { Alert.alert('Maximum 4 photos allowed'); return; }
+    Alert.alert('Add Photo', 'Choose a source', [
+      {
+        text: '📷 Camera',
+        onPress: async () => {
+          const p = await ImagePicker.requestCameraPermissionsAsync();
+          if (!p.granted) { Alert.alert('Permission needed', 'Please allow camera access.'); return; }
+          const r = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: false, quality: 0.8 });
+          if (!r.canceled) await uploadImage(r.assets[0]);
+        },
+      },
+      {
+        text: '🖼️ Photo Library',
+        onPress: async () => {
+          const p = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (!p.granted) { Alert.alert('Permission needed', 'Please allow photo access.'); return; }
+          const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: false, quality: 0.8 });
+          if (!r.canceled) await uploadImage(r.assets[0]);
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }
+
+  async function uploadImage(imageAsset) {
+    try {
+      setUploading(true);
+      const ext = imageAsset.uri.split('.').pop();
+      const fileName = `${user.id}/${Date.now()}.${ext}`;
+      const response = await fetch(imageAsset.uri);
+      const blob = await response.blob();
+      const arrayBuffer = await new Response(blob).arrayBuffer();
+      const { error } = await supabase.storage.from('listings').upload(fileName, arrayBuffer, { contentType: `image/${ext}` });
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from('listings').getPublicUrl(fileName);
+      setImages((prev) => [...prev, urlData.publicUrl]);
+    } catch (error) {
+      Alert.alert('Upload failed', 'Could not upload image.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function removeImage(index) {
+    setImages((prev) => prev.filter((_, i) => i !== index));
+  }
 
   // Parse existing metadata
   let meta = {};
@@ -84,6 +140,7 @@ export default function EditListingScreen({ route, navigation }) {
         title: acTitle,
         description: acDescription,
         price: acPrice ? parseFloat(acPrice) : null,
+        images,
       };
     }
     if (category === 'jobs') {
@@ -91,6 +148,7 @@ export default function EditListingScreen({ route, navigation }) {
         title: jobRole,
         description: jobDescription,
         price: jobSalaryOpen ? null : jobSalary ? parseFloat(jobSalary) : null,
+        images,
         metadata: JSON.stringify({
           company: jobCompany,
           salary_open: jobSalaryOpen,
@@ -106,6 +164,7 @@ export default function EditListingScreen({ route, navigation }) {
         title: bsProductName,
         description: bsDescription,
         price: bsPrice ? parseFloat(bsPrice) : null,
+        images,
         metadata: JSON.stringify({
           negotiable: bsNegotiable,
           product_category: bsProductCategory,
@@ -119,6 +178,7 @@ export default function EditListingScreen({ route, navigation }) {
         title: foodTitle,
         description: foodDescription,
         price: foodPrice ? parseFloat(foodPrice) : null,
+        images,
         metadata: JSON.stringify({
           negotiable: foodNegotiable,
           pickup: foodPickup,
@@ -127,6 +187,38 @@ export default function EditListingScreen({ route, navigation }) {
       };
     }
   }
+
+  // Photos section — shown for all categories except jobs
+  const showPhotos = category !== 'jobs';
+  const PhotosSection = () => (
+    <>
+      <Text style={[styles.label, { color: colors.textPrimary }]}>Photos (up to 4)</Text>
+      <View style={styles.photosContainer}>
+        {images.map((uri, index) => (
+          <View key={index} style={styles.photoWrapper}>
+            <Image source={{ uri }} style={styles.photo} />
+            <TouchableOpacity style={styles.removePhoto} onPress={() => removeImage(index)}>
+              <Text style={styles.removePhotoText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        ))}
+        {images.length < 4 && (
+          <TouchableOpacity
+            style={[styles.addPhotoButton, { backgroundColor: colors.surface, borderColor: color }]}
+            onPress={pickImage}
+            disabled={uploading}
+          >
+            {uploading ? <ActivityIndicator color={color} /> : (
+              <>
+                <Text style={styles.addPhotoIcon}>📷</Text>
+                <Text style={[styles.addPhotoText, { color }]}>Add Photo</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+      </View>
+    </>
+  );
 
   function validate() {
     if (category === 'accommodation' && !acTitle) { Alert.alert('Error', 'Please enter a title'); return false; }
@@ -471,11 +563,14 @@ export default function EditListingScreen({ route, navigation }) {
           </>
         )}
 
+        {/* Photos — all categories except jobs */}
+        {showPhotos && <PhotosSection />}
+
         {/* Save Button */}
         <TouchableOpacity
           style={[styles.saveButton, { backgroundColor: color }]}
           onPress={handleUpdate}
-          disabled={loading}
+          disabled={loading || uploading}
         >
           {loading ? (
             <ActivityIndicator color="#fff" />
@@ -550,6 +645,14 @@ categoryHeaderTitle: {
   serviceOption: { flex: 1, borderRadius: 12, padding: 16, alignItems: 'center', gap: 6 },
   serviceOptionEmoji: { fontSize: 24 },
   serviceOptionLabel: { fontSize: 14 },
+  photosContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  photoWrapper: { position: 'relative' },
+  photo: { width: 80, height: 80, borderRadius: 8 },
+  removePhoto: { position: 'absolute', top: -6, right: -6, backgroundColor: '#E63946', borderRadius: 10, width: 20, height: 20, alignItems: 'center', justifyContent: 'center' },
+  removePhotoText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  addPhotoButton: { width: 80, height: 80, borderRadius: 8, borderWidth: 1, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  addPhotoIcon: { fontSize: 20 },
+  addPhotoText: { fontSize: 10, fontWeight: '500' },
   saveButton: { borderRadius: 12, padding: 15, alignItems: 'center', marginTop: 24 },
   saveButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   cancelButton: { borderRadius: 12, padding: 15, alignItems: 'center', marginTop: 10 },

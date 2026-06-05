@@ -6,14 +6,17 @@
 import { supabase } from '../../../core/database/index';
 
 // ─── Fetch all active rides ────────────────────
-export async function getRides(category = null, tab = 'offers', university = null) {
+// tab: null = all, 'offers' = driver offers, 'requests' = rider requests
+export async function getRides(category = null, tab = null, university = null) {
   let query = supabase
     .from('rides')
     .select('*')
     .eq('is_active', true)
-    .eq('ride_type', tab === 'offers' ? 'offer' : 'request')
     .gte('ride_date', new Date().toISOString())
     .order('ride_date', { ascending: true });
+
+  if (tab === 'offers') query = query.eq('ride_type', 'offer');
+  else if (tab === 'requests') query = query.eq('ride_type', 'request');
 
   if (category) query = query.eq('category', category);
   if (university) query = query.eq('university', university);

@@ -32,7 +32,7 @@ const CATEGORIES = [
 const UNIVERSITIES = [
   { id: 'webster', short: 'Webster', full: 'Webster University',           color: '#8E44AD', logo: { uri: 'https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://webster.edu&size=128' } },
   { id: 'slu',     short: 'SLU',     full: 'Saint Louis University',       color: '#C0392B', logo: { uri: 'https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://slu.edu&size=128' } },
-  { id: 'umsl',    short: 'UMSL',    full: 'Univ. of Missouri–St. Louis',  color: '#C8102E', logo: { uri: 'https://www.umsl.edu/branding/logos/images/university-logo-horizontal_triton-red-blk.png' } },
+  { id: 'umsl',    short: 'UMSL',    full: 'Univ. of Missouri–St. Louis',  color: '#C8102E', logo: { uri: 'https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://umsl.edu&size=128' } },
   { id: 'washu',   short: 'Wash U',  full: 'Washington University',        color: '#117A65', logo: { uri: 'https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://wustl.edu&size=128' } },
 ];
 

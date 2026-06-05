@@ -2,13 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, Alert, Image, FlatList, Dimensions,
+  TouchableOpacity, Alert, Image, FlatList, Dimensions, Modal, StatusBar,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { getProfile, deleteListing } from '../services/listingsService';
 import useAppStore from '../../../core/store/index';
 import { useTheme } from '../../../core/theme/ThemeContext';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const categoryColors = { accommodation: '#E63946', jobs: '#2ECC71', buysell: '#3498DB', food: '#F39C12' };
 const categoryEmojis = { accommodation: '🏠', jobs: '💼', buysell: '🛍️', food: '🍱' };
@@ -26,7 +27,14 @@ export default function ListingDetailScreen({ route, navigation }) {
   const displayLocation = meta?.location || `${listing.city}, ${listing.state}`;
   const [poster, setPoster] = useState(listing.poster || null);
   const [activeImage, setActiveImage] = useState(0);
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
   const images = listing.images || [];
+
+  function openViewer(index) {
+    setViewerIndex(index);
+    setViewerVisible(true);
+  }
 
   useEffect(() => { if (!poster) loadProfile(); }, []);
 
@@ -73,6 +81,7 @@ export default function ListingDetailScreen({ route, navigation }) {
   }
 
   return (
+    <View style={{ flex: 1 }}>
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
       {images.length > 0 ? (
         <View style={styles.imageContainer}>
@@ -83,10 +92,16 @@ export default function ListingDetailScreen({ route, navigation }) {
             showsHorizontalScrollIndicator={false}
             keyExtractor={(_, i) => i.toString()}
             onMomentumScrollEnd={(e) => setActiveImage(Math.round(e.nativeEvent.contentOffset.x / width))}
-            renderItem={({ item }) => (
-              <Image source={{ uri: item }} style={styles.listingImage} resizeMode="cover" />
+            renderItem={({ item, index }) => (
+              <TouchableOpacity activeOpacity={0.95} onPress={() => openViewer(index)}>
+                <Image source={{ uri: item }} style={styles.listingImage} resizeMode="cover" />
+              </TouchableOpacity>
             )}
           />
+          {/* Tap-to-expand hint */}
+          <View style={styles.expandHint}>
+            <Ionicons name="expand-outline" size={16} color="#fff" />
+          </View>
           {images.length > 1 && (
             <View style={styles.imageDots}>
               {images.map((_, i) => (
@@ -249,6 +264,39 @@ export default function ListingDetailScreen({ route, navigation }) {
         </View>
       </View>
     </ScrollView>
+
+      {/* Fullscreen Image Viewer */}
+      <Modal visible={viewerVisible} transparent animationType="fade" onRequestClose={() => setViewerVisible(false)}>
+        <View style={styles.viewerOverlay}>
+          <StatusBar hidden />
+          <FlatList
+            data={images}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            initialScrollIndex={viewerIndex}
+            getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
+            keyExtractor={(_, i) => i.toString()}
+            onMomentumScrollEnd={(e) => setViewerIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
+            renderItem={({ item }) => (
+              <View style={styles.viewerImageWrap}>
+                <Image source={{ uri: item }} style={styles.viewerImage} resizeMode="contain" />
+              </View>
+            )}
+          />
+          {/* Close button */}
+          <TouchableOpacity style={styles.viewerClose} onPress={() => setViewerVisible(false)}>
+            <Ionicons name="close" size={28} color="#fff" />
+          </TouchableOpacity>
+          {/* Counter */}
+          {images.length > 1 && (
+            <View style={styles.viewerCounter}>
+              <Text style={styles.viewerCounterText}>{viewerIndex + 1} / {images.length}</Text>
+            </View>
+          )}
+        </View>
+      </Modal>
+    </View>
   );
 }
 
@@ -256,6 +304,13 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   imageContainer: { position: 'relative', height: 250 },
   listingImage: { width, height: 250 },
+  expandHint: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 16, padding: 6 },
+  viewerOverlay: { flex: 1, backgroundColor: '#000', justifyContent: 'center' },
+  viewerImageWrap: { width, height, alignItems: 'center', justifyContent: 'center' },
+  viewerImage: { width, height: height * 0.8 },
+  viewerClose: { position: 'absolute', top: 50, right: 20, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20, padding: 6 },
+  viewerCounter: { position: 'absolute', bottom: 50, alignSelf: 'center', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 5 },
+  viewerCounterText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   imageDots: { position: 'absolute', bottom: 12, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 6 },
   imageDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.5)' },
   imageDotActive: { backgroundColor: '#fff', width: 18 },
