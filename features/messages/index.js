@@ -1,6 +1,6 @@
 // features/messages/index.js
 import React from 'react';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createStackNavigator, TransitionPresets } from '@react-navigation/stack';
 import ConversationsScreen from './screens/ConversationsScreen';
 import ChatScreen from './screens/ChatScreen';
 
@@ -10,10 +10,9 @@ export default function MessagesNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: '#1D3557' },
+        ...TransitionPresets.SlideFromRightIOS, headerStyle: { backgroundColor: '#1D3557' },
         headerTintColor: '#fff',
-        headerTitleStyle: { fontWeight: '500' },
-        headerBackTitleVisible: false,
+        headerTitleStyle: { fontWeight: '500' }, headerBackTitleVisible: false,
       }}
     >
       <Stack.Screen

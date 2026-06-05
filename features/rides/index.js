@@ -1,6 +1,6 @@
 // features/rides/index.js
 import React from 'react';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createStackNavigator, TransitionPresets } from '@react-navigation/stack';
 import BrowseRidesScreen from './screens/BrowseRidesScreen';
 import PostRideScreen from './screens/PostRideScreen';
 import RideDetailScreen from './screens/RideDetailScreen';
@@ -12,10 +12,9 @@ export default function RidesNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: '#1D3557' },
+        ...TransitionPresets.SlideFromRightIOS, headerStyle: { backgroundColor: '#1D3557' },
         headerTintColor: '#fff',
-        headerTitleStyle: { fontWeight: '500' },
-        headerBackTitleVisible: false,
+        headerTitleStyle: { fontWeight: '500' }, headerBackTitleVisible: false,
       }}
     >
       <Stack.Screen

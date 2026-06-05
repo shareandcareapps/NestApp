@@ -4,7 +4,7 @@ import {
   View, Text, ActivityIndicator, TouchableOpacity,
 } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createStackNavigator, TransitionPresets } from '@react-navigation/stack';
 import { CommonActions } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../database/index';
@@ -19,6 +19,9 @@ import MyRidesScreen from '../screens/MyRidesScreen';
 import HomeScreen from '../screens/HomeScreen';
 import ListingDetailScreen from '../../features/classifieds/screens/ListingDetailScreen';
 import EditListingScreen from '../../features/classifieds/screens/EditListingScreen';
+import BrowseListingsScreen from '../../features/classifieds/screens/BrowseListingsScreen';
+import PostListingScreen from '../../features/classifieds/screens/PostListingScreen';
+import PostRideScreen from '../../features/rides/screens/PostRideScreen';
 import ClassifiedsNavigator from '../../features/classifieds/index';
 import RidesNavigator from '../../features/rides/index';
 import NewsNavigator from '../../features/news/index';
@@ -95,10 +98,10 @@ function MainTabs({ navigation }) {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         tabBarActiveTintColor: theme.primary,
-        tabBarInactiveTintColor: theme.textLight,
+        tabBarInactiveTintColor: 'rgba(255,255,255,0.45)',
         tabBarStyle: {
-          backgroundColor: theme.tabBackground,
-          borderTopColor: theme.border,
+          backgroundColor: theme.secondary,
+          borderTopColor: 'rgba(255,255,255,0.1)',
           borderTopWidth: 0.5,
           height: 84,
           paddingBottom: 28,
@@ -130,7 +133,7 @@ function MainTabs({ navigation }) {
       <Tab.Screen
         name="Home"
         component={HomeScreen}
-        options={{ ...sharedHeaderOptions, title: 'NestApp', headerTitleAlign: 'center' }}
+        options={{ headerShown: false }}
         listeners={({ navigation, route }) => ({
           tabPress: (e) => {
             if (navigation.isFocused()) {
@@ -197,79 +200,29 @@ function MainTabs({ navigation }) {
 }
 
 function MainApp() {
+  const sharedScreenOptions = {
+    ...TransitionPresets.SlideFromRightIOS,
+    headerStyle: { backgroundColor: '#1D3557' },
+    headerTintColor: '#fff',
+    headerTitleStyle: { fontWeight: '500' },
+    headerBackTitleVisible: false,
+  };
   return (
-    <Stack.Navigator>
+    <Stack.Navigator screenOptions={{ ...TransitionPresets.SlideFromRightIOS }}>
       <Stack.Screen
         name="Tabs"
         component={MainTabs}
         options={{ headerShown: false }}
       />
-      <Stack.Screen
-        name="Settings"
-        component={SettingsScreen}
-        options={{
-          title: 'Profile & Settings',
-          headerStyle: { backgroundColor: '#1D3557' },
-          headerTintColor: '#fff',
-          headerTitleStyle: { fontWeight: '500' },
-          headerBackTitleVisible: false,
-        }}
-      />
-      <Stack.Screen
-        name="EditProfile"
-        component={EditProfileScreen}
-        options={{
-          title: 'Edit Profile',
-          headerStyle: { backgroundColor: '#1D3557' },
-          headerTintColor: '#fff',
-          headerTitleStyle: { fontWeight: '500' },
-          headerBackTitleVisible: false,
-        }}
-      />
-      <Stack.Screen
-        name="MyListings"
-        component={MyListingsScreen}
-        options={{
-          title: 'My Listings',
-          headerStyle: { backgroundColor: '#1D3557' },
-          headerTintColor: '#fff',
-          headerTitleStyle: { fontWeight: '500' },
-          headerBackTitleVisible: false,
-        }}
-      />
-      <Stack.Screen
-        name="MyRides"
-        component={MyRidesScreen}
-        options={{
-          title: 'My Carpools',
-          headerStyle: { backgroundColor: '#1D3557' },
-          headerTintColor: '#fff',
-          headerTitleStyle: { fontWeight: '500' },
-          headerBackTitleVisible: false,
-        }}
-      />
-      <Stack.Screen
-        name="ListingDetail"
-        component={ListingDetailScreen}
-        options={{
-          title: 'Listing Details',
-          headerStyle: { backgroundColor: '#1D3557' },
-          headerTintColor: '#fff',
-          headerTitleStyle: { fontWeight: '500' },
-          headerBackTitleVisible: false,
-        }}
-      />
-      <Stack.Screen
-        name="EditListing"
-        component={EditListingScreen}
-        options={{
-          title: 'Edit Listing',
-          headerStyle: { backgroundColor: '#1D3557' },
-          headerTintColor: '#fff',
-          headerTitleStyle: { fontWeight: '500' },
-          headerBackTitleVisible: false,
-        }}
-      />
+      <Stack.Screen name="Settings" component={SettingsScreen} options={{ ...sharedScreenOptions, title: 'Profile & Settings' }} />
+      <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ ...sharedScreenOptions, title: 'Edit Profile' }} />
+      <Stack.Screen name="MyListings" component={MyListingsScreen} options={{ ...sharedScreenOptions, title: 'My Listings' }} />
+      <Stack.Screen name="MyRides" component={MyRidesScreen} options={{ ...sharedScreenOptions, title: 'My Carpools' }} />
+      <Stack.Screen name="ListingDetail" component={ListingDetailScreen} options={{ ...sharedScreenOptions, title: 'Listing Details' }} />
+      <Stack.Screen name="EditListing" component={EditListingScreen} options={{ ...sharedScreenOptions, title: 'Edit Listing' }} />
+      <Stack.Screen name="PostListing" component={PostListingScreen} options={{ ...sharedScreenOptions, headerShown: false }} />
+      <Stack.Screen name="PostRide" component={PostRideScreen} options={{ ...sharedScreenOptions, title: 'Share a Ride' }} />
+      <Stack.Screen name="BrowseListingsByCategory" component={BrowseListingsScreen} options={{ ...sharedScreenOptions, title: 'Browse Listings' }} />
     </Stack.Navigator>
   );
 }

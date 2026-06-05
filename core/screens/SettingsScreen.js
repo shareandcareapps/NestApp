@@ -93,47 +93,6 @@ export default function SettingsScreen({ navigation }) {
         </View>
       </View>
 
-      {/* Account Section */}
-      <View style={[styles.section, {
-        backgroundColor: colors.surface,
-        borderColor: colors.border,
-      }]}>
-        <Text style={[styles.sectionTitle, { color: colors.textLight }]}>ACCOUNT</Text>
-        <TouchableOpacity
-          style={[styles.menuItem, { borderBottomColor: colors.borderLight }]}
-          onPress={() => navigation.navigate('EditProfile')}
-        >
-          <Text style={styles.menuItemEmoji}>👤</Text>
-          <View style={styles.menuItemContent}>
-            <Text style={[styles.menuItemTitle, { color: colors.textPrimary }]}>Edit Profile</Text>
-            <Text style={[styles.menuItemSubtitle, { color: colors.textLight }]}>Name, phone number</Text>
-          </View>
-          <Text style={[styles.menuItemArrow, { color: colors.border }]}>›</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.menuItem, { borderBottomColor: colors.borderLight }]}
-          onPress={() => navigation.navigate('MyListings')}
-        >
-          <Text style={styles.menuItemEmoji}>🏠</Text>
-          <View style={styles.menuItemContent}>
-            <Text style={[styles.menuItemTitle, { color: colors.textPrimary }]}>My Listings</Text>
-            <Text style={[styles.menuItemSubtitle, { color: colors.textLight }]}>View and manage your posts</Text>
-          </View>
-          <Text style={[styles.menuItemArrow, { color: colors.border }]}>›</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.menuItem, { borderBottomColor: colors.borderLight }]}
-          onPress={() => navigation.navigate('MyRides')}
-        >
-          <Text style={styles.menuItemEmoji}>🚗</Text>
-          <View style={styles.menuItemContent}>
-            <Text style={[styles.menuItemTitle, { color: colors.textPrimary }]}>My Rides</Text>
-            <Text style={[styles.menuItemSubtitle, { color: colors.textLight }]}>View and manage your rides</Text>
-          </View>
-          <Text style={[styles.menuItemArrow, { color: colors.border }]}>›</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* Appearance Section */}
       <View style={[styles.section, {
         backgroundColor: colors.surface,
@@ -201,6 +160,16 @@ export default function SettingsScreen({ navigation }) {
           <Text style={styles.menuItemEmoji}>📄</Text>
           <View style={styles.menuItemContent}>
             <Text style={[styles.menuItemTitle, { color: colors.textPrimary }]}>Terms & Conditions</Text>
+          </View>
+          <Text style={[styles.menuItemArrow, { color: colors.border }]}>›</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.menuItem, { borderBottomColor: colors.borderLight }]}
+          onPress={() => Alert.alert('Disclaimer', 'NestApp is a community platform. We are not responsible for the accuracy of listings or interactions between users. Use at your own discretion.')}
+        >
+          <Text style={styles.menuItemEmoji}>⚠️</Text>
+          <View style={styles.menuItemContent}>
+            <Text style={[styles.menuItemTitle, { color: colors.textPrimary }]}>Disclaimer</Text>
           </View>
           <Text style={[styles.menuItemArrow, { color: colors.border }]}>›</Text>
         </TouchableOpacity>

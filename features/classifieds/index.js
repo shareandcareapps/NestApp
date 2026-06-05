@@ -1,6 +1,6 @@
 // features/classifieds/index.js
 import React from 'react';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createStackNavigator, TransitionPresets } from '@react-navigation/stack';
 import BrowseListingsScreen from './screens/BrowseListingsScreen';
 import PostListingScreen from './screens/PostListingScreen';
 import ListingDetailScreen from './screens/ListingDetailScreen';
@@ -12,10 +12,9 @@ export default function ClassifiedsNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: '#1D3557' },
+        ...TransitionPresets.SlideFromRightIOS, headerStyle: { backgroundColor: '#1D3557' },
         headerTintColor: '#fff',
-        headerTitleStyle: { fontWeight: '500' },
-        headerBackTitleVisible: false,
+        headerTitleStyle: { fontWeight: '500' }, headerBackTitleVisible: false,
       }}
     >
       <Stack.Screen

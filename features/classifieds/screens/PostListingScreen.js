@@ -205,7 +205,7 @@ export default function PostListingScreen({ navigation, route }) {
     try {
       await createListing(buildListingData());
       Alert.alert('Posted!', 'Your listing has been posted.', [
-        { text: 'OK', onPress: () => navigation.navigate('BrowseListings') }
+        { text: 'OK', onPress: () => navigation.goBack() }
       ]);
     } catch (error) {
       Alert.alert('Error', 'Failed to post listing. Please try again.');
@@ -219,9 +219,8 @@ export default function PostListingScreen({ navigation, route }) {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <SafeAreaView style={{ backgroundColor: colors.secondary }}>
         <View style={[styles.headerBar, { backgroundColor: colors.secondary }]}>
-          <TouchableOpacity onPress={() => navigation.navigate('BrowseListings')} style={styles.backButton}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="chevron-back" size={22} color="#fff" />
-            <Text style={styles.backText}>Back</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Post a Listing</Text>
           <View style={{ width: 60 }} />
@@ -736,7 +735,7 @@ export default function PostListingScreen({ navigation, route }) {
                 <Text style={styles.postButtonText}>Post Listing</Text>
               )}
             </TouchableOpacity>
-            <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.navigate('BrowseListings')}>
+            <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
               <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>Cancel</Text>
             </TouchableOpacity>
           </>

@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, 
 import { getConversations, getUnreadCountPerConversation } from '../services/messagesService';
 import useAppStore from '../../../core/store/index';
 import { useTheme } from '../../../core/theme/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
 
 function ConversationCard({ item, currentUserId, hasUnread, onPress, colors }) {
   const otherUserId = item.participant_1 === currentUserId
@@ -174,11 +175,12 @@ export default function ConversationsScreen({ navigation }) {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <SafeAreaView style={{ backgroundColor: colors.secondary }}>
         <View style={[styles.headerBar, { backgroundColor: colors.secondary }]}>
-          <Text style={styles.headerTitle}>Messages</Text>
+          <Text style={[styles.headerTitle, { color: '#fff' }]}>Messages</Text>
         </View>
-        <View style={[styles.searchContainer, { backgroundColor: colors.secondary }]}>
+        <View style={[styles.searchContainer, { backgroundColor: 'rgba(255,255,255,0.15)', borderColor: 'transparent', borderWidth: 1, borderRadius: 10, marginHorizontal: 16, marginBottom: 10, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 7 }]}>
+          <Ionicons name="search-outline" size={14} color="rgba(255,255,255,0.7)" style={{ marginRight: 6 }} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: '#fff', flex: 1 }]}
             placeholder="Search conversations..."
             placeholderTextColor="rgba(255,255,255,0.5)"
             value={searchQuery}
@@ -224,10 +226,10 @@ export default function ConversationsScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  headerBar: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 2, alignItems: 'center' },
-  headerTitle: { color: '#fff', fontSize: 17, fontWeight: '500' },
-  searchContainer: { padding: 12 },
-  searchInput: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, padding: 10, fontSize: 14, color: '#fff' },
+  headerBar: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 },
+  headerTitle: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
+  searchContainer: { paddingVertical: 10 },
+  searchInput: { fontSize: 14, paddingVertical: 10 },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadingText: { marginTop: 10, fontSize: 14 },
   emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },

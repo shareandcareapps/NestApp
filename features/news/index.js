@@ -1,6 +1,6 @@
 // features/news/index.js
 import React from 'react';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createStackNavigator, TransitionPresets } from '@react-navigation/stack';
 import NewsFeedScreen from './screens/NewsFeedScreen';
 import NewsDetailScreen from './screens/NewsDetailScreen';
 import PostNewsScreen from './screens/PostNewsScreen';
@@ -11,10 +11,9 @@ export default function NewsNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: '#1D3557' },
+        ...TransitionPresets.SlideFromRightIOS, headerStyle: { backgroundColor: '#1D3557' },
         headerTintColor: '#fff',
-        headerTitleStyle: { fontWeight: '500' },
-        headerBackTitleVisible: false,
+        headerTitleStyle: { fontWeight: '500' }, headerBackTitleVisible: false,
       }}
     >
       <Stack.Screen

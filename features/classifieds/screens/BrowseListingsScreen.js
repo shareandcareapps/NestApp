@@ -4,95 +4,213 @@ import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, ActivityIndicator, RefreshControl, SafeAreaView,
+  ScrollView, Dimensions, Image,
 } from 'react-native';
 import { getListings, searchListings } from '../services/listingsService';
 import useAppStore from '../../../core/store/index';
 import { useTheme } from '../../../core/theme/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 
+const { width } = Dimensions.get('window');
+const CARD_WIDTH = (width - 36) / 2;
+
 const CATEGORIES = [
-  { id: null, label: 'All', icon: 'search-outline' },
-  { id: 'accommodation', label: 'Housing', icon: 'business-outline' },
-  { id: 'jobs', label: 'Jobs', icon: 'briefcase-outline' },
-  { id: 'buysell', label: 'Buy/Sell', icon: 'pricetag-outline' },
-  { id: 'food', label: 'Food', icon: 'restaurant-outline' },
+  { id: null,            label: 'All',      icon: 'apps-outline',       color: '#E63946' },
+  { id: 'accommodation', label: 'Housing',  icon: 'home-outline',       color: '#457B9D' },
+  { id: 'jobs',          label: 'Jobs',     icon: 'briefcase-outline',  color: '#2ECC71' },
+  { id: 'buysell',       label: 'Buy & Sell', icon: 'pricetag-outline', color: '#3498DB' },
+  { id: 'food',          label: 'Food',     icon: 'restaurant-outline', color: '#F39C12' },
 ];
 
-function ListingCard({ item, onPress, colors }) {
-  const categoryColors = {
-    accommodation: '#E63946', jobs: '#2ECC71', buysell: '#3498DB', food: '#F39C12',
-  };
-  const categoryEmojis = {
-    accommodation: '🏠', jobs: '💼', buysell: '🛍️', food: '🍱',
-  };
+const CATEGORY_COLORS = {
+  accommodation: '#457B9D',
+  jobs: '#2ECC71',
+  buysell: '#3498DB',
+  food: '#F39C12',
+};
 
-  const isJob = item.category === 'jobs';
-  const meta = isJob && item.metadata
-    ? (typeof item.metadata === 'string' ? JSON.parse(item.metadata) : item.metadata)
-    : null;
+const CATEGORY_GRADIENTS = {
+  accommodation: ['#EBF4FA', '#D6EAF8'],
+  jobs: ['#EAFAF1', '#D5F5E3'],
+  buysell: ['#EBF5FB', '#D6EAF8'],
+  food: ['#FEF9E7', '#FDEBD0'],
+};
+
+const CATEGORY_EMOJIS = {
+  accommodation: '🏠',
+  jobs: '💼',
+  buysell: '🛍️',
+  food: '🍱',
+};
+
+// Grid card for buy/sell, food, housing
+function GridCard({ item, onPress, colors }) {
+  const color = CATEGORY_COLORS[item.category] || '#E63946';
+  const bgColor = CATEGORY_GRADIENTS[item.category]?.[0] || '#F5F5F5';
+  const hasImages = item.images && item.images.length > 0;
 
   return (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+      style={[styles.gridCard, { backgroundColor: colors.surface }]}
       onPress={() => onPress(item)}
+      activeOpacity={0.92}
     >
-      {item.is_boosted && (
-        <View style={[styles.boostedBadge, { backgroundColor: colors.warningBackground }]}>
-          <Text style={[styles.boostedText, { color: colors.warningText }]}>⭐ Featured</Text>
-        </View>
-      )}
-      <View style={styles.cardHeader}>
-        <View style={[styles.categoryIcon, { backgroundColor: categoryColors[item.category] + '20' }]}>
-          <Text style={styles.categoryEmoji}>{categoryEmojis[item.category]}</Text>
-        </View>
-        <View style={styles.cardTitleArea}>
-          <Text style={[styles.cardTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-            {item.title}
-          </Text>
-          <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-            {isJob && meta?.company ? meta.company : (item.poster?.full_name || item.profiles?.full_name || 'Community Member')}
-          </Text>
-        </View>
-        {isJob ? (
-          <Text style={[styles.cardPrice, { color: '#27AE60' }]}>
-            {meta?.salary_open ? 'Open' : item.price ? `$${item.price}/hr` : '—'}
-          </Text>
-        ) : item.price ? (
-          <Text style={[styles.cardPrice, { color: colors.primary }]}>${item.price}</Text>
-        ) : null}
+      {/* Image / Placeholder */}
+      <View style={[styles.gridImageBox, { backgroundColor: bgColor }]}>
+        {hasImages ? (
+          <Image source={{ uri: item.images[0] }} style={styles.gridImage} resizeMode="cover" />
+        ) : (
+          <Text style={styles.gridEmoji}>{CATEGORY_EMOJIS[item.category] || '📦'}</Text>
+        )}
+        {item.is_boosted && (
+          <View style={styles.featuredBadge}>
+            <Ionicons name="star" size={9} color="#fff" />
+            <Text style={styles.featuredText}>Featured</Text>
+          </View>
+        )}
       </View>
 
-      {isJob && meta ? (
-        <View style={styles.jobPills}>
-          <View style={[styles.jobPill, { backgroundColor: '#2ECC7115', borderColor: '#2ECC7140' }]}>
-            <Text style={[styles.jobPillText, { color: '#27AE60' }]}>
-              {meta.job_type === 'full_time' ? '🕘 Full Time' : '⏰ Part Time'}
+      {/* Info */}
+      <View style={styles.gridInfo}>
+        <Text style={[styles.gridPrice, { color: color }]} numberOfLines={1}>
+          {item.price ? `$${item.price}` : 'Free'}
+        </Text>
+        <Text style={[styles.gridTitle, { color: colors.textPrimary }]} numberOfLines={2}>
+          {item.title}
+        </Text>
+        <View style={styles.gridMeta}>
+          <Ionicons name="location-outline" size={10} color={colors.textLight} />
+          <Text style={[styles.gridLocation, { color: colors.textLight }]} numberOfLines={1}>
+            {item.city}
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+// Full-width card for jobs
+function JobCard({ item, onPress, colors }) {
+  const meta = item.metadata
+    ? (typeof item.metadata === 'string' ? JSON.parse(item.metadata) : item.metadata)
+    : null;
+
+  const isFullTime = meta?.job_type === 'full_time';
+
+  return (
+    <TouchableOpacity
+      style={[styles.jobCard, { backgroundColor: colors.surface }]}
+      onPress={() => onPress(item)}
+      activeOpacity={0.92}
+    >
+      {/* Left accent bar */}
+      <View style={[styles.jobAccent, { backgroundColor: '#2ECC71' }]} />
+
+      <View style={styles.jobContent}>
+        <View style={styles.jobTop}>
+          <View style={[styles.jobIconBox, { backgroundColor: '#EAFAF1' }]}>
+            <Text style={{ fontSize: 22 }}>💼</Text>
+          </View>
+          <View style={styles.jobText}>
+            <Text style={[styles.jobTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+              {item.title}
+            </Text>
+            <Text style={[styles.jobCompany, { color: colors.textSecondary }]} numberOfLines={1}>
+              {meta?.company || item.poster?.full_name || 'Community Member'}
             </Text>
           </View>
-          {meta.hours_per_week ? (
-            <View style={[styles.jobPill, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
-              <Text style={[styles.jobPillText, { color: colors.textSecondary }]}>🕐 {meta.hours_per_week} hrs/week</Text>
+          <View style={styles.jobPriceBox}>
+            <Text style={[styles.jobRate, { color: '#27AE60' }]}>
+              {meta?.salary_open ? 'Open' : item.price ? `$${item.price}/hr` : '—'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.jobPills}>
+          <View style={[styles.pill, { backgroundColor: isFullTime ? '#EAFAF1' : '#FEF9E7', borderColor: isFullTime ? '#A9DFBF' : '#FAD7A0' }]}>
+            <Ionicons name="time-outline" size={11} color={isFullTime ? '#27AE60' : '#E67E22'} />
+            <Text style={[styles.pillText, { color: isFullTime ? '#27AE60' : '#E67E22' }]}>
+              {isFullTime ? 'Full Time' : 'Part Time'}
+            </Text>
+          </View>
+          {meta?.hours_per_week ? (
+            <View style={[styles.pill, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+              <Ionicons name="hourglass-outline" size={11} color={colors.textSecondary} />
+              <Text style={[styles.pillText, { color: colors.textSecondary }]}>{meta.hours_per_week} hrs/wk</Text>
             </View>
           ) : null}
-          {meta.joining ? (
-            <View style={[styles.jobPill, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
-              <Text style={[styles.jobPillText, { color: colors.textSecondary }]}>
-                {meta.joining === 'immediate' ? '⚡ Immediate' : '📅 Flexible'}
+          {meta?.joining ? (
+            <View style={[styles.pill, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+              <Ionicons name="calendar-outline" size={11} color={colors.textSecondary} />
+              <Text style={[styles.pillText, { color: colors.textSecondary }]}>
+                {meta.joining === 'immediate' ? 'Immediate' : 'Flexible'}
               </Text>
             </View>
           ) : null}
         </View>
-      ) : item.description ? (
-        <Text style={[styles.cardDescription, { color: colors.textSecondary }]} numberOfLines={2}>
-          {item.description}
-        </Text>
-      ) : null}
 
-      <View style={[styles.cardFooter, { borderTopColor: colors.borderLight }]}>
-        <Text style={[styles.cardLocation, { color: colors.textLight }]}>📍 {(isJob && meta?.location) ? meta.location : `${item.city}, ${item.state}`}</Text>
-        <Text style={[styles.cardTime, { color: colors.textPrimary }]}>
-          {new Date(item.created_at).toLocaleDateString()}
+        <View style={styles.jobFooter}>
+          <View style={styles.jobFooterLeft}>
+            <Ionicons name="location-outline" size={11} color={colors.textLight} />
+            <Text style={[styles.jobLocation, { color: colors.textLight }]}>
+              {meta?.location || item.city}
+            </Text>
+          </View>
+          <Text style={[styles.jobDate, { color: colors.textLight }]}>
+            {new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+// Full-width card for housing
+function HousingCard({ item, onPress, colors }) {
+  const hasImages = item.images && item.images.length > 0;
+  return (
+    <TouchableOpacity
+      style={[styles.housingCard, { backgroundColor: colors.surface }]}
+      onPress={() => onPress(item)}
+      activeOpacity={0.92}
+    >
+      <View style={[styles.housingImage, { backgroundColor: '#EBF4FA' }]}>
+        {hasImages ? (
+          <Image source={{ uri: item.images[0] }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        ) : (
+          <Text style={{ fontSize: 40 }}>🏠</Text>
+        )}
+        {item.is_boosted && (
+          <View style={styles.featuredBadge}>
+            <Ionicons name="star" size={9} color="#fff" />
+            <Text style={styles.featuredText}>Featured</Text>
+          </View>
+        )}
+        {item.price ? (
+          <View style={styles.housingPriceBadge}>
+            <Text style={styles.housingPriceText}>${item.price}</Text>
+          </View>
+        ) : null}
+      </View>
+      <View style={styles.housingInfo}>
+        <Text style={[styles.housingTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+          {item.title}
         </Text>
+        {item.description ? (
+          <Text style={[styles.housingDesc, { color: colors.textSecondary }]} numberOfLines={2}>
+            {item.description}
+          </Text>
+        ) : null}
+        <View style={styles.housingMeta}>
+          <Ionicons name="location-outline" size={12} color={colors.textLight} />
+          <Text style={[styles.housingLocation, { color: colors.textLight }]}>
+            {item.city}, {item.state}
+          </Text>
+          <Text style={[styles.housingDot, { color: colors.textLight }]}>·</Text>
+          <Text style={[styles.housingDate, { color: colors.textLight }]}>
+            {new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          </Text>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -104,11 +222,11 @@ export default function BrowseListingsScreen({ navigation, route }) {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(route.params?.category ?? null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
   const currentCity = useAppStore((state) => state.currentCity);
   const colors = useTheme();
   const appliedParamCategory = useRef(route.params?.category ?? null);
 
-  // When navigated here from another tab with a category param, apply it
   useFocusEffect(
     React.useCallback(() => {
       const incoming = route.params?.category ?? null;
@@ -151,50 +269,128 @@ export default function BrowseListingsScreen({ navigation, route }) {
     setRefreshing(false);
   }
 
+  function renderItem({ item, index }) {
+    if (item.__type === 'grid_pair') {
+      return (
+        <View style={styles.gridRow}>
+          <GridCard item={item.left} onPress={(l) => navigation.navigate('ListingDetail', { listing: l })} colors={colors} />
+          {item.right ? (
+            <GridCard item={item.right} onPress={(l) => navigation.navigate('ListingDetail', { listing: l })} colors={colors} />
+          ) : (
+            <View style={{ width: CARD_WIDTH }} />
+          )}
+        </View>
+      );
+    }
+    if (item.category === 'jobs') {
+      return <JobCard item={item} onPress={(l) => navigation.navigate('ListingDetail', { listing: l })} colors={colors} />;
+    }
+    if (item.category === 'accommodation') {
+      return <HousingCard item={item} onPress={(l) => navigation.navigate('ListingDetail', { listing: l })} colors={colors} />;
+    }
+    return null;
+  }
+
+  // Build render data — group consecutive buysell/food into grid pairs, keep jobs/housing as rows
+  function buildRenderData(data) {
+    const result = [];
+    let pendingGrid = null;
+
+    for (const item of data) {
+      const isGrid = item.category === 'buysell' || item.category === 'food' || !item.category;
+      if (isGrid) {
+        if (pendingGrid) {
+          result.push({ __type: 'grid_pair', left: pendingGrid, right: item });
+          pendingGrid = null;
+        } else {
+          pendingGrid = item;
+        }
+      } else {
+        if (pendingGrid) {
+          result.push({ __type: 'grid_pair', left: pendingGrid, right: null });
+          pendingGrid = null;
+        }
+        result.push(item);
+      }
+    }
+    if (pendingGrid) result.push({ __type: 'grid_pair', left: pendingGrid, right: null });
+
+    return result;
+  }
+
+  const renderData = buildRenderData(listings);
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-
       <SafeAreaView style={{ backgroundColor: colors.secondary }}>
-        <View style={[styles.headerBar, { backgroundColor: colors.secondary }]}>
-          <Text style={styles.headerTitle}>Classifieds</Text>
-        </View>
-        <View style={[styles.searchContainer, { backgroundColor: colors.secondary }]}>
-          <TextInput
-            style={[styles.searchInput, { color: colors.textWhite }]}
-            placeholder="Search listings..."
-            placeholderTextColor="rgba(255,255,255,0.5)"
-            value={searchQuery}
-            onChangeText={handleSearch}
-          />
-        </View>
-      </SafeAreaView>
+        {/* Header */}
+        <View style={[styles.header, { backgroundColor: colors.secondary }]}>
+          <View style={styles.headerTop}>
+            <Text style={[styles.headerTitle, { color: '#fff' }]}>Marketplace</Text>
+          </View>
 
-      {/* Category Filter Row */}
-      <View style={[styles.categoryContainer, {
-        backgroundColor: colors.surface,
-        borderBottomColor: colors.border,
-      }]}>
-        {CATEGORIES.map((cat) => (
-          <TouchableOpacity
-            key={cat.label}
-            style={[styles.categoryButton, selectedCategory === cat.id && { backgroundColor: colors.primary + '15' }]}
-            onPress={() => setSelectedCategory(cat.id)}
-          >
-            <Ionicons
-              name={cat.icon}
-              size={18}
-              color={selectedCategory === cat.id ? colors.primary : colors.textLight}
+          {/* Search bar */}
+          <View style={[styles.searchBar, {
+            backgroundColor: 'rgba(255,255,255,0.15)',
+            borderColor: searchFocused ? '#fff' : 'transparent',
+            borderWidth: searchFocused ? 1 : 1,
+          }]}>
+            <Ionicons name="search-outline" size={16} color="rgba(255,255,255,0.7)" />
+            <TextInput
+              style={[styles.searchInput, { color: '#fff' }]}
+              placeholder="Search listings..."
+              placeholderTextColor="rgba(255,255,255,0.5)"
+              value={searchQuery}
+              onChangeText={handleSearch}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
             />
-            <Text style={[
-              styles.categoryLabel,
-              { color: selectedCategory === cat.id ? colors.primary : colors.textLight },
-              selectedCategory === cat.id && { fontWeight: '600' },
-            ]}>
-              {cat.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => { setSearchQuery(''); fetchListings(); }}>
+                <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.7)" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* Category pills */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={[styles.categoryScroll, { backgroundColor: colors.surface, borderBottomColor: colors.borderLight }]}
+          contentContainerStyle={styles.categoryContent}
+        >
+          {CATEGORIES.map((cat) => {
+            const active = selectedCategory === cat.id;
+            return (
+              <TouchableOpacity
+                key={cat.label}
+                style={[
+                  styles.categoryChip,
+                  active
+                    ? { backgroundColor: cat.color, borderColor: cat.color }
+                    : { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
+                ]}
+                onPress={() => setSelectedCategory(cat.id)}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={cat.icon}
+                  size={14}
+                  color={active ? '#fff' : colors.textSecondary}
+                />
+                <Text style={[
+                  styles.categoryChipText,
+                  { color: active ? '#fff' : colors.textSecondary },
+                  active && { fontWeight: '700' },
+                ]}>
+                  {cat.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </SafeAreaView>
 
       {/* Content */}
       {loading ? (
@@ -204,23 +400,25 @@ export default function BrowseListingsScreen({ navigation, route }) {
         </View>
       ) : listings.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>📭</Text>
+          <View style={[styles.emptyIconBox, { backgroundColor: colors.surfaceSecondary }]}>
+            <Text style={{ fontSize: 40 }}>📭</Text>
+          </View>
           <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No listings yet</Text>
           <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
             Be the first to post in {currentCity}!
           </Text>
+          <TouchableOpacity
+            style={[styles.emptyPostBtn, { backgroundColor: colors.primary }]}
+            onPress={() => navigation.navigate('PostListing', { preselectedCategory: selectedCategory })}
+          >
+            <Text style={styles.emptyPostText}>Post a Listing</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
-          data={listings}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <ListingCard
-              item={item}
-              colors={colors}
-              onPress={(listing) => navigation.navigate('ListingDetail', { listing })}
-            />
-          )}
+          data={renderData}
+          keyExtractor={(item, i) => item.__type === 'grid_pair' ? `pair-${i}` : item.id}
+          renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
@@ -228,53 +426,124 @@ export default function BrowseListingsScreen({ navigation, route }) {
         />
       )}
 
-      {/* Post Button */}
+      {/* Floating post button */}
       <TouchableOpacity
         style={[styles.postButton, { backgroundColor: colors.primary }]}
-        onPress={() => navigation.navigate('PostListing', {
-          preselectedCategory: selectedCategory
-        })}
+        onPress={() => navigation.navigate('PostListing', { preselectedCategory: selectedCategory })}
+        activeOpacity={0.9}
       >
-        <Text style={styles.postButtonText}>+ Post Listing</Text>
+        <Ionicons name="add" size={18} color="#fff" />
+        <Text style={styles.postButtonText}>Post Listing</Text>
       </TouchableOpacity>
-
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  headerBar: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 2, alignItems: 'center' },
-  headerTitle: { color: '#fff', fontSize: 17, fontWeight: '500' },
-  searchContainer: { padding: 12 },
-  searchInput: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, padding: 10, fontSize: 14 },
-  categoryContainer: { flexDirection: 'row', padding: 10, borderBottomWidth: 0.5 },
-  categoryButton: { flex: 1, alignItems: 'center', padding: 6, borderRadius: 8 },
-  categoryEmoji: { fontSize: 18 },
-  categoryLabel: { fontSize: 10, marginTop: 2, textAlign: 'center' },
+
+  // Header
+  header: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10 },
+  headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  headerTitle: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
+  locationText: { fontSize: 12 },
+
+  postButton: { position: 'absolute', bottom: 20, right: 20, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingVertical: 13, borderRadius: 28, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 6 },
+  postButtonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+
+  searchBar: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7, gap: 6 },
+  searchInput: { flex: 1, fontSize: 13, padding: 0 },
+
+  // Categories
+  categoryScroll: { borderBottomWidth: 1 },
+  categoryContent: { paddingHorizontal: 14, paddingVertical: 10, gap: 8 },
+  categoryChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
+  categoryChipText: { fontSize: 13, fontWeight: '500' },
+
+  // Loading / Empty
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadingText: { marginTop: 10, fontSize: 14 },
   emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
-  emptyEmoji: { fontSize: 48, marginBottom: 12 },
-  emptyTitle: { fontSize: 18, fontWeight: '600' },
+  emptyIconBox: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  emptyTitle: { fontSize: 19, fontWeight: '700' },
   emptySubtitle: { fontSize: 14, marginTop: 6, textAlign: 'center' },
-  listContent: { padding: 12, paddingBottom: 80 },
-  card: { borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 0.5 },
-  boostedBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start', marginBottom: 8 },
-  boostedText: { fontSize: 11, fontWeight: '500' },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  categoryIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  cardTitleArea: { flex: 1 },
-  cardTitle: { fontSize: 15, fontWeight: '600' },
-  cardSubtitle: { fontSize: 12, marginTop: 2 },
-  cardPrice: { fontSize: 16, fontWeight: '700' },
-  cardDescription: { fontSize: 13, marginTop: 8, lineHeight: 18 },
-  jobPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
-  jobPill: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 0.5 },
-  jobPillText: { fontSize: 11, fontWeight: '500' },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10, paddingTop: 8, borderTopWidth: 0.5 },
-  cardLocation: { fontSize: 11 },
-  cardTime: { fontSize: 11 },
-  postButton: { position: 'absolute', bottom: 20, right: 20, borderRadius: 25, paddingVertical: 12, paddingHorizontal: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 4 },
-  postButtonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  emptyPostBtn: { marginTop: 20, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 22 },
+  emptyPostText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+
+  listContent: { padding: 12, paddingBottom: 40 },
+
+  // Grid cards (buy/sell, food)
+  gridRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  gridCard: {
+    width: CARD_WIDTH,
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  gridImageBox: { width: '100%', height: CARD_WIDTH * 0.85, alignItems: 'center', justifyContent: 'center' },
+  gridImage: { width: '100%', height: '100%' },
+  gridEmoji: { fontSize: 44 },
+  featuredBadge: { position: 'absolute', top: 8, left: 8, flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#F39C12', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
+  featuredText: { color: '#fff', fontSize: 9, fontWeight: '700' },
+  gridInfo: { padding: 10 },
+  gridPrice: { fontSize: 16, fontWeight: '800', marginBottom: 2 },
+  gridTitle: { fontSize: 13, fontWeight: '500', lineHeight: 18, marginBottom: 5 },
+  gridMeta: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  gridLocation: { fontSize: 11 },
+
+  // Job cards
+  jobCard: {
+    flexDirection: 'row',
+    borderRadius: 14,
+    marginBottom: 10,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  jobAccent: { width: 4 },
+  jobContent: { flex: 1, padding: 14 },
+  jobTop: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
+  jobIconBox: { width: 46, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  jobText: { flex: 1 },
+  jobTitle: { fontSize: 15, fontWeight: '700' },
+  jobCompany: { fontSize: 12, marginTop: 2 },
+  jobPriceBox: { alignItems: 'flex-end' },
+  jobRate: { fontSize: 15, fontWeight: '800' },
+  jobPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
+  pill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
+  pillText: { fontSize: 11, fontWeight: '600' },
+  jobFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  jobFooterLeft: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  jobLocation: { fontSize: 11 },
+  jobDate: { fontSize: 11 },
+
+  // Housing cards
+  housingCard: {
+    borderRadius: 14,
+    marginBottom: 10,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  housingImage: { height: 160, alignItems: 'center', justifyContent: 'center' },
+  housingPriceBadge: { position: 'absolute', bottom: 10, left: 12, backgroundColor: 'rgba(0,0,0,0.65)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  housingPriceText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  housingInfo: { padding: 14 },
+  housingTitle: { fontSize: 16, fontWeight: '700', marginBottom: 4 },
+  housingDesc: { fontSize: 13, lineHeight: 18, marginBottom: 8 },
+  housingMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  housingLocation: { fontSize: 12 },
+  housingDot: { fontSize: 12 },
+  housingDate: { fontSize: 12 },
 });

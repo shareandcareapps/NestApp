@@ -172,14 +172,15 @@ export default function BrowseRidesScreen({ navigation }) {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
 
-      {/* Fixed header — always on top, filters slide under this */}
+      {/* Fixed header */}
       <SafeAreaView style={{ backgroundColor: colors.secondary }}>
         <View style={[styles.headerBar, { backgroundColor: colors.secondary }]}>
-          <Text style={styles.headerTitle}>Carpool</Text>
+          <Text style={[styles.headerTitle, { color: '#fff' }]}>Carpool</Text>
         </View>
-        <View style={[styles.searchContainer, { backgroundColor: colors.secondary }]}>
+        <View style={[styles.searchContainer, { backgroundColor: 'rgba(255,255,255,0.15)', borderColor: 'transparent', borderWidth: 1, borderRadius: 10, marginHorizontal: 16, marginBottom: 10, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 7 }]}>
+          <Ionicons name="search-outline" size={14} color="rgba(255,255,255,0.7)" style={{ marginRight: 6 }} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: '#fff', flex: 1 }]}
             placeholder="Search by location..."
             placeholderTextColor="rgba(255,255,255,0.5)"
             value={searchQuery}
@@ -350,10 +351,10 @@ export default function BrowseRidesScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  headerBar: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 2, alignItems: 'center' },
-  headerTitle: { color: '#fff', fontSize: 17, fontWeight: '500' },
-  searchContainer: { padding: 12 },
-  searchInput: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, padding: 10, fontSize: 14, color: '#fff' },
+  headerBar: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 },
+  headerTitle: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
+  searchContainer: { paddingVertical: 10 },
+  searchInput: { fontSize: 14, paddingVertical: 10 },
   filterRow: { flexDirection: 'row', paddingHorizontal: 10, paddingVertical: 8, gap: 8, borderBottomWidth: 0.5 },
   filterChip: { flex: 1, borderRadius: 20, paddingVertical: 7, paddingHorizontal: 6, alignItems: 'center', borderWidth: 1.5 },
   filterChipText: { fontSize: 11 },

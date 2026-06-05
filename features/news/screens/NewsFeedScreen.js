@@ -76,7 +76,7 @@ export default function NewsFeedScreen({ navigation }) {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <SafeAreaView style={{ backgroundColor: colors.secondary }}>
         <View style={[styles.headerBar, { backgroundColor: colors.secondary }]}>
-          <Text style={styles.headerTitle}>News</Text>
+          <Text style={[styles.headerTitle, { color: '#fff' }]}>News</Text>
         </View>
       </SafeAreaView>
       <View style={[styles.filterContainer, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
@@ -125,8 +125,8 @@ export default function NewsFeedScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  headerBar: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 12, alignItems: 'center' },
-  headerTitle: { color: '#fff', fontSize: 17, fontWeight: '500' },
+  headerBar: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12 },
+  headerTitle: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
   filterContainer: { flexDirection: 'row', padding: 12, borderBottomWidth: 0.5, gap: 8 },
   filterButton: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 0.5 },
   filterLabel: { fontSize: 13, fontWeight: '500' },
