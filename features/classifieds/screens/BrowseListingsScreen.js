@@ -1,5 +1,6 @@
 // features/classifieds/screens/BrowseListingsScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, ActivityIndicator, RefreshControl, SafeAreaView,
@@ -97,14 +98,26 @@ function ListingCard({ item, onPress, colors }) {
   );
 }
 
-export default function BrowseListingsScreen({ navigation }) {
+export default function BrowseListingsScreen({ navigation, route }) {
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState(route.params?.category ?? null);
   const [searchQuery, setSearchQuery] = useState('');
   const currentCity = useAppStore((state) => state.currentCity);
   const colors = useTheme();
+  const appliedParamCategory = useRef(route.params?.category ?? null);
+
+  // When navigated here from another tab with a category param, apply it
+  useFocusEffect(
+    React.useCallback(() => {
+      const incoming = route.params?.category ?? null;
+      if (incoming !== appliedParamCategory.current) {
+        appliedParamCategory.current = incoming;
+        setSelectedCategory(incoming);
+      }
+    }, [route.params?.category])
+  );
 
   useEffect(() => { fetchListings(); }, [selectedCategory]);
 

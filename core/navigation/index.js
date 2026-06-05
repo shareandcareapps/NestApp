@@ -17,6 +17,8 @@ import EditProfileScreen from '../screens/EditProfileScreen';
 import MyListingsScreen from '../screens/MyListingsScreen';
 import MyRidesScreen from '../screens/MyRidesScreen';
 import HomeScreen from '../screens/HomeScreen';
+import ListingDetailScreen from '../../features/classifieds/screens/ListingDetailScreen';
+import EditListingScreen from '../../features/classifieds/screens/EditListingScreen';
 import ClassifiedsNavigator from '../../features/classifieds/index';
 import RidesNavigator from '../../features/rides/index';
 import NewsNavigator from '../../features/news/index';
@@ -110,7 +112,7 @@ function MainTabs({ navigation }) {
           const icons = {
             Home: focused ? 'home' : 'home-outline',
             Classifieds: focused ? 'grid' : 'grid-outline',
-            Rides: focused ? 'car' : 'car-outline',
+            Carpool: focused ? 'car' : 'car-outline',
             News: focused ? 'newspaper' : 'newspaper-outline',
             Messages: focused ? 'chatbubble' : 'chatbubble-outline',
           };
@@ -152,7 +154,7 @@ function MainTabs({ navigation }) {
         })}
       />
       <Tab.Screen
-        name="Rides"
+        name="Carpool"
         component={RidesNavigator}
         options={{ headerShown: false }}
         listeners={({ navigation, route }) => ({
@@ -239,7 +241,29 @@ function MainApp() {
         name="MyRides"
         component={MyRidesScreen}
         options={{
-          title: 'My Rides',
+          title: 'My Carpools',
+          headerStyle: { backgroundColor: '#1D3557' },
+          headerTintColor: '#fff',
+          headerTitleStyle: { fontWeight: '500' },
+          headerBackTitleVisible: false,
+        }}
+      />
+      <Stack.Screen
+        name="ListingDetail"
+        component={ListingDetailScreen}
+        options={{
+          title: 'Listing Details',
+          headerStyle: { backgroundColor: '#1D3557' },
+          headerTintColor: '#fff',
+          headerTitleStyle: { fontWeight: '500' },
+          headerBackTitleVisible: false,
+        }}
+      />
+      <Stack.Screen
+        name="EditListing"
+        component={EditListingScreen}
+        options={{
+          title: 'Edit Listing',
           headerStyle: { backgroundColor: '#1D3557' },
           headerTintColor: '#fff',
           headerTitleStyle: { fontWeight: '500' },

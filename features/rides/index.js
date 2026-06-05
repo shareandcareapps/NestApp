@@ -26,17 +26,17 @@ export default function RidesNavigator() {
       <Stack.Screen
         name="PostRide"
         component={PostRideScreen}
-        options={{ title: 'Post a Ride' }}
+        options={{ title: 'Share a Ride' }}
       />
       <Stack.Screen
         name="RideDetail"
         component={RideDetailScreen}
-        options={{ title: 'Ride Details' }}
+        options={{ title: 'Carpool Details' }}
       />
       <Stack.Screen
         name="EditRide"
         component={EditRideScreen}
-        options={{ title: 'Edit Ride' }}
+        options={{ title: 'Edit Carpool' }}
       />
     </Stack.Navigator>
   );

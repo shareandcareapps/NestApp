@@ -154,10 +154,10 @@ export default function HomeScreen({ navigation }) {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionCardLarge, { backgroundColor: '#2ECC71' }]}
-            onPress={() => navigation.navigate('Rides', { screen: 'PostRide' })}
+            onPress={() => navigation.navigate('Carpool', { screen: 'PostRide' })}
           >
             <Ionicons name="car-sport-outline" size={26} color="#fff" />
-            <Text style={styles.actionLabelLarge}>Post Ride</Text>
+            <Text style={styles.actionLabelLarge}>Post Carpool</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -173,7 +173,7 @@ export default function HomeScreen({ navigation }) {
                 backgroundColor: cat.bg,
                 borderColor: cat.color + '30',
               }]}
-              onPress={() => navigation.navigate('Classifieds')}
+              onPress={() => navigation.navigate('Classifieds', { screen: 'BrowseListings', params: { category: key } })}
             >
               <View style={[styles.categoryIconWrap, { backgroundColor: cat.color + '20' }]}>
                 <Ionicons name={cat.icon + '-outline'} size={20} color={cat.color} />
@@ -224,10 +224,7 @@ export default function HomeScreen({ navigation }) {
                 <TouchableOpacity
                   key={item.id}
                   style={[styles.listingCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                  onPress={() => navigation.navigate('Classifieds', {
-                    screen: 'ListingDetail',
-                    params: { listing: item },
-                  })}
+                  onPress={() => navigation.navigate('ListingDetail', { listing: item })}
                   activeOpacity={0.85}
                 >
                   {/* Photo */}
@@ -311,7 +308,7 @@ export default function HomeScreen({ navigation }) {
         {[
           { emoji: '👤', label: 'Edit Profile', sub: 'Name, phone number', screen: 'EditProfile' },
           { emoji: '🏠', label: 'My Listings', sub: 'View and manage your posts', screen: 'MyListings' },
-          { emoji: '🚗', label: 'My Rides', sub: 'View and manage your rides', screen: 'MyRides' },
+          { emoji: '🚗', label: 'My Carpools', sub: 'View and manage your carpools', screen: 'MyRides' },
           { emoji: '⚙️', label: 'Settings', sub: 'Theme, preferences', screen: 'Settings' },
         ].map((item) => (
           <TouchableOpacity

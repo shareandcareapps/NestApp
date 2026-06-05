@@ -25,7 +25,7 @@ import { useTheme } from '../../../core/theme/ThemeContext';
 const CATEGORIES = [
   { id: 'airport', label: 'Airport', emoji: '✈️' },
   { id: 'university', label: 'University', emoji: '🎓' },
-  { id: 'temple', label: 'Temple', emoji: '🛕' },
+  { id: 'temple', label: "Religious Centers", emoji: '🙏' },
   { id: 'general', label: 'General', emoji: '🚗' },
 ];
 
@@ -141,9 +141,9 @@ export default function PostRideScreen({ navigation }) {
           >
             <Text style={styles.postTypeEmoji}>🚗</Text>
             <Text style={[styles.postTypeLabel, { color: postType === 'offer' ? '#27AE60' : colors.textSecondary }]}>
-              Driver
+              Offering a Seat
             </Text>
-            <Text style={[styles.postTypeSubLabel, { color: colors.textLight }]}>I have seats available</Text>
+            <Text style={[styles.postTypeSubLabel, { color: colors.textLight }]}>I have seats to share</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.postTypeCard, {
@@ -155,16 +155,16 @@ export default function PostRideScreen({ navigation }) {
           >
             <Text style={styles.postTypeEmoji}>🙋</Text>
             <Text style={[styles.postTypeLabel, { color: postType === 'request' ? '#9B59B6' : colors.textSecondary }]}>
-              Rider
+              Need a Seat
             </Text>
-            <Text style={[styles.postTypeSubLabel, { color: colors.textLight }]}>I need a ride</Text>
+            <Text style={[styles.postTypeSubLabel, { color: colors.textLight }]}>Looking for a carpool</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Cash Notice */}
-        <View style={[styles.cashNotice, { backgroundColor: colors.successBackground }]}>
-          <Text style={[styles.cashNoticeText, { color: colors.successText }]}>
-            💵 All rides are cash-based — payment directly between driver and rider
+        {/* Community notice */}
+        <View style={[styles.cashNotice, { backgroundColor: colors.infoBackground }]}>
+          <Text style={[styles.cashNoticeText, { color: colors.secondary }]}>
+            🤝 Community carpool — cost arrangements are discussed privately in chat
           </Text>
         </View>
 
@@ -376,93 +376,14 @@ export default function PostRideScreen({ navigation }) {
           </>
         )}
 
-        {/* Pricing — drivers only */}
-        {postType === 'offer' && (
-          <>
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Pricing Type *</Text>
-            <View style={styles.pricingRow}>
-              {[
-                { id: 'per_mile', emoji: '📏', label: 'Per Mile', sub: '$1/mile ÷ riders' },
-                { id: 'fixed', emoji: '💵', label: 'Fixed', sub: 'Set your price' },
-                { id: 'free', emoji: '🎁', label: 'Free', sub: 'No charge' },
-              ].map((p) => (
-                <TouchableOpacity
-                  key={p.id}
-                  style={[styles.pricingCard, {
-                    backgroundColor: pricingType === p.id ? colors.successBackground : colors.surface,
-                    borderColor: pricingType === p.id ? '#2ECC71' : colors.border,
-                    borderWidth: pricingType === p.id ? 2 : 0.5,
-                  }]}
-                  onPress={() => setPricingType(p.id)}
-                >
-                  <Text style={styles.pricingEmoji}>{p.emoji}</Text>
-                  <Text style={[styles.pricingLabel, { color: pricingType === p.id ? '#27AE60' : colors.textSecondary }]}>
-                    {p.label}
-                  </Text>
-                  <Text style={[styles.pricingSubLabel, { color: colors.textLight }]}>{p.sub}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {pricingType === 'per_mile' && (
-              <>
-                <Text style={[styles.label, { color: colors.textPrimary }]}>Total Miles *</Text>
-                <TextInput
-                  style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-                  placeholder="e.g. 21"
-                  placeholderTextColor={colors.textLight}
-                  value={totalMiles}
-                  onChangeText={setTotalMiles}
-                  keyboardType="numeric"
-                />
-                {totalMiles && seats ? (
-                  <View style={[styles.calculationBox, { backgroundColor: colors.successBackground }]}>
-                    <Text style={[styles.calculationText, { color: colors.successText }]}>
-                      📏 {totalMiles} miles × $1 = ${totalMiles} total
-                    </Text>
-                    <Text style={[styles.calculationResult, { color: colors.successText }]}>
-                      💵 ${calculateCostPerPerson()} per person
-                    </Text>
-                  </View>
-                ) : null}
-              </>
-            )}
-
-            {pricingType === 'fixed' && (
-              <>
-                <Text style={[styles.label, { color: colors.textPrimary }]}>Cost per Person (USD) *</Text>
-                <TextInput
-                  style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-                  placeholder="e.g. 15"
-                  placeholderTextColor={colors.textLight}
-                  value={costShare}
-                  onChangeText={setCostShare}
-                  keyboardType="numeric"
-                />
-              </>
-            )}
-          </>
-        )}
-
-        {/* Budget — riders only */}
-        {postType === 'request' && (
-          <>
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Your Budget per Person (USD)</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-              placeholder="e.g. 15 (leave empty to discuss with driver)"
-              placeholderTextColor={colors.textLight}
-              value={costShare}
-              onChangeText={setCostShare}
-              keyboardType="numeric"
-            />
-            <View style={[styles.infoBox, { backgroundColor: colors.infoBackground }]}>
-              <Text style={[styles.infoText, { color: colors.secondary }]}>
-                💡 Leave budget empty if you want to discuss price with the driver directly.
-              </Text>
-            </View>
-          </>
-        )}
+        {/* Cost tip */}
+        <View style={[styles.infoBox, { backgroundColor: colors.infoBackground }]}>
+          <Text style={[styles.infoText, { color: colors.secondary }]}>
+            💬 {postType === 'offer'
+              ? 'Cost sharing details can be discussed privately with riders in chat after they connect with you.'
+              : 'You can discuss cost sharing with the driver directly in chat once they respond.'}
+          </Text>
+        </View>
 
         {/* Notes */}
         <Text style={[styles.label, { color: colors.textPrimary }]}>Notes (optional)</Text>
@@ -491,7 +412,7 @@ export default function PostRideScreen({ navigation }) {
             <ActivityIndicator color="#fff" />
           ) : (
             <Text style={styles.postButtonText}>
-              {postType === 'offer' ? 'Post Ride Offer' : 'Post Ride Request'}
+              {postType === 'offer' ? '🚗 Share My Ride' : '🙋 Request a Seat'}
             </Text>
           )}
         </TouchableOpacity>
