@@ -14,6 +14,8 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Keyboard,
+  Image,
 } from 'react-native';
 import { createRide } from '../services/ridesService';
 import useAppStore from '../../../core/store/index';
@@ -25,6 +27,13 @@ const CATEGORIES = [
   { id: 'university', label: 'University', emoji: '🎓' },
   { id: 'temple', label: 'Temple', emoji: '🛕' },
   { id: 'general', label: 'General', emoji: '🚗' },
+];
+
+const UNIVERSITIES = [
+  { id: 'webster', short: 'Webster', full: 'Webster University',           color: '#8E44AD', logo: { uri: 'https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://webster.edu&size=128' } },
+  { id: 'slu',     short: 'SLU',     full: 'Saint Louis University',       color: '#C0392B', logo: { uri: 'https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://slu.edu&size=128' } },
+  { id: 'umsl',    short: 'UMSL',    full: 'Univ. of Missouri–St. Louis',  color: '#C8102E', logo: { uri: 'https://www.umsl.edu/branding/logos/images/university-logo-horizontal_triton-red-blk.png' } },
+  { id: 'washu',   short: 'Wash U',  full: 'Washington University',        color: '#117A65', logo: { uri: 'https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://wustl.edu&size=128' } },
 ];
 
 export default function PostRideScreen({ navigation }) {
@@ -39,6 +48,9 @@ export default function PostRideScreen({ navigation }) {
   const [pricingType, setPricingType] = useState('per_mile');
   const [totalMiles, setTotalMiles] = useState('');
   const [category, setCategory] = useState(null);
+  const [university, setUniversity] = useState(null);
+  const [universityDirection, setUniversityDirection] = useState(null); // 'from' | 'to'
+  const [airportDirection, setAirportDirection] = useState(null); // 'from' | 'to'
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const user = useAppStore((state) => state.user);
@@ -66,6 +78,11 @@ export default function PostRideScreen({ navigation }) {
       rideTime.getMinutes(),
     );
 
+    if (combinedDateTime <= new Date()) {
+      Alert.alert('Invalid Time', 'Please select a future date and time.');
+      return;
+    }
+
     let finalCost = null;
     if (pricingType === 'per_mile' && totalMiles && seats) {
       finalCost = parseFloat((parseFloat(totalMiles) / parseInt(seats)).toFixed(2));
@@ -85,6 +102,7 @@ export default function PostRideScreen({ navigation }) {
         seats_available: postType === 'offer' ? parseInt(seats) || 1 : parseInt(peopleCount) || 1,
         cost_share: finalCost,
         category,
+        university: category === 'university' ? university : null,
         notes,
         is_active: true,
       });
@@ -102,7 +120,11 @@ export default function PostRideScreen({ navigation }) {
   }
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScrollView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      keyboardShouldPersistTaps="handled"
+      onScrollBeginDrag={Keyboard.dismiss}
+    >
       <View style={styles.inner}>
 
         {/* Post Type */}
@@ -157,7 +179,7 @@ export default function PostRideScreen({ navigation }) {
                 borderColor: category === cat.id ? '#2ECC71' : colors.border,
                 borderWidth: category === cat.id ? 2 : 0.5,
               }]}
-              onPress={() => setCategory(cat.id)}
+              onPress={() => { setCategory(cat.id); setUniversity(null); setUniversityDirection(null); setAirportDirection(null); setFromLocation(''); setToLocation(''); }}
             >
               <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
               <Text style={[styles.categoryLabel, { color: category === cat.id ? '#27AE60' : colors.textSecondary }]}>
@@ -167,25 +189,142 @@ export default function PostRideScreen({ navigation }) {
           ))}
         </View>
 
-        {/* From */}
-        <Text style={[styles.label, { color: colors.textPrimary }]}>From (Pickup Location) *</Text>
-        <TextInput
-          style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-          placeholder="e.g. Clayton, St. Louis"
-          placeholderTextColor={colors.textLight}
-          value={fromLocation}
-          onChangeText={setFromLocation}
-        />
+        {/* University Selector */}
+        {category === 'university' && (
+          <>
+            <Text style={[styles.label, { color: colors.textPrimary }]}>Select University *</Text>
+            <View style={styles.universityGrid}>
+              {UNIVERSITIES.map((uni) => (
+                <TouchableOpacity
+                  key={uni.id}
+                  style={[styles.universityCard, {
+                    backgroundColor: university === uni.id ? uni.color + '18' : colors.surface,
+                    borderColor: university === uni.id ? uni.color : colors.border,
+                    borderWidth: university === uni.id ? 2 : 0.5,
+                  }]}
+                  onPress={() => { setUniversity(uni.id); setUniversityDirection(null); setFromLocation(''); setToLocation(''); }}
+                >
+                  <Image source={uni.logo} style={styles.universityLogo} resizeMode="contain" />
+                  <Text style={[styles.universityShort, { color: university === uni.id ? uni.color : colors.textPrimary }]}>
+                    {uni.short}
+                  </Text>
+                  <Text style={[styles.universityFull, { color: colors.textLight }]} numberOfLines={2}>
+                    {uni.full}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
 
-        {/* To */}
-        <Text style={[styles.label, { color: colors.textPrimary }]}>To (Drop Location) *</Text>
-        <TextInput
-          style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-          placeholder="e.g. STL Lambert Airport"
-          placeholderTextColor={colors.textLight}
-          value={toLocation}
-          onChangeText={setToLocation}
-        />
+        {/* University Direction Picker */}
+        {category === 'university' && university && (() => {
+          const uni = UNIVERSITIES.find(u => u.id === university);
+          return (
+            <>
+              <Text style={[styles.label, { color: colors.textPrimary }]}>Direction *</Text>
+              <View style={styles.directionRow}>
+                <TouchableOpacity
+                  style={[styles.directionCard, {
+                    backgroundColor: universityDirection === 'from' ? uni.color + '18' : colors.surface,
+                    borderColor: universityDirection === 'from' ? uni.color : colors.border,
+                    borderWidth: universityDirection === 'from' ? 2 : 0.5,
+                  }]}
+                  onPress={() => { setUniversityDirection('from'); setFromLocation(uni.short); setToLocation(''); }}
+                >
+                  <Text style={styles.directionEmoji}>🏫→🏠</Text>
+                  <Text style={[styles.directionTitle, { color: universityDirection === 'from' ? uni.color : colors.textPrimary }]}>
+                    From {uni.short}
+                  </Text>
+                  <Text style={[styles.directionSub, { color: colors.textLight }]}>University is pickup</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.directionCard, {
+                    backgroundColor: universityDirection === 'to' ? uni.color + '18' : colors.surface,
+                    borderColor: universityDirection === 'to' ? uni.color : colors.border,
+                    borderWidth: universityDirection === 'to' ? 2 : 0.5,
+                  }]}
+                  onPress={() => { setUniversityDirection('to'); setToLocation(uni.short); setFromLocation(''); }}
+                >
+                  <Text style={styles.directionEmoji}>🏠→🏫</Text>
+                  <Text style={[styles.directionTitle, { color: universityDirection === 'to' ? uni.color : colors.textPrimary }]}>
+                    To {uni.short}
+                  </Text>
+                  <Text style={[styles.directionSub, { color: colors.textLight }]}>University is drop-off</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          );
+        })()}
+
+        {/* Airport Direction Picker */}
+        {category === 'airport' && (
+          <>
+            <Text style={[styles.label, { color: colors.textPrimary }]}>Direction *</Text>
+            <View style={styles.directionRow}>
+              <TouchableOpacity
+                style={[styles.directionCard, {
+                  backgroundColor: airportDirection === 'to' ? '#1D355720' : colors.surface,
+                  borderColor: airportDirection === 'to' ? colors.secondary : colors.border,
+                  borderWidth: airportDirection === 'to' ? 2 : 0.5,
+                }]}
+                onPress={() => { setAirportDirection('to'); setToLocation('STL Lambert Airport'); setFromLocation(''); }}
+              >
+                <Text style={styles.directionEmoji}>🏠→✈️</Text>
+                <Text style={[styles.directionTitle, { color: airportDirection === 'to' ? colors.secondary : colors.textPrimary }]}>
+                  To Airport
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.directionCard, {
+                  backgroundColor: airportDirection === 'from' ? '#1D355720' : colors.surface,
+                  borderColor: airportDirection === 'from' ? colors.secondary : colors.border,
+                  borderWidth: airportDirection === 'from' ? 2 : 0.5,
+                }]}
+                onPress={() => { setAirportDirection('from'); setFromLocation('STL Lambert Airport'); setToLocation(''); }}
+              >
+                <Text style={styles.directionEmoji}>✈️→🏠</Text>
+                <Text style={[styles.directionTitle, { color: airportDirection === 'from' ? colors.secondary : colors.textPrimary }]}>
+                  From Airport
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+
+        {/* For university/airport rides: hide everything until direction is picked */}
+        {(category !== 'university' || universityDirection) &&
+         (category !== 'airport'    || airportDirection) && (
+          <>
+            {/* From — hide if pre-filled by university/airport */}
+            {!((category === 'university' && universityDirection === 'from') ||
+               (category === 'airport'    && airportDirection    === 'from')) && (
+              <>
+                <Text style={[styles.label, { color: colors.textPrimary }]}>From (Pickup Location) *</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
+                  placeholder="e.g. Clayton, St. Louis"
+                  placeholderTextColor={colors.textLight}
+                  value={fromLocation}
+                  onChangeText={setFromLocation}
+                />
+              </>
+            )}
+
+            {/* To — hide if pre-filled by university/airport */}
+            {!((category === 'university' && universityDirection === 'to') ||
+               (category === 'airport'    && airportDirection    === 'to')) && (
+              <>
+                <Text style={[styles.label, { color: colors.textPrimary }]}>To (Drop Location) *</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
+                  placeholder="e.g. Your neighborhood"
+                  placeholderTextColor={colors.textLight}
+                  value={toLocation}
+                  onChangeText={setToLocation}
+                />
+              </>
+            )}
 
         {/* Date Picker */}
         <Text style={[styles.label, { color: colors.textPrimary }]}>Date *</Text>
@@ -336,12 +475,17 @@ export default function PostRideScreen({ navigation }) {
           multiline
           numberOfLines={3}
         />
+          </>
+        )}
 
         {/* Post Button */}
         <TouchableOpacity
-          style={[styles.postButton, { backgroundColor: postType === 'offer' ? '#2ECC71' : '#9B59B6' }]}
+          style={[styles.postButton, {
+            backgroundColor: postType === 'offer' ? '#2ECC71' : '#9B59B6',
+            opacity: (loading || (category === 'university' && !universityDirection) || (category === 'airport' && !airportDirection)) ? 0.4 : 1,
+          }]}
           onPress={handlePost}
-          disabled={loading}
+          disabled={loading || (category === 'university' && !universityDirection) || (category === 'airport' && !airportDirection)}
         >
           {loading ? (
             <ActivityIndicator color="#fff" />
@@ -377,6 +521,18 @@ const styles = StyleSheet.create({
   categoryCard: { flex: 1, borderRadius: 10, padding: 10, alignItems: 'center' },
   categoryEmoji: { fontSize: 20, marginBottom: 4 },
   categoryLabel: { fontSize: 9, fontWeight: '500', textAlign: 'center' },
+  directionRow: { flexDirection: 'row', gap: 8 },
+  directionCard: { flex: 1, borderRadius: 10, padding: 10, alignItems: 'center', gap: 2 },
+  directionEmoji: { fontSize: 18, marginBottom: 2 },
+  directionTitle: { fontSize: 11, fontWeight: '700', textAlign: 'center' },
+  directionSub: { fontSize: 9, textAlign: 'center' },
+  lockedField: { borderRadius: 10, padding: 12, borderWidth: 0.5 },
+  lockedFieldText: { fontSize: 15, fontWeight: '500' },
+  universityGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  universityCard: { width: '47%', borderRadius: 10, padding: 10, alignItems: 'center', gap: 2 },
+  universityLogo: { width: 28, height: 28 },
+  universityShort: { fontSize: 11, fontWeight: '700' },
+  universityFull: { fontSize: 9, textAlign: 'center' },
   input: { borderRadius: 10, padding: 12, fontSize: 15, borderWidth: 0.5 },
   textArea: { height: 80, textAlignVertical: 'top' },
   peopleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

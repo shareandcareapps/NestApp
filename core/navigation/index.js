@@ -5,9 +5,11 @@ import {
 } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
+import { CommonActions } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../database/index';
 import useAppStore from '../store/index';
+import { useTheme } from '../theme/ThemeContext';
 import LoginScreen from '../auth/screens/LoginScreen';
 import SignupScreen from '../auth/screens/SignupScreen';
 import SettingsScreen from '../screens/SettingsScreen';
@@ -62,6 +64,7 @@ function AvatarButton({ onPress, name }) {
 function MainTabs({ navigation }) {
   const user = useAppStore((state) => state.user);
   const [profileName, setProfileName] = useState('');
+  const theme = useTheme();
 
   useEffect(() => { loadProfileName(); }, [user]);
 
@@ -91,11 +94,11 @@ function MainTabs({ navigation }) {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textLight,
+        tabBarActiveTintColor: theme.primary,
+        tabBarInactiveTintColor: theme.textLight,
         tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
+          backgroundColor: theme.tabBackground,
+          borderTopColor: theme.border,
           borderTopWidth: 0.5,
           height: 84,
           paddingBottom: 28,
@@ -118,6 +121,7 @@ function MainTabs({ navigation }) {
               name={icons[route.name]}
               size={22}
               color={color}
+              style={{ opacity: focused ? 1 : 0.55 }}
             />
           );
         },
@@ -126,31 +130,67 @@ function MainTabs({ navigation }) {
       <Tab.Screen
         name="Home"
         component={HomeScreen}
-        options={{
-          ...sharedHeaderOptions,
-          title: 'NestApp',
-          headerTitleAlign: 'center',
-        }}
+        options={{ ...sharedHeaderOptions, title: 'NestApp', headerTitleAlign: 'center' }}
+        listeners={({ navigation, route }) => ({
+          tabPress: (e) => {
+            if (navigation.isFocused()) {
+              e.preventDefault();
+              navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: route.name }] }));
+            }
+          },
+        })}
       />
       <Tab.Screen
         name="Classifieds"
         component={ClassifiedsNavigator}
         options={{ headerShown: false }}
+        listeners={({ navigation, route }) => ({
+          tabPress: (e) => {
+            if (navigation.isFocused()) {
+              e.preventDefault();
+              navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: route.name }] }));
+            }
+          },
+        })}
       />
       <Tab.Screen
         name="Rides"
         component={RidesNavigator}
         options={{ headerShown: false }}
+        listeners={({ navigation, route }) => ({
+          tabPress: (e) => {
+            if (navigation.isFocused()) {
+              e.preventDefault();
+              navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: route.name }] }));
+            }
+          },
+        })}
       />
       <Tab.Screen
         name="News"
         component={NewsNavigator}
         options={{ headerShown: false }}
+        listeners={({ navigation, route }) => ({
+          tabPress: (e) => {
+            if (navigation.isFocused()) {
+              e.preventDefault();
+              navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: route.name }] }));
+            }
+          },
+        })}
       />
       <Tab.Screen
         name="Messages"
         component={MessagesNavigator}
         options={{ headerShown: false }}
+        listeners={({ navigation, route }) => ({
+          tabPress: (e) => {
+            if (navigation.isFocused()) {
+              e.preventDefault();
+              navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: route.name }] }));
+            }
+          },
+        })}
       />
     </Tab.Navigator>
   );

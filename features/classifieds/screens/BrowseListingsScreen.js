@@ -24,6 +24,12 @@ function ListingCard({ item, onPress, colors }) {
   const categoryEmojis = {
     accommodation: '🏠', jobs: '💼', buysell: '🛍️', food: '🍱',
   };
+
+  const isJob = item.category === 'jobs';
+  const meta = isJob && item.metadata
+    ? (typeof item.metadata === 'string' ? JSON.parse(item.metadata) : item.metadata)
+    : null;
+
   return (
     <TouchableOpacity
       style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
@@ -43,21 +49,47 @@ function ListingCard({ item, onPress, colors }) {
             {item.title}
           </Text>
           <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-            {item.poster?.full_name || item.profiles?.full_name || 'Community Member'}
+            {isJob && meta?.company ? meta.company : (item.poster?.full_name || item.profiles?.full_name || 'Community Member')}
           </Text>
         </View>
-        {item.price && (
+        {isJob ? (
+          <Text style={[styles.cardPrice, { color: '#27AE60' }]}>
+            {meta?.salary_open ? 'Open' : item.price ? `$${item.price}/hr` : '—'}
+          </Text>
+        ) : item.price ? (
           <Text style={[styles.cardPrice, { color: colors.primary }]}>${item.price}</Text>
-        )}
+        ) : null}
       </View>
-      {item.description && (
+
+      {isJob && meta ? (
+        <View style={styles.jobPills}>
+          <View style={[styles.jobPill, { backgroundColor: '#2ECC7115', borderColor: '#2ECC7140' }]}>
+            <Text style={[styles.jobPillText, { color: '#27AE60' }]}>
+              {meta.job_type === 'full_time' ? '🕘 Full Time' : '⏰ Part Time'}
+            </Text>
+          </View>
+          {meta.hours_per_week ? (
+            <View style={[styles.jobPill, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+              <Text style={[styles.jobPillText, { color: colors.textSecondary }]}>🕐 {meta.hours_per_week} hrs/week</Text>
+            </View>
+          ) : null}
+          {meta.joining ? (
+            <View style={[styles.jobPill, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+              <Text style={[styles.jobPillText, { color: colors.textSecondary }]}>
+                {meta.joining === 'immediate' ? '⚡ Immediate' : '📅 Flexible'}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      ) : item.description ? (
         <Text style={[styles.cardDescription, { color: colors.textSecondary }]} numberOfLines={2}>
           {item.description}
         </Text>
-      )}
+      ) : null}
+
       <View style={[styles.cardFooter, { borderTopColor: colors.borderLight }]}>
-        <Text style={[styles.cardLocation, { color: colors.textLight }]}>📍 {item.city}, {item.state}</Text>
-        <Text style={[styles.cardTime, { color: colors.textLight }]}>
+        <Text style={[styles.cardLocation, { color: colors.textLight }]}>📍 {(isJob && meta?.location) ? meta.location : `${item.city}, ${item.state}`}</Text>
+        <Text style={[styles.cardTime, { color: colors.textPrimary }]}>
           {new Date(item.created_at).toLocaleDateString()}
         </Text>
       </View>
@@ -109,8 +141,10 @@ export default function BrowseListingsScreen({ navigation }) {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
 
-      {/* SafeAreaView wraps only the header so status bar is never overlapped */}
       <SafeAreaView style={{ backgroundColor: colors.secondary }}>
+        <View style={[styles.headerBar, { backgroundColor: colors.secondary }]}>
+          <Text style={styles.headerTitle}>Classifieds</Text>
+        </View>
         <View style={[styles.searchContainer, { backgroundColor: colors.secondary }]}>
           <TextInput
             style={[styles.searchInput, { color: colors.textWhite }]}
@@ -197,6 +231,8 @@ export default function BrowseListingsScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  headerBar: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 2, alignItems: 'center' },
+  headerTitle: { color: '#fff', fontSize: 17, fontWeight: '500' },
   searchContainer: { padding: 12 },
   searchInput: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, padding: 10, fontSize: 14 },
   categoryContainer: { flexDirection: 'row', padding: 10, borderBottomWidth: 0.5 },
@@ -220,6 +256,9 @@ const styles = StyleSheet.create({
   cardSubtitle: { fontSize: 12, marginTop: 2 },
   cardPrice: { fontSize: 16, fontWeight: '700' },
   cardDescription: { fontSize: 13, marginTop: 8, lineHeight: 18 },
+  jobPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  jobPill: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 0.5 },
+  jobPillText: { fontSize: 11, fontWeight: '500' },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10, paddingTop: 8, borderTopWidth: 0.5 },
   cardLocation: { fontSize: 11 },
   cardTime: { fontSize: 11 },

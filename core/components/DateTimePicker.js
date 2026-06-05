@@ -2,7 +2,7 @@
 // CORE COMPONENT — Native iOS Date and Time Picker
 // Uses @react-native-community/datetimepicker for native feel
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -89,7 +89,21 @@ export function DatePicker({ value, onChange, label }) {
 // ─── Time Picker ───────────────────────────────
 export function TimePicker({ value, onChange, label }) {
   const [visible, setVisible] = useState(false);
-  const [tempTime, setTempTime] = useState(value || new Date());
+  const [pickerKey, setPickerKey] = useState(0);
+  const tempTimeRef = React.useRef(new Date());
+
+  function openPicker() {
+    // Set ref synchronously — no batching issues
+    tempTimeRef.current = value ? new Date(value.getTime()) : new Date();
+    // Increment key to force DateTimePicker to remount with fresh value
+    setPickerKey(k => k + 1);
+    setVisible(true);
+  }
+
+  function handleConfirm() {
+    onChange(new Date(tempTimeRef.current.getTime()));
+    setVisible(false);
+  }
 
   function formatTime(date) {
     if (!date) return null;
@@ -101,16 +115,11 @@ export function TimePicker({ value, onChange, label }) {
     return `${displayHour}:${displayMin} ${ampm}`;
   }
 
-  function handleConfirm() {
-    onChange(tempTime);
-    setVisible(false);
-  }
-
   return (
     <>
       <TouchableOpacity
         style={styles.pickerButton}
-        onPress={() => setVisible(true)}
+        onPress={openPicker}
       >
         <Text style={styles.pickerButtonEmoji}>🕐</Text>
         <Text style={[
@@ -130,7 +139,6 @@ export function TimePicker({ value, onChange, label }) {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
-            {/* Header */}
             <View style={styles.modalHeader}>
               <TouchableOpacity onPress={() => setVisible(false)}>
                 <Text style={styles.cancelButton}>Cancel</Text>
@@ -141,14 +149,14 @@ export function TimePicker({ value, onChange, label }) {
               </TouchableOpacity>
             </View>
 
-            {/* Native iOS Time Picker */}
             <DateTimePicker
-              value={tempTime}
+              key={pickerKey}
+              value={tempTimeRef.current}
               mode="time"
               display="spinner"
               minuteInterval={15}
               onChange={(event, selectedTime) => {
-                if (selectedTime) setTempTime(selectedTime);
+                if (selectedTime) tempTimeRef.current = selectedTime;
               }}
               style={styles.nativePicker}
               textColor="#1A1A1A"

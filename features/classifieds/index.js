@@ -25,7 +25,7 @@ export default function ClassifiedsNavigator() {
       <Stack.Screen
         name="PostListing"
         component={PostListingScreen}
-        options={{ title: 'Post a Listing' }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="ListingDetail"

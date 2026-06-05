@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator, RefreshControl,
+  TouchableOpacity, ActivityIndicator, RefreshControl, Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../database/index';
@@ -36,9 +36,10 @@ export default function HomeScreen({ navigation }) {
           .from('listings')
           .select('*')
           .eq('is_active', true)
+          .neq('category', 'jobs')
           .order('is_boosted', { ascending: false })
           .order('created_at', { ascending: false })
-          .limit(6),
+          .limit(4),
         supabase
           .from('profiles')
           .select('full_name, username')
@@ -47,9 +48,8 @@ export default function HomeScreen({ navigation }) {
       ]);
       if (listingsRes.data) setListings(listingsRes.data);
       if (profileRes.data) {
-        setProfileName(profileRes.data.username
-          ? `@${profileRes.data.username}`
-          : profileRes.data.full_name || '');
+        const raw = profileRes.data.username || profileRes.data.full_name || '';
+        setProfileName(raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : '');
       }
     } catch (error) {
       console.error('Error fetching home data:', error);
@@ -84,12 +84,30 @@ export default function HomeScreen({ navigation }) {
     >
       {/* Greeting */}
       <View style={[styles.heroSection, { backgroundColor: colors.surface }]}>
-        <Text style={[styles.greeting, { color: colors.textSecondary }]}>
+        <Text style={[styles.greeting, { color: colors.textPrimary }]}>
           {greeting()}{profileName ? `, ${profileName}` : ''} 👋
         </Text>
         <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
           What are you{'\n'}looking for today?
         </Text>
+      </View>
+
+      {/* Community Notice */}
+      <View style={[styles.communityBox, {
+        backgroundColor: colors.infoBackground,
+        borderColor: colors.info + '30',
+        marginHorizontal: 16,
+        marginBottom: 4,
+      }]}>
+        <Ionicons name="people-outline" size={20} color={colors.info} />
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.communityTitle, { color: colors.secondary }]}>
+            St. Louis Desi Community
+          </Text>
+          <Text style={[styles.communityText, { color: colors.textSecondary }]}>
+            Connect with fellow desis in St. Louis for housing, jobs, car pooling and more.
+          </Text>
+        </View>
       </View>
 
       {/* Quick Actions */}
@@ -176,65 +194,78 @@ export default function HomeScreen({ navigation }) {
             </TouchableOpacity>
           </View>
         ) : (
-          listings.map((item) => {
-            const cat = categoryConfig[item.category] || categoryConfig.accommodation;
-            return (
-              <TouchableOpacity
-                key={item.id}
-                style={[styles.listingCard, {
-                  backgroundColor: colors.card,
-                  borderColor: colors.border,
-                }]}
-                onPress={() => navigation.navigate('Classifieds', {
-                  screen: 'ListingDetail',
-                  params: { listing: item },
-                })}
-              >
-                <View style={[styles.listingIcon, { backgroundColor: cat.bg }]}>
-                  <Ionicons name={cat.icon + '-outline'} size={20} color={cat.color} />
-                </View>
-                <View style={styles.listingBody}>
-                  <Text style={[styles.listingTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                  <View style={styles.listingMeta}>
+          <View style={styles.listingGrid}>
+            {listings.map((item) => {
+              const cat = categoryConfig[item.category] || categoryConfig.accommodation;
+              const photo = Array.isArray(item.images) && item.images.length > 0 ? item.images[0] : null;
+              const meta = item.metadata
+                ? (typeof item.metadata === 'string' ? JSON.parse(item.metadata) : item.metadata)
+                : null;
+              const negotiable = meta?.negotiable;
+              const location = meta?.location;
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.listingCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  onPress={() => navigation.navigate('Classifieds', {
+                    screen: 'ListingDetail',
+                    params: { listing: item },
+                  })}
+                  activeOpacity={0.85}
+                >
+                  {/* Photo */}
+                  <View style={[styles.listingPhoto, { backgroundColor: cat.bg }]}>
+                    {photo ? (
+                      <Image source={{ uri: photo }} style={styles.listingPhotoImg} />
+                    ) : (
+                      <Ionicons name={cat.icon + '-outline'} size={32} color={cat.color} />
+                    )}
+                  </View>
+
+                  <View style={styles.listingBody}>
+                    {/* Category badge */}
                     <View style={[styles.catBadge, { backgroundColor: cat.bg }]}>
-                      <Text style={[styles.catBadgeText, { color: cat.color }]}>
-                        {cat.label}
-                      </Text>
+                      <Text style={[styles.catBadgeText, { color: cat.color }]}>{cat.label}</Text>
                     </View>
+
+                    {/* Title */}
+                    <Text style={[styles.listingTitle, { color: colors.textPrimary }]} numberOfLines={2}>
+                      {item.title}
+                    </Text>
+
+                    {/* Location */}
+                    {location ? (
+                      <Text style={[styles.listingLocation, { color: colors.textSecondary }]} numberOfLines={1}>
+                        📍 {location}
+                      </Text>
+                    ) : null}
+
+                    {/* Price + negotiable */}
+                    <View style={styles.listingPriceRow}>
+                      {item.price ? (
+                        <Text style={[styles.listingPrice, { color: cat.color }]}>
+                          ${item.price}
+                        </Text>
+                      ) : (
+                        <Text style={[styles.listingPrice, { color: colors.textLight }]}>Free</Text>
+                      )}
+                      {negotiable && (
+                        <View style={[styles.negotiableBadge, { backgroundColor: colors.surfaceSecondary }]}>
+                          <Text style={[styles.negotiableText, { color: colors.textSecondary }]}>Neg.</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Date */}
                     <Text style={[styles.listingTime, { color: colors.textLight }]}>
                       {new Date(item.created_at).toLocaleDateString()}
                     </Text>
                   </View>
-                </View>
-                {item.price && (
-                  <Text style={[styles.listingPrice, { color: cat.color }]}>
-                    ${item.price}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            );
-          })
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         )}
-      </View>
-
-      {/* Community Notice */}
-      <View style={[styles.communityBox, {
-        backgroundColor: colors.infoBackground,
-        borderColor: colors.info + '30',
-        marginHorizontal: 16,
-        marginBottom: 20,
-      }]}>
-        <Ionicons name="people-outline" size={20} color={colors.info} />
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.communityTitle, { color: colors.secondary }]}>
-            St. Louis Indian Community
-          </Text>
-          <Text style={[styles.communityText, { color: colors.textSecondary }]}>
-            Connect with fellow Indians in St. Louis for housing, jobs, rides and more.
-          </Text>
-        </View>
       </View>
 
     </ScrollView>
@@ -248,7 +279,8 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   greeting: {
-    fontSize: 13,
+    fontSize: 15,
+    fontWeight: '700',
     marginBottom: 6,
   },
   heroTitle: {
@@ -345,48 +377,70 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  listingCard: {
+  listingGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: 0.5,
-    gap: 12,
+    flexWrap: 'wrap',
+    gap: 10,
   },
-  listingIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+  listingCard: {
+    width: '47.5%',
+    borderRadius: 14,
+    borderWidth: 0.5,
+    overflow: 'hidden',
+  },
+  listingPhoto: {
+    width: '100%',
+    height: 110,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  listingBody: { flex: 1 },
-  listingTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 4,
+  listingPhotoImg: {
+    width: '100%',
+    height: 110,
+    resizeMode: 'cover',
   },
-  listingMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  listingBody: {
+    padding: 10,
+    gap: 4,
   },
   catBadge: {
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 2,
+    alignSelf: 'flex-start',
   },
   catBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
+    fontSize: 9,
+    fontWeight: '700',
   },
-  listingTime: {
+  listingTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  listingLocation: {
     fontSize: 11,
   },
+  listingPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   listingPrice: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
+  },
+  negotiableBadge: {
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  negotiableText: {
+    fontSize: 9,
+    fontWeight: '500',
+  },
+  listingTime: {
+    fontSize: 10,
   },
   communityBox: {
     borderRadius: 12,

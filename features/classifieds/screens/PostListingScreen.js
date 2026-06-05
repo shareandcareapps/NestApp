@@ -2,8 +2,9 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, ActivityIndicator, Alert, Image, Switch,
+  ScrollView, ActivityIndicator, Alert, Image, Switch, SafeAreaView,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { createListing } from '../services/listingsService';
 import useAppStore from '../../../core/store/index';
@@ -36,6 +37,7 @@ export default function PostListingScreen({ navigation, route }) {
   const [acTitle, setAcTitle] = useState('');
   const [acDescription, setAcDescription] = useState('');
   const [acPrice, setAcPrice] = useState('');
+  const [acLocation, setAcLocation] = useState('');
 
   // ─── Jobs fields ───────────────────────────
   const [jobRole, setJobRole] = useState('');
@@ -66,21 +68,42 @@ export default function PostListingScreen({ navigation, route }) {
   const [foodDelivery, setFoodDelivery] = useState(false);
 
   async function pickImage() {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Permission needed', 'Please allow access to your photos.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.7,
-    });
-    if (!result.canceled) {
-      if (images.length >= 4) { Alert.alert('Maximum 4 photos allowed'); return; }
-      await uploadImage(result.assets[0]);
-    }
+    if (images.length >= 4) { Alert.alert('Maximum 4 photos allowed'); return; }
+    Alert.alert('Add Photo', 'Choose a source', [
+      {
+        text: '📷 Camera',
+        onPress: async () => {
+          const permission = await ImagePicker.requestCameraPermissionsAsync();
+          if (!permission.granted) {
+            Alert.alert('Permission needed', 'Please allow access to your camera.');
+            return;
+          }
+          const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: false,
+            quality: 0.8,
+          });
+          if (!result.canceled) await uploadImage(result.assets[0]);
+        },
+      },
+      {
+        text: '🖼️ Photo Library',
+        onPress: async () => {
+          const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (!permission.granted) {
+            Alert.alert('Permission needed', 'Please allow access to your photos.');
+            return;
+          }
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: false,
+            quality: 0.8,
+          });
+          if (!result.canceled) await uploadImage(result.assets[0]);
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   }
 
   async function uploadImage(imageAsset) {
@@ -115,6 +138,7 @@ export default function PostListingScreen({ navigation, route }) {
         title: acTitle,
         description: acDescription,
         price: acPrice ? parseFloat(acPrice) : null,
+        metadata: JSON.stringify({ location: acLocation }),
       };
     }
 
@@ -181,7 +205,7 @@ export default function PostListingScreen({ navigation, route }) {
     try {
       await createListing(buildListingData());
       Alert.alert('Posted!', 'Your listing has been posted.', [
-        { text: 'OK', onPress: () => navigation.goBack() }
+        { text: 'OK', onPress: () => navigation.navigate('BrowseListings') }
       ]);
     } catch (error) {
       Alert.alert('Error', 'Failed to post listing. Please try again.');
@@ -192,7 +216,18 @@ export default function PostListingScreen({ navigation, route }) {
   }
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={{ backgroundColor: colors.secondary }}>
+        <View style={[styles.headerBar, { backgroundColor: colors.secondary }]}>
+          <TouchableOpacity onPress={() => navigation.navigate('BrowseListings')} style={styles.backButton}>
+            <Ionicons name="chevron-back" size={22} color="#fff" />
+            <Text style={styles.backText}>Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Post a Listing</Text>
+          <View style={{ width: 60 }} />
+        </View>
+      </SafeAreaView>
+    <ScrollView keyboardShouldPersistTaps="handled">
       <View style={styles.inner}>
 
         {/* Category Selector — hidden if pre-selected from browse */}
@@ -255,6 +290,14 @@ export default function PostListingScreen({ navigation, route }) {
               value={acPrice}
               onChangeText={setAcPrice}
               keyboardType="numeric"
+            />
+            <Text style={[styles.label, { color: colors.textPrimary }]}>Location / Neighborhood</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
+              placeholder="e.g. Clayton, Creve Coeur, Brentwood"
+              placeholderTextColor={colors.textLight}
+              value={acLocation}
+              onChangeText={setAcLocation}
             />
             {/* Photos */}
             <Text style={[styles.label, { color: colors.textPrimary }]}>Photos (up to 4)</Text>
@@ -693,7 +736,7 @@ export default function PostListingScreen({ navigation, route }) {
                 <Text style={styles.postButtonText}>Post Listing</Text>
               )}
             </TouchableOpacity>
-            <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
+            <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.navigate('BrowseListings')}>
               <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>Cancel</Text>
             </TouchableOpacity>
           </>
@@ -701,11 +744,16 @@ export default function PostListingScreen({ navigation, route }) {
 
       </View>
     </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  headerBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 12 },
+  headerTitle: { color: '#fff', fontSize: 17, fontWeight: '500' },
+  backButton: { flexDirection: 'row', alignItems: 'center', gap: 4, width: 60 },
+  backText: { color: '#fff', fontSize: 15 },
   inner: { padding: 20, paddingBottom: 40 },
   sectionHeader: {
     fontSize: 16,

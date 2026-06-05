@@ -1,6 +1,6 @@
 // features/messages/screens/ConversationsScreen.js
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, SafeAreaView, TextInput } from 'react-native';
 import { getConversations } from '../services/messagesService';
 import useAppStore from '../../../core/store/index';
 import { useTheme } from '../../../core/theme/ThemeContext';
@@ -62,8 +62,10 @@ function ConversationCard({ item, currentUserId, onPress, colors }) {
 
 export default function ConversationsScreen({ navigation }) {
   const [conversations, setConversations] = useState([]);
+  const [allConversations, setAllConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const user = useAppStore((state) => state.user);
   const colors = useTheme();
 
@@ -73,11 +75,25 @@ export default function ConversationsScreen({ navigation }) {
     try {
       setLoading(true);
       const data = await getConversations(user.id);
+      setAllConversations(data);
       setConversations(data);
     } catch (error) {
       console.error('Error fetching conversations:', error);
     } finally {
       setLoading(false);
+    }
+  }
+
+  function handleSearch(text) {
+    setSearchQuery(text);
+    if (text.trim().length === 0) {
+      setConversations(allConversations);
+    } else {
+      const q = text.toLowerCase();
+      setConversations(allConversations.filter(c =>
+        c.otherProfile?.full_name?.toLowerCase().includes(q) ||
+        c.last_message?.toLowerCase().includes(q)
+      ));
     }
   }
 
@@ -89,6 +105,20 @@ export default function ConversationsScreen({ navigation }) {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={{ backgroundColor: colors.secondary }}>
+        <View style={[styles.headerBar, { backgroundColor: colors.secondary }]}>
+          <Text style={styles.headerTitle}>Messages</Text>
+        </View>
+        <View style={[styles.searchContainer, { backgroundColor: colors.secondary }]}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search conversations..."
+            placeholderTextColor="rgba(255,255,255,0.5)"
+            value={searchQuery}
+            onChangeText={handleSearch}
+          />
+        </View>
+      </SafeAreaView>
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#9B59B6" />
@@ -123,6 +153,10 @@ export default function ConversationsScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  headerBar: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 2, alignItems: 'center' },
+  headerTitle: { color: '#fff', fontSize: 17, fontWeight: '500' },
+  searchContainer: { padding: 12 },
+  searchInput: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, padding: 10, fontSize: 14, color: '#fff' },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadingText: { marginTop: 10, fontSize: 14 },
   emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },

@@ -20,6 +20,10 @@ export default function ListingDetailScreen({ route, navigation }) {
   const colors = useTheme();
   const isOwner = user?.id === listing.user_id;
   const color = categoryColors[listing.category] || '#E63946';
+  const meta = listing.metadata
+    ? (typeof listing.metadata === 'string' ? JSON.parse(listing.metadata) : listing.metadata)
+    : null;
+  const displayLocation = meta?.location || `${listing.city}, ${listing.state}`;
   const [poster, setPoster] = useState(listing.poster || null);
   const [activeImage, setActiveImage] = useState(0);
   const images = listing.images || [];
@@ -114,11 +118,58 @@ export default function ListingDetailScreen({ route, navigation }) {
           {listing.price && <Text style={[styles.price, { color }]}>${listing.price}</Text>}
         </View>
         <View style={styles.metaRow}>
-          <Text style={[styles.metaText, { color: colors.textSecondary }]}>📍 {listing.city}, {listing.state}</Text>
+          <Text style={[styles.metaText, { color: colors.textSecondary }]}>📍 {displayLocation}</Text>
           <Text style={[styles.metaText, { color: colors.textSecondary }]}>🕐 {new Date(listing.created_at).toLocaleDateString()}</Text>
         </View>
 
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        {listing.category === 'jobs' && meta && (
+          <>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Job Details</Text>
+            <View style={styles.jobDetailsGrid}>
+              {meta.company ? (
+                <View style={[styles.jobDetailItem, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+                  <Text style={[styles.jobDetailLabel, { color: colors.textLight }]}>Business / Store</Text>
+                  <Text style={[styles.jobDetailValue, { color: colors.textPrimary }]}>{meta.company}</Text>
+                </View>
+              ) : null}
+              <View style={[styles.jobDetailItem, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+                <Text style={[styles.jobDetailLabel, { color: colors.textLight }]}>Job Type</Text>
+                <Text style={[styles.jobDetailValue, { color: colors.textPrimary }]}>
+                  {meta.job_type === 'full_time' ? '🕘 Full Time' : '⏰ Part Time'}
+                </Text>
+              </View>
+              <View style={[styles.jobDetailItem, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+                <Text style={[styles.jobDetailLabel, { color: colors.textLight }]}>Pay</Text>
+                <Text style={[styles.jobDetailValue, { color: '#27AE60' }]}>
+                  {meta.salary_open ? 'Open to discuss' : listing.price ? `$${listing.price}/hr` : '—'}
+                </Text>
+              </View>
+              {meta.hours_per_week ? (
+                <View style={[styles.jobDetailItem, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+                  <Text style={[styles.jobDetailLabel, { color: colors.textLight }]}>Hours / Week</Text>
+                  <Text style={[styles.jobDetailValue, { color: colors.textPrimary }]}>{meta.hours_per_week} hrs</Text>
+                </View>
+              ) : null}
+              {meta.location ? (
+                <View style={[styles.jobDetailItem, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+                  <Text style={[styles.jobDetailLabel, { color: colors.textLight }]}>Work Location</Text>
+                  <Text style={[styles.jobDetailValue, { color: colors.textPrimary }]}>{meta.location}</Text>
+                </View>
+              ) : null}
+              {meta.joining ? (
+                <View style={[styles.jobDetailItem, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+                  <Text style={[styles.jobDetailLabel, { color: colors.textLight }]}>Joining</Text>
+                  <Text style={[styles.jobDetailValue, { color: colors.textPrimary }]}>
+                    {meta.joining === 'immediate' ? '⚡ Immediate' : '📅 Flexible'}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          </>
+        )}
 
         {listing.description && (
           <>
@@ -224,6 +275,10 @@ const styles = StyleSheet.create({
   divider: { height: 0.5, marginVertical: 16 },
   sectionTitle: { fontSize: 15, fontWeight: '600', marginBottom: 10 },
   description: { fontSize: 15, lineHeight: 22 },
+  jobDetailsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 10 },
+  jobDetailItem: { width: '47%', borderRadius: 10, padding: 12, borderWidth: 0.5 },
+  jobDetailLabel: { fontSize: 11, fontWeight: '500', marginBottom: 4 },
+  jobDetailValue: { fontSize: 14, fontWeight: '600' },
   posterCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 12, padding: 14, borderWidth: 0.5 },
   avatarCircle: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: '#fff', fontSize: 18, fontWeight: '700' },

@@ -6,7 +6,7 @@
 import { supabase } from '../../../core/database/index';
 
 // ─── Fetch all active rides ────────────────────
-export async function getRides(category = null, tab = 'offers') {
+export async function getRides(category = null, tab = 'offers', university = null) {
   let query = supabase
     .from('rides')
     .select('*')
@@ -15,9 +15,8 @@ export async function getRides(category = null, tab = 'offers') {
     .gte('ride_date', new Date().toISOString())
     .order('ride_date', { ascending: true });
 
-  if (category) {
-    query = query.eq('category', category);
-  }
+  if (category) query = query.eq('category', category);
+  if (university) query = query.eq('university', university);
 
   const { data, error } = await query;
   if (error) throw error;

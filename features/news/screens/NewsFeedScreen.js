@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
-  TouchableOpacity, ActivityIndicator, RefreshControl,
+  TouchableOpacity, ActivityIndicator, RefreshControl, SafeAreaView,
 } from 'react-native';
 import { getNews } from '../services/newsService';
 import { useTheme } from '../../../core/theme/ThemeContext';
@@ -74,6 +74,11 @@ export default function NewsFeedScreen({ navigation }) {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={{ backgroundColor: colors.secondary }}>
+        <View style={[styles.headerBar, { backgroundColor: colors.secondary }]}>
+          <Text style={styles.headerTitle}>News</Text>
+        </View>
+      </SafeAreaView>
       <View style={[styles.filterContainer, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         {CATEGORIES.map((cat) => (
   <TouchableOpacity
@@ -120,6 +125,8 @@ export default function NewsFeedScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  headerBar: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 12, alignItems: 'center' },
+  headerTitle: { color: '#fff', fontSize: 17, fontWeight: '500' },
   filterContainer: { flexDirection: 'row', padding: 12, borderBottomWidth: 0.5, gap: 8 },
   filterButton: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 0.5 },
   filterLabel: { fontSize: 13, fontWeight: '500' },
