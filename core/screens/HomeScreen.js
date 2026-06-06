@@ -23,8 +23,10 @@ export default function HomeScreen({ navigation }) {
   const user = useAppStore((state) => state.user);
   const profileName = useAppStore((state) => state.profileName);
   const profileEmail = useAppStore((state) => state.profileEmail);
+  const profilePoints = useAppStore((state) => state.profilePoints);
   const setProfileName = useAppStore((state) => state.setProfileName);
   const setProfileEmail = useAppStore((state) => state.setProfileEmail);
+  const setProfilePoints = useAppStore((state) => state.setProfilePoints);
   const colors = useTheme();
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -51,6 +53,23 @@ export default function HomeScreen({ navigation }) {
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
     fetchData();
+
+    // Refetch listings each time Home regains focus (so sold/archived items drop off)
+    const unsubscribe = navigation.addListener('focus', () => { fetchData(); });
+
+    // Realtime: update points pill whenever this user earns points
+    const channel = supabase
+      .channel(`points-${user.id}`)
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'point_transactions', filter: `user_id=eq.${user.id}` },
+        (payload) => {
+          const earned = payload.new?.points || 0;
+          setProfilePoints((useAppStore.getState().profilePoints ?? 0) + earned);
+        }
+      )
+      .subscribe();
+
+    return () => { unsubscribe(); supabase.removeChannel(channel); };
   }, []);
 
   async function fetchData() {
@@ -60,22 +79,24 @@ export default function HomeScreen({ navigation }) {
         supabase
           .from('listings')
           .select('*')
-          .eq('is_active', true)
+          .eq('status', 'active')
           .neq('category', 'jobs')
           .order('is_boosted', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(4),
         supabase
           .from('profiles')
-          .select('full_name, username')
+          .select('username, points')
           .eq('id', user.id)
-          .single(),
+          .maybeSingle(),
       ]);
       if (listingsRes.data) setListings(listingsRes.data);
       if (profileRes.data) {
-        const raw = profileRes.data.username || profileRes.data.full_name || '';
-        setProfileName(raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : '');
+        const raw = profileRes.data.username || '';
+        const display = raw.split(/[\s_]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        setProfileName(display);
         setProfileEmail(user?.email || '');
+        setProfilePoints(profileRes.data.points ?? 0);
       }
     } catch (error) {
       console.error('Error fetching home data:', error);
@@ -110,13 +131,18 @@ export default function HomeScreen({ navigation }) {
             <Text style={[styles.headerTitle, { color: '#fff' }]}>
               {profileName || 'NestApp'}
             </Text>
+            <View style={styles.pointsPill}>
+              <Text style={styles.pointsPillText}>
+                {profilePoints > 0 ? `🏅 ${profilePoints} pts` : '🌱 Start earning points!'}
+              </Text>
+            </View>
           </View>
           <View style={styles.logoWrap}>
             <View style={[styles.logo, { backgroundColor: colors.primary }]}>
               <Text style={styles.logoText}>N</Text>
             </View>
           </View>
-          <TouchableOpacity onPress={toggleDrawer} style={[styles.menuBtn, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
+          <TouchableOpacity onPress={toggleDrawer} accessibilityLabel="Open menu" style={[styles.menuBtn, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
             <Ionicons name="menu" size={22} color="#fff" />
           </TouchableOpacity>
         </View>
@@ -135,14 +161,34 @@ export default function HomeScreen({ navigation }) {
             <Ionicons name="people" size={16} color={colors.secondary} />
           </View>
           <Text style={[styles.communityTagText, { color: colors.secondary }]}>
-            Your community is here — share a ride, find a home, or post a job.{' '}
-            <Text style={{ fontWeight: '700' }}>Every post helps someone nearby.</Text>{' '}
-            The more we share, the stronger we grow together. 🤝
+            St. Louis Indian community — find housing, share rides, and connect with neighbors.{' '}
+            <Text style={{ fontWeight: '700' }}>Every post helps someone in St. Louis.</Text>{' '}
+            The more we share, the stronger we grow. 🤝
           </Text>
         </View>
 
-        {/* Quick Actions */}
+        {/* Browse by Category */}
         <View style={[styles.section, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Browse by Category</Text>
+          <View style={styles.categoryGrid}>
+            {Object.entries(categoryConfig).map(([key, cat]) => (
+              <TouchableOpacity
+                key={key}
+                style={[styles.categoryCard, { backgroundColor: cat.bg, borderColor: cat.color + '25' }]}
+                onPress={() => navigation.navigate('BrowseListingsByCategory', { category: key })}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.categoryIconWrap, { backgroundColor: cat.color + '18' }]}>
+                  <Ionicons name={cat.icon + '-outline'} size={22} color={cat.color} />
+                </View>
+                <Text style={[styles.categoryLabel, { color: cat.color }]}>{cat.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Quick Actions */}
+        <View style={[styles.section, { backgroundColor: colors.surface, marginTop: 8 }]}>
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Quick Actions</Text>
           <View style={styles.actionRow}>
             <TouchableOpacity
@@ -166,26 +212,6 @@ export default function HomeScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Browse by Category */}
-        <View style={[styles.section, { backgroundColor: colors.surface, marginTop: 8 }]}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Browse by Category</Text>
-          <View style={styles.categoryGrid}>
-            {Object.entries(categoryConfig).map(([key, cat]) => (
-              <TouchableOpacity
-                key={key}
-                style={[styles.categoryCard, { backgroundColor: cat.bg, borderColor: cat.color + '25' }]}
-                onPress={() => navigation.navigate('BrowseListingsByCategory', { category: key })}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.categoryIconWrap, { backgroundColor: cat.color + '18' }]}>
-                  <Ionicons name={cat.icon + '-outline'} size={22} color={cat.color} />
-                </View>
-                <Text style={[styles.categoryLabel, { color: cat.color }]}>{cat.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
         {/* Recent Listings */}
         <View style={[styles.section, { backgroundColor: colors.surface, marginTop: 8, marginBottom: 24 }]}>
           <View style={styles.sectionHeader}>
@@ -202,7 +228,7 @@ export default function HomeScreen({ navigation }) {
           ) : listings.length === 0 ? (
             <View style={[styles.emptyCard, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
               <Ionicons name="grid-outline" size={32} color={colors.textLight} />
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No listings yet</Text>
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No listings in St. Louis yet</Text>
               <TouchableOpacity
                 style={[styles.postBtn, { backgroundColor: colors.primary }]}
                 onPress={() => navigation.navigate('PostListing')}
@@ -321,7 +347,9 @@ const styles = StyleSheet.create({
   logoText: { color: '#fff', fontSize: 18, fontWeight: '800', letterSpacing: -0.5 },
   greeting: { fontSize: 12, fontWeight: '500', marginBottom: 2 },
   headerTitle: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
-  menuBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  pointsPill: { marginTop: 4, backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2, alignSelf: 'flex-start' },
+  pointsPillText: { color: '#fff', fontSize: 11, fontWeight: '600' },
+  menuBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
 
   // Community tag
   communityTag: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginHorizontal: 16, marginTop: 12, marginBottom: 4, padding: 14, borderRadius: 14, borderWidth: 1 },

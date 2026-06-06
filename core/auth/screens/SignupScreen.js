@@ -25,12 +25,16 @@ export default function SignupScreen({ navigation }) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
-    if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      Alert.alert('Error', 'Please enter a valid email address');
       return;
     }
-    if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+    if (password.length < 8) {
+      Alert.alert('Error', 'Password must be at least 8 characters');
+      return;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert('Error', 'Passwords do not match');
       return;
     }
     setLoading(true);
@@ -42,7 +46,7 @@ export default function SignupScreen({ navigation }) {
     }
     const { error: profileError } = await supabase
       .from('profiles')
-      .insert({ id: data.user.id, full_name: fullName, phone, city: 'St. Louis', is_verified: false });
+      .insert({ id: data.user.id, full_name: fullName, phone, city: 'St. Louis', state: 'Missouri', is_verified: false });
     setLoading(false);
     if (profileError) {
       Alert.alert('Error', 'Account created but profile setup failed.');
@@ -69,7 +73,7 @@ export default function SignupScreen({ navigation }) {
             { label: 'Full Name *', value: fullName, onChange: setFullName, placeholder: 'Enter your full name' },
             { label: 'Email *', value: email, onChange: setEmail, placeholder: 'Enter your email', keyboard: 'email-address', caps: 'none' },
             { label: 'Phone (optional)', value: phone, onChange: setPhone, placeholder: 'Enter your phone number', keyboard: 'phone-pad' },
-            { label: 'Password *', value: password, onChange: setPassword, placeholder: 'Minimum 6 characters', secure: true },
+            { label: 'Password *', value: password, onChange: setPassword, placeholder: 'Minimum 8 characters', secure: true },
             { label: 'Confirm Password *', value: confirmPassword, onChange: setConfirmPassword, placeholder: 'Re-enter your password', secure: true },
           ].map((field) => (
             <View key={field.label}>

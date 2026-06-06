@@ -1,156 +1,165 @@
 // features/messages/screens/ChatScreen.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput,
   TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Modal,
-  Animated, PanResponder, Dimensions,
 } from 'react-native';
-
-const SCREEN_W = Dimensions.get('window').width;
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-
-// Detects phone numbers: (123) 456-7890, 123-456-7890, 1234567890, +1 etc.
-const PHONE_REGEX = /(\+?1?\s?)?(\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4})/;
-import { getMessages, sendMessage } from '../services/messagesService';
+import { getMessages, sendMessage, markMessagesAsRead } from '../services/messagesService';
 import useAppStore from '../../../core/store/index';
 import { useTheme } from '../../../core/theme/ThemeContext';
 import { supabase } from '../../../core/database/index';
 
-const TIME_REVEAL = 70; // how far (px) timestamps are offset to the right
+// Detects phone numbers: (123) 456-7890, 123-456-7890, 1234567890, +1 etc.
+const PHONE_REGEX = /(\+?1?\s?)?(\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4})/;
 
-function MessageBubble({ item, isMe, isLast, slideX, colors }) {
-  const time = new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const BRAND = '#9B59B6';
+const GROUP_GAP_MS = 5 * 60 * 1000; // 5 min — split message groups
+
+const avatarColors = ['#E63946', '#1D3557', '#2ECC71', '#3498DB', '#9B59B6', '#F39C12'];
+
+function timeOf(date) {
+  return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function dayLabel(date) {
+  const d = new Date(date);
+  const today = new Date();
+  const yest = new Date(); yest.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return 'Today';
+  if (d.toDateString() === yest.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function MessageRow({ item, isMe, firstOfGroup, lastOfGroup, showDay, showTime, otherInitial, otherColor, isLastSent, onToggleTime, colors }) {
+  // Instagram-style grouped corner radii
+  const radius = 20, tight = 6;
+  const meCorners = {
+    borderTopRightRadius: firstOfGroup ? radius : tight,
+    borderBottomRightRadius: lastOfGroup ? radius : tight,
+    borderTopLeftRadius: radius,
+    borderBottomLeftRadius: radius,
+  };
+  const themCorners = {
+    borderTopLeftRadius: firstOfGroup ? radius : tight,
+    borderBottomLeftRadius: lastOfGroup ? radius : tight,
+    borderTopRightRadius: radius,
+    borderBottomRightRadius: radius,
+  };
 
   return (
-    // Outer clip — hides the timestamp area until user slides
-    <View style={styles.bubbleRowClip}>
-      {/* Inner row is SCREEN_W + TIME_REVEAL wide, slides left to reveal time */}
-      <Animated.View style={[
-        styles.bubbleRow,
-        { transform: [{ translateX: slideX }] },
-      ]}>
-        {/* Main content area — exactly SCREEN_W wide */}
-        <View style={[styles.bubbleContent, isMe ? styles.bubbleContentRight : styles.bubbleContentLeft]}>
+    <View>
+      {showDay && (
+        <View style={styles.daySeparator}>
+          <Text style={[styles.dayText, { color: colors.textLight, backgroundColor: colors.surfaceSecondary }]}>
+            {dayLabel(item.created_at)}
+          </Text>
+        </View>
+      )}
+
+      <View style={[styles.row, isMe ? styles.rowMe : styles.rowThem, { marginTop: firstOfGroup ? 10 : 2 }]}>
+        {/* Avatar gutter for received messages */}
+        {!isMe && (
+          <View style={styles.avatarGutter}>
+            {lastOfGroup ? (
+              <View style={[styles.smallAvatar, { backgroundColor: otherColor }]}>
+                <Text style={styles.smallAvatarText}>{otherInitial}</Text>
+              </View>
+            ) : <View style={styles.smallAvatar} />}
+          </View>
+        )}
+
+        <TouchableOpacity activeOpacity={0.85} onPress={onToggleTime} style={{ maxWidth: '76%' }}>
           <View style={[
             styles.bubble,
-            isMe
-              ? styles.bubbleMe
-              : { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 0.5 },
+            isMe ? { backgroundColor: BRAND } : { backgroundColor: colors.surfaceSecondary },
+            isMe ? meCorners : themCorners,
           ]}>
-            <Text style={[styles.bubbleText, { color: isMe ? '#fff' : colors.textPrimary }]}>
-              {item.body}
-            </Text>
+            <Text style={[styles.bubbleText, { color: isMe ? '#fff' : colors.textPrimary }]}>{item.body}</Text>
           </View>
-          {isMe && isLast && (
-            <View style={styles.statusRow}>
-              {item.is_read ? (
-                <>
-                  <Ionicons name="checkmark-done" size={13} color="#9B59B6" />
-                  <Text style={[styles.statusText, { color: '#9B59B6' }]}>
-                    Seen · {new Date(item.updated_at || item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </Text>
-                </>
-              ) : (
-                <>
-                  <Ionicons name="checkmark" size={13} color={colors.textLight} />
-                  <Text style={[styles.statusText, { color: colors.textLight }]}>Delivered</Text>
-                </>
-              )}
-            </View>
+
+          {showTime && (
+            <Text style={[styles.timeUnderBubble, { color: colors.textLight, textAlign: isMe ? 'right' : 'left' }]}>
+              {timeOf(item.created_at)}
+            </Text>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Read receipt under the last sent message */}
+      {isLastSent && (
+        <View style={styles.receiptRow}>
+          {item.is_read ? (
+            <Text style={[styles.receiptText, { color: BRAND }]}>Seen</Text>
+          ) : (
+            <Text style={[styles.receiptText, { color: colors.textLight }]}>Delivered</Text>
           )}
         </View>
-
-        {/* Time area — TIME_REVEAL wide, off-screen until slide */}
-        <View style={styles.pullTimeBox}>
-          <Text style={[styles.pullTime, { color: colors.textLight }]}>{time}</Text>
-        </View>
-      </Animated.View>
+      )}
     </View>
   );
 }
 
 export default function ChatScreen({ route, navigation }) {
-  const { conversation, otherProfile } = route.params;
+  const { conversation, otherProfile, listingTitle } = route.params;
+  const productContext = listingTitle || conversation?.listingTitle || null;
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [showPhoneWarning, setShowPhoneWarning] = useState(false);
-  const pendingMessageRef = React.useRef('');
+  const [revealedId, setRevealedId] = useState(null);
+  const pendingMessageRef = useRef('');
   const user = useAppStore((state) => state.user);
   const clearUnreadConversation = useAppStore((state) => state.clearUnreadConversation);
   const colors = useTheme();
   const flatListRef = useRef(null);
-  const slideX = useRef(new Animated.Value(0)).current;
-  const panResponder = useRef(PanResponder.create({
-    onMoveShouldSetPanResponder: (_, { dx, dy }) =>
-      Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy),
-    onPanResponderMove: (_, { dx }) => {
-      // Only allow left pull (negative dx), clamp to -TIME_REVEAL
-      const clamped = Math.max(-TIME_REVEAL, Math.min(0, dx));
-      slideX.setValue(clamped);
-    },
-    onPanResponderRelease: () => {
-      Animated.spring(slideX, { toValue: 0, useNativeDriver: true, tension: 80, friction: 10 }).start();
-    },
-    onPanResponderTerminate: () => {
-      Animated.spring(slideX, { toValue: 0, useNativeDriver: true }).start();
-    },
-  })).current;
-  const rawOtherName = otherProfile?.username || otherProfile?.full_name || 'Community Member';
-  const otherName = rawOtherName.charAt(0).toUpperCase() + rawOtherName.slice(1);
-  const initials = otherName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
-  const avatarColors = ['#E63946', '#1D3557', '#2ECC71', '#3498DB', '#9B59B6', '#F39C12'];
-  const colorIndex = otherName.charCodeAt(0) % avatarColors.length;
 
-  const lastMessageIdRef = useRef(null);
+  const rawOtherName = otherProfile?.username || 'Community Member';
+  const otherName = rawOtherName.split(/[\s_]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  const otherInitial = otherName.charAt(0).toUpperCase();
+  const otherColor = avatarColors[otherName.charCodeAt(0) % avatarColors.length];
 
   useEffect(() => {
-    navigation.setOptions({ title: otherName });
-    clearUnreadConversation(conversation.id);
     fetchMessages();
-    refreshOtherProfile();
+    markRead();
 
-    // Poll for new messages every 3 seconds
-    const interval = setInterval(pollNewMessages, 3000);
-    return () => clearInterval(interval);
+    const channel = supabase
+      .channel(`messages:${conversation.id}`)
+      // Incoming/echoed inserts
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversation.id}` },
+        (payload) => {
+          const newMsg = payload.new;
+          setMessages((prev) => (prev.some(m => m.id === newMsg.id) ? prev : [...prev, newMsg]));
+          scrollToBottom();
+          if (newMsg.sender_id !== user.id) { clearUnreadConversation(conversation.id); markRead(); }
+        }
+      )
+      // Read-receipt updates → live "Seen"
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversation.id}` },
+        (payload) => {
+          const upd = payload.new;
+          setMessages((prev) => prev.map(m => (m.id === upd.id ? { ...m, ...upd } : m)));
+        }
+      )
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
   }, []);
 
-  async function pollNewMessages() {
-    try {
-      const data = await getMessages(conversation.id);
-      if (!data || data.length === 0) return;
-      const latestId = data[data.length - 1]?.id;
-      if (latestId !== lastMessageIdRef.current) {
-        lastMessageIdRef.current = latestId;
-        setMessages(data);
-        scrollToBottom();
-        // Mark any incoming messages as read in store
-        clearUnreadConversation(conversation.id);
-      }
-    } catch (_) {}
-  }
-
-  async function refreshOtherProfile() {
-    if (!otherProfile?.id) return;
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, full_name, username, avatar_url')
-      .eq('id', otherProfile.id)
-      .single();
-    if (data) {
-      const fresh = data.username || data.full_name || 'Community Member';
-      const freshName = fresh.charAt(0).toUpperCase() + fresh.slice(1);
-      navigation.setOptions({ title: freshName });
-    }
+  async function markRead() {
+    try { await markMessagesAsRead(conversation.id, user.id); } catch (_) {}
+    clearUnreadConversation(conversation.id);
   }
 
   async function fetchMessages() {
     try {
       setLoading(true);
       const data = await getMessages(conversation.id);
-      setMessages(data);
-      if (data?.length) lastMessageIdRef.current = data[data.length - 1]?.id;
+      setMessages(data || []);
     } catch (error) {
       console.error('Error fetching messages:', error);
     } finally {
@@ -159,15 +168,15 @@ export default function ChatScreen({ route, navigation }) {
     }
   }
 
-  function scrollToBottom() {
-    setTimeout(() => { flatListRef.current?.scrollToEnd({ animated: true }); }, 100);
-  }
+  const scrollToBottom = useCallback(() => {
+    setTimeout(() => { flatListRef.current?.scrollToEnd({ animated: true }); }, 80);
+  }, []);
 
   async function doSend(body) {
     setSending(true);
     try {
       const newMessage = await sendMessage(conversation.id, user.id, body);
-      setMessages((prev) => [...prev, newMessage]);
+      setMessages((prev) => (prev.some(m => m.id === newMessage.id) ? prev : [...prev, newMessage]));
       scrollToBottom();
     } catch (error) {
       console.error('Error sending message:', error);
@@ -194,60 +203,114 @@ export default function ChatScreen({ route, navigation }) {
     doSend(pendingMessageRef.current);
   }
 
-  if (loading) {
+  const lastMyIndex = messages.reduce((last, m, i) => (m.sender_id === user.id ? i : last), -1);
+
+  function renderItem({ item, index }) {
+    const prev = messages[index - 1];
+    const next = messages[index + 1];
+    const isMe = item.sender_id === user.id;
+    const t = new Date(item.created_at).getTime();
+
+    const firstOfGroup = !prev || prev.sender_id !== item.sender_id || (t - new Date(prev.created_at).getTime()) > GROUP_GAP_MS;
+    const lastOfGroup = !next || next.sender_id !== item.sender_id || (new Date(next.created_at).getTime() - t) > GROUP_GAP_MS;
+    const showDay = !prev || new Date(prev.created_at).toDateString() !== new Date(item.created_at).toDateString();
+
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color="#9B59B6" />
-      </View>
+      <MessageRow
+        item={item}
+        isMe={isMe}
+        firstOfGroup={firstOfGroup}
+        lastOfGroup={lastOfGroup}
+        showDay={showDay}
+        showTime={revealedId === item.id}
+        otherInitial={otherInitial}
+        otherColor={otherColor}
+        isLastSent={isMe && index === lastMyIndex}
+        onToggleTime={() => setRevealedId(revealedId === item.id ? null : item.id)}
+        colors={colors}
+      />
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={90}
-    >
-      {messages.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>👋</Text>
-          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Say hello!</Text>
-          <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>Start the conversation with {otherName}</Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Custom Messenger-style header */}
+      <SafeAreaView edges={['top']} style={{ backgroundColor: colors.secondary }}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBack} accessibilityLabel="Back">
+            <Ionicons name="chevron-back" size={26} color="#fff" />
+          </TouchableOpacity>
+          <View style={[styles.headerAvatar, { backgroundColor: otherColor }]}>
+            <Text style={styles.headerAvatarText}>{otherInitial}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerName} numberOfLines={1}>{otherName}</Text>
+            {productContext ? (
+              <Text style={styles.headerSub} numberOfLines={1}>🏷 {productContext}</Text>
+            ) : (
+              <Text style={styles.headerSub} numberOfLines={1}>Community member</Text>
+            )}
+          </View>
         </View>
-      ) : (
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item) => item.id}
-          {...panResponder.panHandlers}
-          renderItem={({ item, index }) => {
-            const isMe = item.sender_id === user.id;
-            const lastMyIndex = messages.reduce((last, m, i) => m.sender_id === user.id ? i : last, -1);
-            const isLast = isMe && index === lastMyIndex;
-            return <MessageBubble item={item} isMe={isMe} isLast={isLast} slideX={slideX} colors={colors} />;
-          }}
-          contentContainerStyle={styles.messagesList}
-          onContentSizeChange={scrollToBottom}
-        />
-      )}
-      <View style={[styles.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-        <TextInput
-          style={[styles.input, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.textPrimary }]}
-          placeholder="Type a message..."
-          placeholderTextColor={colors.textLight}
-          value={message}
-          onChangeText={setMessage}
-          multiline
-          maxLength={500}
-        />
-        <TouchableOpacity
-          style={[styles.sendButton, { backgroundColor: (!message.trim() || sending) ? colors.border : '#9B59B6' }]}
-          onPress={handleSend}
-          disabled={!message.trim() || sending}
-        >
-          {sending ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.sendButtonText}>➤</Text>}
-        </TouchableOpacity>
-      </View>
+      </SafeAreaView>
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}
+      >
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={BRAND} />
+          </View>
+        ) : messages.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <View style={[styles.emptyAvatar, { backgroundColor: otherColor }]}>
+              <Text style={styles.emptyAvatarText}>{otherInitial}</Text>
+            </View>
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{otherName}</Text>
+            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+              Say hi 👋 — start the conversation
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            keyExtractor={(item) => item.id}
+            renderItem={renderItem}
+            contentContainerStyle={styles.messagesList}
+            onContentSizeChange={scrollToBottom}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
+
+        {/* Input bar */}
+        <View style={[styles.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.borderLight }]}>
+          <View style={[styles.inputPill, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+            <TextInput
+              style={[styles.input, { color: colors.textPrimary }]}
+              placeholder="Message…"
+              placeholderTextColor={colors.textLight}
+              value={message}
+              onChangeText={setMessage}
+              multiline
+              maxLength={500}
+            />
+          </View>
+          <TouchableOpacity
+            style={[styles.sendButton, { backgroundColor: (!message.trim() || sending) ? colors.border : BRAND }]}
+            onPress={handleSend}
+            disabled={!message.trim() || sending}
+            accessibilityLabel="Send message"
+          >
+            {sending
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Ionicons name="arrow-up" size={20} color="#fff" />}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+
       {/* Phone Number Warning Modal */}
       <Modal visible={showPhoneWarning} transparent animationType="fade">
         <View style={styles.warningOverlay}>
@@ -255,72 +318,86 @@ export default function ChatScreen({ route, navigation }) {
             <View style={styles.warningIconRow}>
               <Ionicons name="shield-checkmark" size={36} color="#F39C12" />
             </View>
-            <Text style={[styles.warningTitle, { color: colors.textPrimary }]}>
-              Be careful sharing your number
-            </Text>
+            <Text style={[styles.warningTitle, { color: colors.textPrimary }]}>Be careful sharing your number</Text>
             <Text style={[styles.warningBody, { color: colors.textSecondary }]}>
               You're about to share a phone number with someone you may not know personally. Only share contact details with people you trust.
             </Text>
-            <View style={[styles.warningTip, { backgroundColor: '#FEF9E7' }]}>
-              <Text style={styles.warningTipText}>
+            <View style={[styles.warningTip, { backgroundColor: colors.surfaceSecondary }]}>
+              <Text style={[styles.warningTipText, { color: colors.textSecondary }]}>
                 💡 Tip: Keep conversations inside NestApp until you're comfortable with the other person.
               </Text>
             </View>
             <TouchableOpacity
               style={[styles.warningSendBtn, { backgroundColor: '#E67E22' }]}
               onPress={handleWarningSend}
+              accessibilityLabel="Send message with phone number anyway"
             >
               <Text style={styles.warningSendBtnText}>Send Anyway</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.warningCancelBtn, { borderColor: colors.border }]}
               onPress={() => setShowPhoneWarning(false)}
+              accessibilityLabel="Go back and edit message"
             >
               <Text style={[styles.warningCancelBtnText, { color: colors.textSecondary }]}>Go Back & Edit</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
-
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
+  // Header
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 8, gap: 6 },
+  headerBack: { padding: 4 },
+  headerAvatar: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', marginRight: 4 },
+  headerAvatarText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  headerName: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
+  headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 1 },
+
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
-  emptyEmoji: { fontSize: 48, marginBottom: 12 },
-  emptyTitle: { fontSize: 18, fontWeight: '600' },
+  emptyAvatar: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  emptyAvatarText: { color: '#fff', fontSize: 28, fontWeight: '700' },
+  emptyTitle: { fontSize: 18, fontWeight: '700' },
   emptySubtitle: { fontSize: 14, marginTop: 6, textAlign: 'center' },
-  messagesList: { paddingTop: 16, paddingBottom: 8 },
-  // Clips the oversized inner row so time stays hidden until slide
-  bubbleRowClip: { width: SCREEN_W, overflow: 'hidden', marginBottom: 12 },
-  // Inner row is wider than screen to accommodate the time
-  bubbleRow: { flexDirection: 'row', width: SCREEN_W + TIME_REVEAL, alignItems: 'center' },
-  // Main content fills exactly the screen width with horizontal padding
-  bubbleContent: { width: SCREEN_W, paddingHorizontal: 12 },
-  bubbleContentRight: { alignItems: 'flex-end' },
-  bubbleContentLeft: { alignItems: 'flex-start' },
-  bubble: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10, maxWidth: SCREEN_W * 0.72 },
-  bubbleMe: { backgroundColor: '#9B59B6', borderBottomRightRadius: 4 },
-  bubbleText: { fontSize: 15, lineHeight: 20 },
-  // Time area sits in the extra width, centred vertically
-  pullTimeBox: { width: TIME_REVEAL, justifyContent: 'center' },
-  pullTime: { fontSize: 11 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2, alignSelf: 'flex-end' },
-  statusText: { fontSize: 11 },
-  inputBar: { flexDirection: 'row', alignItems: 'flex-end', padding: 10, borderTopWidth: 0.5, gap: 8 },
-  input: { flex: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, fontSize: 15, borderWidth: 0.5, maxHeight: 100 },
-  sendButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  sendButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+  messagesList: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 12 },
+
+  daySeparator: { alignItems: 'center', marginVertical: 12 },
+  dayText: { fontSize: 11, fontWeight: '600', overflow: 'hidden', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
+
+  row: { flexDirection: 'row', alignItems: 'flex-end' },
+  rowMe: { justifyContent: 'flex-end' },
+  rowThem: { justifyContent: 'flex-start' },
+  avatarGutter: { width: 30, justifyContent: 'flex-end' },
+  smallAvatar: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  smallAvatarText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+
+  bubble: { paddingHorizontal: 14, paddingVertical: 9 },
+  bubbleText: { fontSize: 15.5, lineHeight: 21 },
+  timeUnderBubble: { fontSize: 10.5, marginTop: 3, marginHorizontal: 4 },
+
+  receiptRow: { alignItems: 'flex-end', marginTop: 3, marginRight: 2 },
+  receiptText: { fontSize: 11, fontWeight: '600' },
+
+  // Input
+  inputBar: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 10, paddingVertical: 8, borderTopWidth: 0.5, gap: 8 },
+  inputPill: { flex: 1, borderRadius: 22, borderWidth: 0.5, paddingHorizontal: 16, paddingVertical: Platform.OS === 'ios' ? 10 : 4, justifyContent: 'center', minHeight: 42, maxHeight: 120 },
+  input: { fontSize: 15.5, maxHeight: 100, padding: 0 },
+  sendButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+
   warningOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
   warningSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
   warningIconRow: { alignItems: 'center', marginBottom: 12 },
   warningTitle: { fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 10 },
   warningBody: { fontSize: 14, lineHeight: 21, textAlign: 'center', marginBottom: 16 },
   warningTip: { borderRadius: 10, padding: 12, marginBottom: 20 },
-  warningTipText: { fontSize: 13, color: '#7D6608', lineHeight: 19 },
+  warningTipText: { fontSize: 13, lineHeight: 19 },
   warningSendBtn: { borderRadius: 12, padding: 14, alignItems: 'center', marginBottom: 10 },
   warningSendBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
   warningCancelBtn: { borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1 },

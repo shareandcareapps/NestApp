@@ -16,15 +16,18 @@ const useAppStore = create((set) => ({
   clearAuth: () => set({ user: null, session: null, isAuthenticated: false }),
 
   // ─── App State ────────────────────────────────
-  isLoading: false,
+  // St. Louis only — multi-city support reserved for future release
   currentCity: 'St. Louis',
+  currentState: 'Missouri',
   profileName: '',
   profileEmail: '',
+  profilePoints: 0,
 
-  setLoading: (isLoading) => set({ isLoading }),
+  // setCurrentCity is intentionally NOT exposed in UI — app is STL-only for now
   setCurrentCity: (city) => set({ currentCity: city }),
   setProfileName: (profileName) => set({ profileName }),
   setProfileEmail: (profileEmail) => set({ profileEmail }),
+  setProfilePoints: (profilePoints) => set({ profilePoints }),
 
   // ─── Theme ────────────────────────────────────
   // 'light', 'dark', 'auto'

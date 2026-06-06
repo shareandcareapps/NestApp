@@ -95,9 +95,11 @@ export default function EditListingScreen({ route, navigation }) {
     setImages((prev) => prev.filter((_, i) => i !== index));
   }
 
-  // Parse existing metadata
+  // metadata is stored as jsonb — already an object from Supabase
   let meta = {};
-  try { meta = listing.metadata ? JSON.parse(listing.metadata) : {}; } catch (e) {}
+  if (listing.metadata) {
+    meta = typeof listing.metadata === 'string' ? JSON.parse(listing.metadata) : listing.metadata;
+  }
 
   // ─── Accommodation fields ──────────────────
   const [acTitle, setAcTitle] = useState(listing.title || '');
@@ -149,14 +151,14 @@ export default function EditListingScreen({ route, navigation }) {
         description: jobDescription,
         price: jobSalaryOpen ? null : jobSalary ? parseFloat(jobSalary) : null,
         images,
-        metadata: JSON.stringify({
+        metadata: {
           company: jobCompany,
           salary_open: jobSalaryOpen,
           job_type: jobType,
           hours_per_week: jobHours,
           location: jobLocation,
           joining: jobJoining,
-        }),
+        },
       };
     }
     if (category === 'buysell') {
@@ -165,12 +167,12 @@ export default function EditListingScreen({ route, navigation }) {
         description: bsDescription,
         price: bsPrice ? parseFloat(bsPrice) : null,
         images,
-        metadata: JSON.stringify({
+        metadata: {
           negotiable: bsNegotiable,
           product_category: bsProductCategory,
           condition: bsCondition,
           pickup_location: bsPickupLocation,
-        }),
+        },
       };
     }
     if (category === 'food') {
@@ -179,11 +181,11 @@ export default function EditListingScreen({ route, navigation }) {
         description: foodDescription,
         price: foodPrice ? parseFloat(foodPrice) : null,
         images,
-        metadata: JSON.stringify({
+        metadata: {
           negotiable: foodNegotiable,
           pickup: foodPickup,
           delivery: foodDelivery,
-        }),
+        },
       };
     }
   }

@@ -10,6 +10,7 @@ import { getListings, searchListings } from '../services/listingsService';
 import useAppStore from '../../../core/store/index';
 import { useTheme } from '../../../core/theme/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
+import { formatDisplayName } from '../../../core/components/UserProfileModal';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 36) / 2;
@@ -91,9 +92,7 @@ function GridCard({ item, onPress, colors }) {
 
 // Full-width card for jobs
 function JobCard({ item, onPress, colors }) {
-  const meta = item.metadata
-    ? (typeof item.metadata === 'string' ? JSON.parse(item.metadata) : item.metadata)
-    : null;
+  const meta = item.metadata || null;
 
   const isFullTime = meta?.job_type === 'full_time';
 
@@ -116,7 +115,7 @@ function JobCard({ item, onPress, colors }) {
               {item.title}
             </Text>
             <Text style={[styles.jobCompany, { color: colors.textSecondary }]} numberOfLines={1}>
-              {meta?.company || item.poster?.full_name || 'Community Member'}
+              {meta?.company || formatDisplayName(item.poster?.username)}
             </Text>
           </View>
           <View style={styles.jobPriceBox}>
@@ -220,10 +219,10 @@ export default function BrowseListingsScreen({ navigation, route }) {
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(route.params?.category ?? null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
-  const currentCity = useAppStore((state) => state.currentCity);
   const colors = useTheme();
   const appliedParamCategory = useRef(route.params?.category ?? null);
 
@@ -233,6 +232,9 @@ export default function BrowseListingsScreen({ navigation, route }) {
       if (incoming !== appliedParamCategory.current) {
         appliedParamCategory.current = incoming;
         setSelectedCategory(incoming);
+      } else {
+        // Same category — refetch so sold/archived items drop off the grid
+        fetchListings();
       }
     }, [route.params?.category])
   );
@@ -242,10 +244,12 @@ export default function BrowseListingsScreen({ navigation, route }) {
   async function fetchListings() {
     try {
       setLoading(true);
+      setFetchError(false);
       const data = await getListings(selectedCategory);
       setListings(data);
     } catch (error) {
       console.error('Error fetching listings:', error);
+      setFetchError(true);
     } finally {
       setLoading(false);
     }
@@ -326,7 +330,13 @@ export default function BrowseListingsScreen({ navigation, route }) {
         {/* Header */}
         <View style={[styles.header, { backgroundColor: colors.secondary }]}>
           <View style={styles.headerTop}>
-            <Text style={[styles.headerTitle, { color: '#fff' }]}>Marketplace</Text>
+            <View>
+              <Text style={[styles.headerTitle, { color: '#fff' }]}>Marketplace</Text>
+              <View style={styles.cityPill}>
+                <Ionicons name="location-sharp" size={10} color="rgba(255,255,255,0.8)" />
+                <Text style={styles.cityPillText}>St. Louis, MO</Text>
+              </View>
+            </View>
           </View>
 
           {/* Search bar */}
@@ -338,7 +348,7 @@ export default function BrowseListingsScreen({ navigation, route }) {
             <Ionicons name="search-outline" size={16} color="rgba(255,255,255,0.7)" />
             <TextInput
               style={[styles.searchInput, { color: '#fff' }]}
-              placeholder="Search listings..."
+              placeholder="Search St. Louis listings..."
               placeholderTextColor="rgba(255,255,255,0.5)"
               value={searchQuery}
               onChangeText={handleSearch}
@@ -346,7 +356,7 @@ export default function BrowseListingsScreen({ navigation, route }) {
               onBlur={() => setSearchFocused(false)}
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => { setSearchQuery(''); fetchListings(); }}>
+              <TouchableOpacity onPress={() => { setSearchQuery(''); fetchListings(); }} accessibilityLabel="Clear search">
                 <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.7)" />
               </TouchableOpacity>
             )}
@@ -392,11 +402,43 @@ export default function BrowseListingsScreen({ navigation, route }) {
         </ScrollView>
       </SafeAreaView>
 
+      {/* Food banner — always visible when food category is selected */}
+      {selectedCategory === 'food' && (
+        <TouchableOpacity
+          style={styles.foodBanner}
+          onPress={() => navigation.navigate('PostListing', { preselectedCategory: 'food' })}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.foodBannerEmoji}>🍱</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.foodBannerTitle}>Got a food business or tiffin service?</Text>
+            <Text style={styles.foodBannerSub}>List your home kitchen, catering, or local food business — reach your community in minutes.</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color="#F39C12" />
+        </TouchableOpacity>
+      )}
+
       {/* Content */}
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading listings...</Text>
+        </View>
+      ) : fetchError ? (
+        <View style={styles.emptyContainer}>
+          <View style={[styles.emptyIconBox, { backgroundColor: colors.surfaceSecondary }]}>
+            <Text style={{ fontSize: 40 }}>📡</Text>
+          </View>
+          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Couldn't load listings</Text>
+          <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+            Check your connection and try again.
+          </Text>
+          <TouchableOpacity
+            style={[styles.retryButton, { backgroundColor: colors.primary }]}
+            onPress={fetchListings}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
         </View>
       ) : listings.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -405,14 +447,8 @@ export default function BrowseListingsScreen({ navigation, route }) {
           </View>
           <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No listings yet</Text>
           <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-            Be the first to post in {currentCity}!
+            Be the first to post in St. Louis!
           </Text>
-          <TouchableOpacity
-            style={[styles.emptyPostBtn, { backgroundColor: colors.primary }]}
-            onPress={() => navigation.navigate('PostListing', { preselectedCategory: selectedCategory })}
-          >
-            <Text style={styles.emptyPostText}>Post a Listing</Text>
-          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -446,6 +482,8 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10 },
   headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   headerTitle: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
+  cityPill: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
+  cityPillText: { fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: '500' },
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
   locationText: { fontSize: 12 },
 
@@ -468,10 +506,16 @@ const styles = StyleSheet.create({
   emptyIconBox: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   emptyTitle: { fontSize: 19, fontWeight: '700' },
   emptySubtitle: { fontSize: 14, marginTop: 6, textAlign: 'center' },
+  retryButton: { marginTop: 20, paddingHorizontal: 28, paddingVertical: 12, borderRadius: 22 },
+  retryButtonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
   emptyPostBtn: { marginTop: 20, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 22 },
   emptyPostText: { color: '#fff', fontWeight: '700', fontSize: 15 },
 
   listContent: { padding: 12, paddingBottom: 40 },
+  foodBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FFF8EC', borderColor: '#F39C1240', borderWidth: 1, borderRadius: 14, padding: 14, margin: 12, marginBottom: 0 },
+  foodBannerEmoji: { fontSize: 28 },
+  foodBannerTitle: { fontSize: 13, fontWeight: '700', color: '#B7770D', marginBottom: 3 },
+  foodBannerSub: { fontSize: 12, color: '#8a6200', lineHeight: 17 },
 
   // Grid cards (buy/sell, food)
   gridRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },

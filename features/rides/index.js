@@ -25,7 +25,7 @@ export default function RidesNavigator() {
       <Stack.Screen
         name="PostRide"
         component={PostRideScreen}
-        options={{ title: 'Share a Ride' }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="RideDetail"

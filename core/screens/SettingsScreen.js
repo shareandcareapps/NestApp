@@ -20,6 +20,7 @@ export default function SettingsScreen({ navigation }) {
   const user = useAppStore((state) => state.user);
   const themeMode = useAppStore((state) => state.themeMode);
   const setThemeMode = useAppStore((state) => state.setThemeMode);
+  const storedProfileName = useAppStore((state) => state.profileName);
   const colors = useTheme();
   const [profile, setProfile] = useState(null);
   const systemTheme = useColorScheme();
@@ -34,8 +35,8 @@ export default function SettingsScreen({ navigation }) {
         .from('profiles')
         .select('*')
         .eq('id', user.id)
-        .single();
-      if (!error) setProfile(data);
+        .maybeSingle();
+      if (!error && data) setProfile(data);
     } catch (error) {
       console.error('Error loading profile:', error);
     }
@@ -58,7 +59,7 @@ export default function SettingsScreen({ navigation }) {
     );
   }
 
-  const name = profile?.full_name || user?.email || 'User';
+  const name = profile?.full_name || storedProfileName || user?.email || 'User';
   const initials = name
     .split(' ')
     .map((n) => n[0])
@@ -145,7 +146,7 @@ export default function SettingsScreen({ navigation }) {
         <Text style={[styles.sectionTitle, { color: colors.textLight }]}>APP</Text>
         <TouchableOpacity
           style={[styles.menuItem, { borderBottomColor: colors.borderLight }]}
-          onPress={() => Alert.alert('Privacy Policy', 'Privacy policy will be added before launch.')}
+          onPress={() => navigation.navigate('PrivacyPolicy')}
         >
           <Text style={styles.menuItemEmoji}>📋</Text>
           <View style={styles.menuItemContent}>
@@ -155,7 +156,7 @@ export default function SettingsScreen({ navigation }) {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.menuItem, { borderBottomColor: colors.borderLight }]}
-          onPress={() => Alert.alert('Terms & Conditions', 'Terms will be added before launch.')}
+          onPress={() => navigation.navigate('Terms')}
         >
           <Text style={styles.menuItemEmoji}>📄</Text>
           <View style={styles.menuItemContent}>
@@ -165,7 +166,7 @@ export default function SettingsScreen({ navigation }) {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.menuItem, { borderBottomColor: colors.borderLight }]}
-          onPress={() => Alert.alert('Disclaimer', 'NestApp is a community platform. We are not responsible for the accuracy of listings or interactions between users. Use at your own discretion.')}
+          onPress={() => navigation.navigate('Disclaimer')}
         >
           <Text style={styles.menuItemEmoji}>⚠️</Text>
           <View style={styles.menuItemContent}>

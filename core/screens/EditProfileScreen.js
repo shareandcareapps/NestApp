@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   ScrollView, ActivityIndicator, Alert, StyleSheet,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { supabase } from '../database/index';
 import useAppStore from '../store/index';
@@ -79,14 +80,14 @@ export default function EditProfileScreen({ navigation }) {
       }
 
       // Update global store so name reflects everywhere instantly
-      const raw = username || fullName || '';
-      setProfileName(raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : '');
+      const raw = username || '';
+      const display = raw.split(/[\s_]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      setProfileName(display);
       Alert.alert('Saved!', 'Your profile has been updated.', [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
     } catch (error) {
-      Alert.alert('Error', 'Could not save profile. Please try again.');
-      console.error(error);
+      Alert.alert('Error', error?.message || 'Could not save profile. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -101,6 +102,7 @@ export default function EditProfileScreen({ navigation }) {
   }
 
   return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.inner}>
 
@@ -217,6 +219,7 @@ export default function EditProfileScreen({ navigation }) {
 
       </View>
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

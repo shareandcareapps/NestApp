@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, ActivityIndicator, Alert,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { createNews } from '../services/newsService';
 import useAppStore from '../../../core/store/index';
@@ -39,10 +40,11 @@ export default function PostNewsScreen({ navigation }) {
   }
 
   return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.inner}>
         <View style={[styles.adminBadge, { backgroundColor: colors.secondary }]}>
-          <Text style={styles.adminBadgeText}>🔐 Admin — Post Community News</Text>
+          <Text style={styles.adminBadgeText}>🔐 Admin — Post St. Louis Community News</Text>
         </View>
         <Text style={[styles.label, { color: colors.textPrimary }]}>Category *</Text>
         <View style={styles.categoryGrid}>
@@ -94,6 +96,7 @@ export default function PostNewsScreen({ navigation }) {
         </TouchableOpacity>
       </View>
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

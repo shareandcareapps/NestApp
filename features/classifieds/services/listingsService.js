@@ -9,7 +9,7 @@ export async function getListings(category = null) {
   let query = supabase
     .from('listings')
     .select('*')
-    .eq('is_active', true)
+    .eq('status', 'active')
     .order('is_boosted', { ascending: false })
     .order('created_at', { ascending: false });
 
@@ -19,23 +19,19 @@ export async function getListings(category = null) {
 
   const { data, error } = await query;
   if (error) throw error;
+  if (!data || data.length === 0) return [];
 
-  // Fetch profiles separately for each listing
-  if (data && data.length > 0) {
-    const enriched = await Promise.all(
-      data.map(async (listing) => {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id, full_name, avatar_url')
-          .eq('id', listing.user_id)
-          .single();
-        return { ...listing, poster: profile };
-      })
-    );
-    return enriched;
-  }
+  // Batch fetch all unique profiles in a single query
+  const userIds = [...new Set(data.map(l => l.user_id))];
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, username, avatar_url, seller_rating, seller_rating_count')
+    .in('id', userIds);
 
-  return data;
+  const profileMap = {};
+  (profiles || []).forEach(p => { profileMap[p.id] = p; });
+
+  return data.map(listing => ({ ...listing, poster: profileMap[listing.user_id] || null }));
 }
 
 // ─── Fetch single listing ──────────────────────
@@ -56,6 +52,7 @@ export async function createListing(listing) {
     .from('listings')
     .insert({
       ...listing,
+      status: 'active',
       is_active: true,
       is_boosted: false,
     })
@@ -64,6 +61,31 @@ export async function createListing(listing) {
 
   if (error) throw error;
   return data;
+}
+
+// ─── Listing lifecycle ─────────────────────────
+// 'active' (live) | 'sold' (sold, archived) | 'archived' (manually hidden)
+// Keeps is_active in sync so any legacy reads still behave.
+export async function setListingStatus(id, status) {
+  const { data, error } = await supabase
+    .from('listings')
+    .update({ status, is_active: status === 'active' })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// ─── Fetch the current user's listings (all statuses) ──
+export async function getMyListings(userId) {
+  const { data, error } = await supabase
+    .from('listings')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
 }
 
 // ─── Update listing ────────────────────────────
@@ -95,7 +117,7 @@ export async function searchListings(query, category = null) {
   let dbQuery = supabase
     .from('listings')
     .select('*')
-    .eq('is_active', true)
+    .eq('status', 'active')
     .or(`title.ilike.%${query}%,description.ilike.%${query}%`)
     .order('is_boosted', { ascending: false })
     .order('created_at', { ascending: false });
@@ -113,7 +135,7 @@ export async function searchListings(query, category = null) {
 export async function getProfile(userId) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, full_name, username, avatar_url')
+    .select('id, username, avatar_url, seller_rating, seller_rating_count')
     .eq('id', userId)
     .single();
     

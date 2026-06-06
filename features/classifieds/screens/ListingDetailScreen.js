@@ -5,9 +5,12 @@ import {
   TouchableOpacity, Alert, Image, FlatList, Dimensions, Modal, StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getProfile, deleteListing } from '../services/listingsService';
+import { getProfile, deleteListing, setListingStatus } from '../services/listingsService';
+import { getOrCreateConversation } from '../../messages/services/messagesService';
 import useAppStore from '../../../core/store/index';
 import { useTheme } from '../../../core/theme/ThemeContext';
+import UserProfileModal, { formatDisplayName } from '../../../core/components/UserProfileModal';
+import MarkSoldModal from '../../../core/components/MarkSoldModal';
 
 const { width, height } = Dimensions.get('window');
 
@@ -21,15 +24,17 @@ export default function ListingDetailScreen({ route, navigation }) {
   const colors = useTheme();
   const isOwner = user?.id === listing.user_id;
   const color = categoryColors[listing.category] || '#E63946';
-  const meta = listing.metadata
-    ? (typeof listing.metadata === 'string' ? JSON.parse(listing.metadata) : listing.metadata)
-    : null;
+  const meta = listing.metadata || null;
   const displayLocation = meta?.location || `${listing.city}, ${listing.state}`;
   const [poster, setPoster] = useState(listing.poster || null);
   const [activeImage, setActiveImage] = useState(0);
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
+  const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [soldModalVisible, setSoldModalVisible] = useState(false);
+  const [status, setStatus] = useState(listing.status || (listing.is_active === false ? 'archived' : 'active'));
   const images = listing.images || [];
+  const isSellable = listing.category === 'buysell' || listing.category === 'food';
 
   function openViewer(index) {
     setViewerIndex(index);
@@ -45,14 +50,42 @@ export default function ListingDetailScreen({ route, navigation }) {
 
   async function handleMessage() {
     try {
-      const { getOrCreateConversation } = require('../../../features/messages/services/messagesService');
-      const conversation = await getOrCreateConversation(user.id, listing.user_id);
-      navigation.navigate('Messages', {
-        screen: 'Chat',
-        params: { conversation, otherProfile: poster || { full_name: 'Community Member' } },
+      // Per-listing thread: scope the conversation to this listing (+ title snapshot)
+      const conversation = await getOrCreateConversation(user.id, listing.user_id, listing.id, listing.title);
+      navigation.navigate('Tabs', {
+        screen: 'Messages',
+        params: {
+          screen: 'Chat',
+          params: {
+            conversation,
+            otherProfile: poster || { username: 'Community Member' },
+            listingTitle: listing.title,
+          },
+        },
       });
     } catch (error) {
-      Alert.alert('Error', 'Could not open chat. Please try again.');
+      console.error('open chat error:', error);
+      Alert.alert('Could not open chat', error?.message || 'Please try again.');
+    }
+  }
+
+  async function handleArchive() {
+    try {
+      await setListingStatus(listing.id, 'archived');
+      setStatus('archived');
+      Alert.alert('Archived', 'This listing has been moved to your Archive.');
+    } catch (e) {
+      Alert.alert('Error', e?.message || 'Could not archive listing.');
+    }
+  }
+
+  async function handleRelist() {
+    try {
+      await setListingStatus(listing.id, 'active');
+      setStatus('active');
+      Alert.alert('Relisted', 'Your listing is live again.');
+    } catch (e) {
+      Alert.alert('Error', e?.message || 'Could not relist.');
     }
   }
 
@@ -90,7 +123,7 @@ export default function ListingDetailScreen({ route, navigation }) {
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
-            keyExtractor={(_, i) => i.toString()}
+            keyExtractor={(item, i) => `${item}-${i}`}
             onMomentumScrollEnd={(e) => setActiveImage(Math.round(e.nativeEvent.contentOffset.x / width))}
             renderItem={({ item, index }) => (
               <TouchableOpacity activeOpacity={0.95} onPress={() => openViewer(index)}>
@@ -195,17 +228,36 @@ export default function ListingDetailScreen({ route, navigation }) {
         )}
 
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Posted By</Text>
-        <View style={[styles.posterCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <TouchableOpacity
+          style={[styles.posterCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+          onPress={() => !isOwner && setProfileModalVisible(true)}
+          activeOpacity={isOwner ? 1 : 0.7}
+        >
           <View style={[styles.avatarCircle, { backgroundColor: colors.secondary }]}>
-            <Text style={styles.avatarText}>{poster?.full_name?.charAt(0)?.toUpperCase() || '?'}</Text>
+            <Text style={styles.avatarText}>{poster?.username?.charAt(0)?.toUpperCase() || '?'}</Text>
           </View>
           <View style={styles.posterInfo}>
             <Text style={[styles.posterName, { color: colors.textPrimary }]}>
-  {poster?.username ? `@${poster.username}` : poster?.full_name || 'Community Member'}
-</Text>
-            <Text style={[styles.posterCity, { color: colors.textSecondary }]}>St. Louis, Missouri</Text>
+              {formatDisplayName(poster?.username)}
+            </Text>
+            {poster?.seller_rating_count >= 5 && (
+              <Text style={{ fontSize: 12, color: '#F39C12', marginTop: 2 }}>
+                {'★'.repeat(Math.round(poster.seller_rating))} {poster.seller_rating?.toFixed(1)} ({poster.seller_rating_count})
+              </Text>
+            )}
+            <Text style={[styles.posterCity, { color: colors.textSecondary }]}>
+              {listing.city}, {listing.state} {!isOwner && <Text style={{ color: colors.info }}>· View profile</Text>}
+            </Text>
           </View>
-        </View>
+          {!isOwner && <Ionicons name="chevron-forward" size={16} color={colors.textLight} />}
+        </TouchableOpacity>
+
+        <UserProfileModal
+          visible={profileModalVisible}
+          userId={listing.user_id}
+          onClose={() => setProfileModalVisible(false)}
+          onMessage={!isOwner ? handleMessage : null}
+        />
 
         {/* Contact Button — non owners */}
         {!isOwner && (
@@ -234,26 +286,71 @@ export default function ListingDetailScreen({ route, navigation }) {
           <>
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Manage Listing</Text>
-            <View style={styles.ownerActions}>
-              <TouchableOpacity
-                style={[styles.editButton, {
-                  backgroundColor: colors.infoBackground,
-                  borderColor: colors.info,
-                }]}
-                onPress={() => navigation.navigate('EditListing', { listing })}
-              >
-                <Text style={[styles.editButtonText, { color: colors.info }]}>✏️ Edit</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.deleteButton, {
-                  backgroundColor: colors.errorBackground,
-                  borderColor: colors.error,
-                }]}
-                onPress={handleDelete}
-              >
-                <Text style={[styles.deleteButtonText, { color: colors.error }]}>🗑️ Delete</Text>
-              </TouchableOpacity>
-            </View>
+
+            {/* Status banner when not active */}
+            {status !== 'active' && (
+              <View style={[styles.statusBanner, { backgroundColor: '#2ECC7115', borderColor: '#2ECC71' }]}>
+                <Text style={[styles.statusBannerText, { color: '#1a7a45' }]}>
+                  {status === 'sold' ? '✓ This item is marked as sold' : '📦 This listing is archived'}
+                </Text>
+              </View>
+            )}
+
+            {status === 'active' ? (
+              <>
+                {isSellable && (
+                  <TouchableOpacity
+                    style={[styles.soldButtonFull, { backgroundColor: '#2ECC71' }]}
+                    onPress={() => setSoldModalVisible(true)}
+                  >
+                    <Text style={styles.soldButtonFullText}>✓ Mark as Sold</Text>
+                  </TouchableOpacity>
+                )}
+                <View style={styles.ownerActions}>
+                  <TouchableOpacity
+                    style={[styles.editButton, { backgroundColor: colors.infoBackground, borderColor: colors.info }]}
+                    onPress={() => navigation.navigate('EditListing', { listing })}
+                  >
+                    <Text style={[styles.editButtonText, { color: colors.info }]}>✏️ Edit</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.editButton, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}
+                    onPress={handleArchive}
+                  >
+                    <Text style={[styles.editButtonText, { color: colors.textSecondary }]}>📦 Archive</Text>
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity
+                  style={[styles.deleteButtonFull, { backgroundColor: colors.errorBackground, borderColor: colors.error }]}
+                  onPress={handleDelete}
+                >
+                  <Text style={[styles.deleteButtonText, { color: colors.error }]}>🗑️ Delete</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <View style={styles.ownerActions}>
+                <TouchableOpacity
+                  style={[styles.editButton, { backgroundColor: '#2ECC7115', borderColor: '#2ECC71' }]}
+                  onPress={handleRelist}
+                >
+                  <Text style={[styles.editButtonText, { color: '#1a7a45' }]}>♻️ Relist</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.deleteButton, { backgroundColor: colors.errorBackground, borderColor: colors.error }]}
+                  onPress={handleDelete}
+                >
+                  <Text style={[styles.deleteButtonText, { color: colors.error }]}>🗑️ Delete</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <MarkSoldModal
+              visible={soldModalVisible}
+              listing={listing}
+              sellerId={user.id}
+              onClose={() => setSoldModalVisible(false)}
+              onSold={() => setStatus('sold')}
+            />
           </>
         )}
 
@@ -276,7 +373,7 @@ export default function ListingDetailScreen({ route, navigation }) {
             showsHorizontalScrollIndicator={false}
             initialScrollIndex={viewerIndex}
             getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
-            keyExtractor={(_, i) => i.toString()}
+            keyExtractor={(item, i) => `${item}-${i}`}
             onMomentumScrollEnd={(e) => setViewerIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
             renderItem={({ item }) => (
               <View style={styles.viewerImageWrap}>
@@ -285,7 +382,7 @@ export default function ListingDetailScreen({ route, navigation }) {
             )}
           />
           {/* Close button */}
-          <TouchableOpacity style={styles.viewerClose} onPress={() => setViewerVisible(false)}>
+          <TouchableOpacity style={styles.viewerClose} onPress={() => setViewerVisible(false)} accessibilityLabel="Close image viewer">
             <Ionicons name="close" size={28} color="#fff" />
           </TouchableOpacity>
           {/* Counter */}
@@ -344,11 +441,16 @@ const styles = StyleSheet.create({
   messageButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   privacyNotice: { borderRadius: 10, padding: 12, marginTop: 10, borderWidth: 0.5 },
   privacyText: { fontSize: 12, textAlign: 'center', lineHeight: 18 },
-  ownerActions: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  ownerActions: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   editButton: { flex: 1, borderRadius: 10, padding: 14, alignItems: 'center', borderWidth: 0.5 },
   editButtonText: { fontSize: 14, fontWeight: '600' },
   deleteButton: { flex: 1, borderRadius: 10, padding: 14, alignItems: 'center', borderWidth: 0.5 },
+  deleteButtonFull: { borderRadius: 10, padding: 14, alignItems: 'center', borderWidth: 0.5, marginBottom: 16 },
   deleteButtonText: { fontSize: 14, fontWeight: '600' },
+  soldButtonFull: { borderRadius: 10, padding: 14, alignItems: 'center', marginBottom: 10 },
+  soldButtonFullText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  statusBanner: { borderRadius: 10, padding: 12, marginBottom: 12, borderWidth: 1 },
+  statusBannerText: { fontSize: 14, fontWeight: '600', textAlign: 'center' },
   safetyBox: { borderRadius: 10, padding: 12, marginTop: 16 },
   safetyText: { fontSize: 12, lineHeight: 18 },
 });

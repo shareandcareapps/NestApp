@@ -33,8 +33,18 @@ export async function getNewsById(id) {
   return data;
 }
 
+async function assertAdmin(userId) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error || data?.role !== 'admin') throw new Error('Unauthorized: admin access required');
+}
+
 // ─── Create news article (admin only) ─────────
-export async function createNews(article) {
+export async function createNews(article, userId) {
+  await assertAdmin(userId);
   const { data, error } = await supabase
     .from('news')
     .insert(article)
@@ -46,7 +56,8 @@ export async function createNews(article) {
 }
 
 // ─── Delete news article (admin only) ─────────
-export async function deleteNews(id) {
+export async function deleteNews(id, userId) {
+  await assertAdmin(userId);
   const { error } = await supabase
     .from('news')
     .delete()

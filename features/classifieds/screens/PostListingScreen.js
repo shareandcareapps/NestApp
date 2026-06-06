@@ -10,6 +10,7 @@ import { createListing } from '../services/listingsService';
 import useAppStore from '../../../core/store/index';
 import { supabase } from '../../../core/database/index';
 import { useTheme } from '../../../core/theme/ThemeContext';
+import { awardPoints } from '../../../core/services/pointsService';
 
 const CATEGORIES = [
   { id: 'accommodation', label: 'Accommodation', emoji: '🏠' },
@@ -29,6 +30,7 @@ export default function PostListingScreen({ navigation, route }) {
   const categoryLocked = preselected !== null;
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [images, setImages] = useState([]);
   const user = useAppStore((state) => state.user);
   const colors = useTheme();
@@ -109,19 +111,25 @@ export default function PostListingScreen({ navigation, route }) {
   async function uploadImage(imageAsset) {
     try {
       setUploading(true);
+      setUploadProgress(10);
       const ext = imageAsset.uri.split('.').pop();
       const fileName = `${user.id}/${Date.now()}.${ext}`;
+      setUploadProgress(30);
       const response = await fetch(imageAsset.uri);
       const blob = await response.blob();
       const arrayBuffer = await new Response(blob).arrayBuffer();
+      setUploadProgress(60);
       const { error } = await supabase.storage.from('listings').upload(fileName, arrayBuffer, { contentType: `image/${ext}` });
       if (error) throw error;
+      setUploadProgress(90);
       const { data: urlData } = supabase.storage.from('listings').getPublicUrl(fileName);
       setImages((prev) => [...prev, urlData.publicUrl]);
+      setUploadProgress(100);
     } catch (error) {
-      Alert.alert('Upload failed', 'Could not upload image.');
+      Alert.alert('Upload failed', `Could not upload image: ${error.message}`);
     } finally {
       setUploading(false);
+      setUploadProgress(0);
     }
   }
 
@@ -138,7 +146,7 @@ export default function PostListingScreen({ navigation, route }) {
         title: acTitle,
         description: acDescription,
         price: acPrice ? parseFloat(acPrice) : null,
-        metadata: JSON.stringify({ location: acLocation }),
+        metadata: { location: acLocation },
       };
     }
 
@@ -148,14 +156,14 @@ export default function PostListingScreen({ navigation, route }) {
         title: jobRole,
         description: jobDescription,
         price: jobSalaryOpen ? null : jobSalary ? parseFloat(jobSalary) : null,
-        metadata: JSON.stringify({
+        metadata: {
           company: jobCompany,
           salary_open: jobSalaryOpen,
           job_type: jobType,
           hours_per_week: jobHours,
           location: jobLocation,
           joining: jobJoining,
-        }),
+        },
       };
     }
 
@@ -165,12 +173,12 @@ export default function PostListingScreen({ navigation, route }) {
         title: bsProductName,
         description: bsDescription,
         price: bsPrice ? parseFloat(bsPrice) : null,
-        metadata: JSON.stringify({
+        metadata: {
           negotiable: bsNegotiable,
           product_category: bsProductCategory,
           condition: bsCondition,
           pickup_location: bsPickupLocation,
-        }),
+        },
       };
     }
 
@@ -180,11 +188,11 @@ export default function PostListingScreen({ navigation, route }) {
         title: foodTitle,
         description: foodDescription,
         price: foodPrice ? parseFloat(foodPrice) : null,
-        metadata: JSON.stringify({
+        metadata: {
           negotiable: foodNegotiable,
           pickup: foodPickup,
           delivery: foodDelivery,
-        }),
+        },
       };
     }
   }
@@ -203,12 +211,17 @@ export default function PostListingScreen({ navigation, route }) {
     if (!validateForm()) return;
     setLoading(true);
     try {
-      await createListing(buildListingData());
-      Alert.alert('Posted!', 'Your listing has been posted.', [
+      const newListing = await createListing(buildListingData());
+      // Check if this is their first listing
+      const { count } = await supabase
+        .from('listings').select('id', { count: 'exact', head: true }).eq('user_id', user.id);
+      await awardPoints(user.id, count === 1 ? 'first_listing' : 'post_listing', newListing.id);
+      const pts = count === 1 ? 20 : 5;
+      Alert.alert('Posted! 🎉', `Your listing is live.\n+${pts} community points earned!`, [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
     } catch (error) {
-      Alert.alert('Error', 'Failed to post listing. Please try again.');
+      Alert.alert('Error', error?.message || 'Failed to post listing. Please try again.');
       console.error(error);
     } finally {
       setLoading(false);
@@ -304,7 +317,7 @@ export default function PostListingScreen({ navigation, route }) {
               {images.map((uri, index) => (
                 <View key={index} style={styles.photoWrapper}>
                   <Image source={{ uri }} style={styles.photo} />
-                  <TouchableOpacity style={styles.removePhoto} onPress={() => removeImage(index)}>
+                  <TouchableOpacity style={styles.removePhoto} onPress={() => removeImage(index)} accessibilityLabel="Remove photo">
                     <Text style={styles.removePhotoText}>✕</Text>
                   </TouchableOpacity>
                 </View>
@@ -315,7 +328,15 @@ export default function PostListingScreen({ navigation, route }) {
                   onPress={pickImage}
                   disabled={uploading}
                 >
-                  {uploading ? <ActivityIndicator color={colors.primary} /> : (
+                  {uploading ? (
+                    <View style={{ alignItems: 'center', gap: 6 }}>
+                      <ActivityIndicator color={colors.primary} />
+                      <Text style={[styles.addPhotoText, { color: colors.primary }]}>{uploadProgress}%</Text>
+                      <View style={{ width: 60, height: 3, backgroundColor: colors.border, borderRadius: 2 }}>
+                        <View style={{ width: `${uploadProgress}%`, height: 3, backgroundColor: colors.primary, borderRadius: 2 }} />
+                      </View>
+                    </View>
+                  ) : (
                     <>
                       <Text style={styles.addPhotoIcon}>📷</Text>
                       <Text style={[styles.addPhotoText, { color: colors.primary }]}>Add Photo</Text>
@@ -575,7 +596,7 @@ export default function PostListingScreen({ navigation, route }) {
               {images.map((uri, index) => (
                 <View key={index} style={styles.photoWrapper}>
                   <Image source={{ uri }} style={styles.photo} />
-                  <TouchableOpacity style={styles.removePhoto} onPress={() => removeImage(index)}>
+                  <TouchableOpacity style={styles.removePhoto} onPress={() => removeImage(index)} accessibilityLabel="Remove photo">
                     <Text style={styles.removePhotoText}>✕</Text>
                   </TouchableOpacity>
                 </View>
@@ -688,7 +709,7 @@ export default function PostListingScreen({ navigation, route }) {
               {images.map((uri, index) => (
                 <View key={index} style={styles.photoWrapper}>
                   <Image source={{ uri }} style={styles.photo} />
-                  <TouchableOpacity style={styles.removePhoto} onPress={() => removeImage(index)}>
+                  <TouchableOpacity style={styles.removePhoto} onPress={() => removeImage(index)} accessibilityLabel="Remove photo">
                     <Text style={styles.removePhotoText}>✕</Text>
                   </TouchableOpacity>
                 </View>
@@ -768,7 +789,7 @@ const styles = StyleSheet.create({
   categoryEmoji: { fontSize: 24, marginBottom: 6 },
   categoryLabel: { fontSize: 12, fontWeight: '500', textAlign: 'center' },
   input: { borderRadius: 10, padding: 12, fontSize: 15, borderWidth: 0.5 },
-  textArea: { height: 100, textAlignVertical: 'top' },
+  textArea: { minHeight: 100, textAlignVertical: 'top' },
   toggleRow: { flexDirection: 'row', gap: 10 },
   toggleButton: { flex: 1, borderRadius: 10, padding: 12, alignItems: 'center' },
   toggleLabel: { fontSize: 14 },
@@ -786,7 +807,7 @@ const styles = StyleSheet.create({
   photosContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   photoWrapper: { position: 'relative' },
   photo: { width: 80, height: 80, borderRadius: 8 },
-  removePhoto: { position: 'absolute', top: -6, right: -6, backgroundColor: '#E63946', borderRadius: 10, width: 20, height: 20, alignItems: 'center', justifyContent: 'center' },
+  removePhoto: { position: 'absolute', top: -8, right: -8, backgroundColor: '#E63946', borderRadius: 13, width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
   removePhotoText: { color: '#fff', fontSize: 10, fontWeight: '700' },
   addPhotoButton: { width: 80, height: 80, borderRadius: 8, borderWidth: 1, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 4 },
   addPhotoIcon: { fontSize: 20 },

@@ -5,6 +5,34 @@
 
 import { supabase } from '../../../core/database/index';
 
+// Attach the poster profile (driver for offers, requester for requests) to each
+// ride in one batched query — so cards/detail can show who & their rating.
+async function attachPosters(rides) {
+  if (!rides || rides.length === 0) return rides || [];
+  const ids = [...new Set(rides.map(r => r.driver_id || r.requester_id).filter(Boolean))];
+  if (ids.length === 0) return rides;
+
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, username, avatar_url, driver_rating, driver_rating_count')
+    .in('id', ids);
+
+  const map = {};
+  (profiles || []).forEach(p => { map[p.id] = p; });
+  return rides.map(r => ({ ...r, poster: map[r.driver_id || r.requester_id] || null }));
+}
+
+// Fetch a single poster profile (used by the detail screen as a fallback).
+export async function getRidePoster(userId) {
+  if (!userId) return null;
+  const { data } = await supabase
+    .from('profiles')
+    .select('id, username, avatar_url, driver_rating, driver_rating_count')
+    .eq('id', userId)
+    .maybeSingle();
+  return data || null;
+}
+
 // ─── Fetch all active rides ────────────────────
 // tab: null = all, 'offers' = driver offers, 'requests' = rider requests
 export async function getRides(category = null, tab = null, university = null) {
@@ -23,7 +51,7 @@ export async function getRides(category = null, tab = null, university = null) {
 
   const { data, error } = await query;
   if (error) throw error;
-  return data;
+  return attachPosters(data);
 }
 
 // ─── Fetch single ride ─────────────────────────
@@ -92,7 +120,7 @@ export async function searchRides(from, to) {
 
   const { data, error } = await query;
   if (error) throw error;
-  return data;
+  return attachPosters(data);
 }
 
 // ─── Get user's own rides ──────────────────────

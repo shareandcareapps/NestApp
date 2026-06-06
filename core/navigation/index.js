@@ -1,7 +1,7 @@
 // core/navigation/index.js
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, ActivityIndicator, TouchableOpacity,
+  View, Text, ActivityIndicator, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator, TransitionPresets } from '@react-navigation/stack';
@@ -14,6 +14,9 @@ import LoginScreen from '../auth/screens/LoginScreen';
 import SignupScreen from '../auth/screens/SignupScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
+import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
+import TermsScreen from '../screens/TermsScreen';
+import DisclaimerScreen from '../screens/DisclaimerScreen';
 import MyListingsScreen from '../screens/MyListingsScreen';
 import MyRidesScreen from '../screens/MyRidesScreen';
 import HomeScreen from '../screens/HomeScreen';
@@ -47,21 +50,10 @@ function AvatarButton({ onPress, name }) {
   return (
     <TouchableOpacity
       onPress={onPress}
-      style={{
-        marginRight: 14,
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: avatarColors[colorIndex],
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 2,
-        borderColor: 'rgba(255,255,255,0.4)',
-      }}
+      accessibilityLabel="Open profile settings"
+      style={[navStyles.avatarBtn, { backgroundColor: avatarColors[colorIndex] }]}
     >
-      <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>
-        {initials}
-      </Text>
+      <Text style={navStyles.avatarText}>{initials}</Text>
     </TouchableOpacity>
   );
 }
@@ -216,12 +208,15 @@ function MainApp() {
       />
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ ...sharedScreenOptions, title: 'Profile & Settings' }} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ ...sharedScreenOptions, title: 'Edit Profile' }} />
+      <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ ...sharedScreenOptions, title: 'Privacy Policy' }} />
+      <Stack.Screen name="Terms" component={TermsScreen} options={{ ...sharedScreenOptions, title: 'Terms & Conditions' }} />
+      <Stack.Screen name="Disclaimer" component={DisclaimerScreen} options={{ ...sharedScreenOptions, title: 'Disclaimer' }} />
       <Stack.Screen name="MyListings" component={MyListingsScreen} options={{ ...sharedScreenOptions, title: 'My Listings' }} />
       <Stack.Screen name="MyRides" component={MyRidesScreen} options={{ ...sharedScreenOptions, title: 'My Carpools' }} />
       <Stack.Screen name="ListingDetail" component={ListingDetailScreen} options={{ ...sharedScreenOptions, title: 'Listing Details' }} />
       <Stack.Screen name="EditListing" component={EditListingScreen} options={{ ...sharedScreenOptions, title: 'Edit Listing' }} />
       <Stack.Screen name="PostListing" component={PostListingScreen} options={{ ...sharedScreenOptions, headerShown: false }} />
-      <Stack.Screen name="PostRide" component={PostRideScreen} options={{ ...sharedScreenOptions, title: 'Share a Ride' }} />
+      <Stack.Screen name="PostRide" component={PostRideScreen} options={{ ...sharedScreenOptions, headerShown: false }} />
       <Stack.Screen name="BrowseListingsByCategory" component={BrowseListingsScreen} options={{ ...sharedScreenOptions, title: 'Browse Listings' }} />
     </Stack.Navigator>
   );
@@ -255,10 +250,12 @@ export default function RootNavigator() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) { setUser(session.user); setSession(session); }
-      setLoading(false);
-    });
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (session) { setUser(session.user); setSession(session); }
+      })
+      .catch(err => console.error('getSession error:', err))
+      .finally(() => setLoading(false));
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         if (session) { setUser(session.user); setSession(session); }
@@ -280,3 +277,17 @@ export default function RootNavigator() {
     </Stack.Navigator>
   );
 }
+
+const navStyles = StyleSheet.create({
+  avatarBtn: {
+    marginRight: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  avatarText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+});

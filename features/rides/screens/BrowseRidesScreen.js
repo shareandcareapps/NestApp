@@ -1,19 +1,26 @@
 // features/rides/screens/BrowseRidesScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  ActivityIndicator, RefreshControl, SafeAreaView, TextInput, Image,
+  ActivityIndicator, RefreshControl, SafeAreaView, TextInput,
+  Image, ScrollView,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { getRides } from '../services/ridesService';
 import { useTheme } from '../../../core/theme/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
+import { formatDisplayName } from '../../../core/components/UserProfileModal';
+import { decodeLongRideNotes } from '../utils/longRideUtils';
+
+const AVATAR_COLORS = ['#E63946', '#1D3557', '#2ECC71', '#3498DB', '#9B59B6', '#F39C12'];
 
 const CATEGORIES = [
-  { id: null, label: 'All', icon: 'apps-outline' },
-  { id: 'airport', label: 'Airport', icon: 'airplane-outline' },
+  { id: null,         label: 'All',        icon: 'apps-outline' },
+  { id: 'airport',    label: 'Airport',    icon: 'airplane-outline' },
   { id: 'university', label: 'University', icon: 'school-outline' },
-  { id: 'temple', label: "Religious Centers", icon: 'partly-sunny-outline' },
-  { id: 'general', label: 'General', icon: 'car-outline' },
+  { id: 'temple',     label: 'Religious',  icon: 'leaf-outline' },
+  { id: 'general',    label: 'General',    icon: 'car-outline' },
+  { id: 'longride',   label: 'Long Ride',  icon: 'map-outline' },
 ];
 
 const UNIVERSITIES = [
@@ -23,102 +30,154 @@ const UNIVERSITIES = [
   { id: 'washu',   label: 'Wash U',  color: '#117A65', logo: { uri: 'https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://wustl.edu&size=128' } },
 ];
 
-// Driver offers: elegant teal accent  |  Rider requests: elegant warm amber
-const OFFER_BG   = '#E8F8F5';
-const OFFER_ACCENT = '#1ABC9C';
-const REQUEST_BG   = '#FEF9E7';
-const REQUEST_ACCENT = '#F39C12';
-
+const OFFER_ACCENT   = '#1ABC9C';
+const REQUEST_ACCENT = '#9B59B6';
+const LONGRIDE_ACCENT = '#E67E22';
 
 function RideCard({ item, onPress, colors }) {
-  const rideDate = new Date(item.ride_date);
-  const isToday = new Date().toDateString() === rideDate.toDateString();
-  const isTomorrow = new Date(Date.now() + 86400000).toDateString() === rideDate.toDateString();
-  const isRequest = item.ride_type === 'request';
-  const accent = isRequest ? REQUEST_ACCENT : OFFER_ACCENT;
-  const cardBg = isRequest ? '#FFFBF2' : '#F0FFF8';
-  const dateLabel = isToday ? 'Today' : isTomorrow ? 'Tomorrow' : rideDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+  const rideDate  = new Date(item.ride_date);
+  const now       = new Date();
+  const tomorrow  = new Date(now.getTime() + 86400000);
+  const isToday   = now.toDateString()      === rideDate.toDateString();
+  const isTomorrow = tomorrow.toDateString() === rideDate.toDateString();
+  const isRequest   = item.ride_type === 'request';
+  const isLongRide  = item.category === 'longride';
+  const accent      = isRequest ? REQUEST_ACCENT : (isLongRide ? LONGRIDE_ACCENT : OFFER_ACCENT);
+  const cardBg      = isRequest ? '#FAF5FF' : (isLongRide ? '#FFF8F0' : '#F0FFF9');
+  const borderCol   = accent + '35';
+
+  const dateLabel = isToday    ? 'Today'
+    : isTomorrow  ? 'Tomorrow'
+    : rideDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
   const timeLabel = rideDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const categoryEmojis = { airport: '✈️', temple: '🌤️', general: '🚗' };
-  const uniData = item.category === 'university' ? UNIVERSITIES.find(u => u.id === item.university) : null;
+
+  const categoryIcons = { airport: 'airplane-outline', temple: 'leaf-outline', general: 'car-outline', longride: 'map-outline' };
+  const uniData    = item.category === 'university' ? UNIVERSITIES.find(u => u.id === item.university) : null;
+  const posterName  = formatDisplayName(item.poster?.username);
+  const posterColor = AVATAR_COLORS[posterName.charCodeAt(0) % AVATAR_COLORS.length];
+  const showRating  = !isRequest && (item.poster?.driver_rating_count ?? 0) >= 5;
+
+  // Long ride extras decoded from notes
+  const longRideInfo = isLongRide ? decodeLongRideNotes(item.notes) : null;
 
   return (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: cardBg, borderColor: accent + '40' }]}
+      style={[styles.card, { backgroundColor: cardBg, borderColor: borderCol }]}
       onPress={() => onPress(item)}
-      activeOpacity={0.75}
+      activeOpacity={0.78}
     >
-      {/* Top row: badge + category icon */}
-      <View style={styles.cardTop}>
-        <View style={[styles.typeBadge, { backgroundColor: accent + '20' }]}>
-          <Ionicons name={isRequest ? 'hand-left-outline' : 'car-sport-outline'} size={12} color={accent} style={{ marginRight: 4 }} />
+      {/* Header row */}
+      <View style={styles.cardHeader}>
+        <View style={styles.posterRow}>
+          <View style={[styles.posterAvatar, { backgroundColor: posterColor }]}>
+            <Text style={styles.posterAvatarText}>{posterName.charAt(0).toUpperCase()}</Text>
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[styles.posterName, { color: colors.textPrimary }]} numberOfLines={1}>
+              {posterName}
+            </Text>
+            <View style={styles.posterMeta}>
+              {uniData ? (
+                <Image source={uniData.logo} style={styles.uniLogo} resizeMode="contain" />
+              ) : (
+                <Ionicons name={categoryIcons[item.category] || 'car-outline'} size={12} color={colors.textLight} />
+              )}
+              {showRating && (
+                <Text style={styles.ratingText}>⭐ {item.poster.driver_rating?.toFixed(1)}</Text>
+              )}
+            </View>
+          </View>
+        </View>
+        <View style={[styles.typeBadge, { backgroundColor: accent + '18', borderColor: accent + '35' }]}>
+          <Ionicons
+            name={isRequest ? 'hand-left-outline' : 'car-sport-outline'}
+            size={11}
+            color={accent}
+          />
           <Text style={[styles.typeBadgeText, { color: accent }]}>
-            {isRequest ? 'Need a Seat' : 'Offering Seat'}
+            {isRequest ? 'Need Seat' : 'Offering'}
           </Text>
         </View>
-        {uniData ? (
-          <Image source={uniData.logo} style={styles.uniLogo} resizeMode="contain" />
-        ) : (
-          <Text style={styles.categoryEmoji}>{categoryEmojis[item.category] || '🚗'}</Text>
-        )}
       </View>
 
       {/* Route */}
       <View style={styles.routeBlock}>
-        <View style={styles.routeIndicator}>
-          <View style={[styles.dotOrigin, { backgroundColor: accent }]} />
-          <View style={[styles.routeLine, { backgroundColor: accent + '40' }]} />
-          <View style={[styles.dotDest, { borderColor: accent }]} />
+        <View style={styles.routeTrack}>
+          <View style={[styles.dotFilled, { backgroundColor: accent }]} />
+          <View style={[styles.routeLine, { backgroundColor: accent + '30' }]} />
+          <View style={[styles.dotRing, { borderColor: accent }]} />
         </View>
-        <View style={styles.routeText}>
-          <Text style={[styles.locationText, { color: colors.textPrimary }]} numberOfLines={1}>{item.from_location}</Text>
-          <View style={{ height: 10 }} />
-          <Text style={[styles.locationText, { color: colors.textPrimary }]} numberOfLines={1}>{item.to_location}</Text>
+        <View style={styles.routeLabels}>
+          <Text style={[styles.locationText, { color: colors.textPrimary }]} numberOfLines={1}>
+            {item.from_location}
+          </Text>
+          <View style={{ height: 12 }} />
+          <Text style={[styles.locationText, { color: colors.textPrimary }]} numberOfLines={1}>
+            {item.to_location}
+          </Text>
         </View>
       </View>
 
-      {/* Footer pills */}
+      {/* Long ride: stops row */}
+      {isLongRide && longRideInfo?.stops && (
+        <View style={styles.stopsRow}>
+          <Ionicons name="ellipsis-horizontal" size={12} color={accent} style={{ marginTop: 1 }} />
+          <Text style={[styles.stopsText, { color: accent }]} numberOfLines={1}>
+            via {longRideInfo.stops}
+          </Text>
+        </View>
+      )}
+
+      {/* Footer */}
       <View style={styles.pillRow}>
-        <View style={[styles.pill, { backgroundColor: colors.surface }]}>
-          <Ionicons name="calendar-outline" size={11} color={colors.textLight} />
-          <Text style={[styles.pillText, { color: colors.textSecondary }]}>{dateLabel}</Text>
-        </View>
-        <View style={[styles.pill, { backgroundColor: colors.surface }]}>
-          <Ionicons name="time-outline" size={11} color={colors.textLight} />
-          <Text style={[styles.pillText, { color: colors.textSecondary }]}>{timeLabel}</Text>
-        </View>
-        {!isRequest && (
-          <View style={[styles.pill, { backgroundColor: colors.surface }]}>
-            <Ionicons name="people-outline" size={11} color={colors.textLight} />
-            <Text style={[styles.pillText, { color: colors.textSecondary }]}>
-              {item.seats_available} seat{item.seats_available > 1 ? 's' : ''}
-            </Text>
+        <Pill icon="calendar-outline" label={dateLabel} colors={colors} />
+        <Pill icon="time-outline"     label={timeLabel} colors={colors} />
+        {!isRequest && item.seats_available > 0 && (
+          <Pill icon="people-outline" label={`${item.seats_available} seat${item.seats_available > 1 ? 's' : ''}`} colors={colors} />
+        )}
+        {isLongRide && longRideInfo?.returnDate && (
+          <View style={[styles.pill, { backgroundColor: LONGRIDE_ACCENT + '15' }]}>
+            <Ionicons name="refresh-outline" size={11} color={LONGRIDE_ACCENT} />
+            <Text style={[styles.pillText, { color: LONGRIDE_ACCENT, fontWeight: '600' }]}>Return</Text>
           </View>
         )}
-        <View style={[styles.pill, { backgroundColor: accent + '15' }]}>
+        <View style={[styles.pill, { backgroundColor: accent + '12' }]}>
           <Ionicons name="chatbubble-ellipses-outline" size={11} color={accent} />
-          <Text style={[styles.pillText, { color: accent, fontWeight: '600' }]}>Chat to arrange</Text>
+          <Text style={[styles.pillText, { color: accent, fontWeight: '600' }]}>Chat</Text>
         </View>
       </View>
     </TouchableOpacity>
   );
 }
 
+function Pill({ icon, label, colors }) {
+  return (
+    <View style={[styles.pill, { backgroundColor: colors.surfaceSecondary }]}>
+      <Ionicons name={icon} size={11} color={colors.textLight} />
+      <Text style={[styles.pillText, { color: colors.textSecondary }]}>{label}</Text>
+    </View>
+  );
+}
+
 export default function BrowseRidesScreen({ navigation }) {
-  const [rides, setRides] = useState([]);
-  const [allRides, setAllRides] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const [selectedUniversity, setSelectedUniversity] = useState(null);
-  const [airportDirection, setAirportDirection] = useState(null); // 'to' | 'from'
-  const [activeTab, setActiveTab] = useState(null); // null = all, 'offers', 'requests'
-  const [sortBy, setSortBy] = useState('recent'); // 'recent' | 'time'
-  const [searchQuery, setSearchQuery] = useState('');
+  const [rides,             setRides]             = useState([]);
+  const [allRides,          setAllRides]          = useState([]);
+  const [loading,           setLoading]           = useState(true);
+  const [refreshing,        setRefreshing]        = useState(false);
+  const [selectedCategory,  setSelectedCategory]  = useState(null);
+  const [selectedUniversity,setSelectedUniversity]= useState(null);
+  const [airportDirection,  setAirportDirection]  = useState(null);
+  const [activeTab,         setActiveTab]         = useState(null);
+  const [sortBy,            setSortBy]            = useState('time');
+  const [searchQuery,       setSearchQuery]       = useState('');
   const colors = useTheme();
 
-
-  useEffect(() => { fetchRides(); }, [selectedCategory, selectedUniversity, airportDirection, activeTab]);
+  // Single fetch on focus; avoids double-fetch from useEffect + focus listener.
+  useFocusEffect(
+    useCallback(() => {
+      fetchRides();
+    }, [selectedCategory, selectedUniversity, airportDirection, activeTab])
+  );
 
   async function fetchRides() {
     try {
@@ -132,25 +191,26 @@ export default function BrowseRidesScreen({ navigation }) {
         );
       }
       setAllRides(data);
-      setRides(data);
-    } catch (error) {
-      console.error('Error fetching rides:', error);
+      applySearch(searchQuery, data);
+    } catch (err) {
+      console.error('fetchRides error:', err);
     } finally {
       setLoading(false);
     }
   }
 
+  function applySearch(text, source = allRides) {
+    const q = text.trim().toLowerCase();
+    if (!q) { setRides(source); return; }
+    setRides(source.filter(r =>
+      r.from_location?.toLowerCase().includes(q) ||
+      r.to_location?.toLowerCase().includes(q)
+    ));
+  }
+
   function handleSearch(text) {
     setSearchQuery(text);
-    if (text.trim().length === 0) {
-      setRides(allRides);
-    } else {
-      const q = text.toLowerCase();
-      setRides(allRides.filter(r =>
-        r.from_location?.toLowerCase().includes(q) ||
-        r.to_location?.toLowerCase().includes(q)
-      ));
-    }
+    applySearch(text);
   }
 
   async function handleRefresh() {
@@ -160,170 +220,232 @@ export default function BrowseRidesScreen({ navigation }) {
   }
 
   function getSortedRides() {
-    const sorted = [...rides];
-    if (sortBy === 'recent') {
-      sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    } else if (sortBy === 'time') {
-      sorted.sort((a, b) => new Date(a.ride_date) - new Date(b.ride_date));
-    }
-    return sorted;
+    return [...rides].sort((a, b) =>
+      sortBy === 'time'
+        ? new Date(a.ride_date)  - new Date(b.ride_date)
+        : new Date(b.created_at) - new Date(a.created_at)
+    );
   }
+
+  function selectCategory(catId) {
+    setSelectedCategory(catId);
+    if (catId !== 'university') setSelectedUniversity(null);
+    if (catId !== 'airport')    setAirportDirection(null);
+  }
+
+  const sorted = getSortedRides();
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
 
-      {/* Fixed header */}
+      {/* ── Header ── */}
       <SafeAreaView style={{ backgroundColor: colors.secondary }}>
-        <View style={[styles.headerBar, { backgroundColor: colors.secondary }]}>
-          <Text style={[styles.headerTitle, { color: '#fff' }]}>Carpool</Text>
+        <View style={styles.headerBar}>
+          <View>
+            <Text style={styles.headerTitle}>Carpool</Text>
+            <View style={styles.headerMetaRow}>
+              <View style={styles.cityPill}>
+                <Ionicons name="location-sharp" size={10} color="rgba(255,255,255,0.7)" />
+                <Text style={styles.cityPillText}>St. Louis, MO</Text>
+              </View>
+              {!loading && sorted.length > 0 && (
+                <Text style={styles.headerSub}>
+                  · {sorted.length} {sorted.length === 1 ? 'ride' : 'rides'}
+                </Text>
+              )}
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.postFab}
+            onPress={() => navigation.navigate('PostRide')}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="add" size={18} color="#fff" />
+            <Text style={styles.postFabText}>Share</Text>
+          </TouchableOpacity>
         </View>
-        <View style={[styles.searchContainer, { backgroundColor: 'rgba(255,255,255,0.15)', borderColor: 'transparent', borderWidth: 1, borderRadius: 10, marginHorizontal: 16, marginBottom: 10, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 7 }]}>
-          <Ionicons name="search-outline" size={14} color="rgba(255,255,255,0.7)" style={{ marginRight: 6 }} />
+
+        {/* Search */}
+        <View style={styles.searchWrap}>
+          <Ionicons name="search-outline" size={15} color="rgba(255,255,255,0.6)" />
           <TextInput
-            style={[styles.searchInput, { color: '#fff', flex: 1 }]}
-            placeholder="Search by location..."
-            placeholderTextColor="rgba(255,255,255,0.5)"
+            style={styles.searchInput}
+            placeholder="Search by location…"
+            placeholderTextColor="rgba(255,255,255,0.45)"
             value={searchQuery}
             onChangeText={handleSearch}
+            returnKeyType="search"
           />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => handleSearch('')}>
+              <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.6)" />
+            </TouchableOpacity>
+          )}
         </View>
       </SafeAreaView>
 
-      {/* Sticky filter menu */}
-      <View>
-        {/* Category Filter Row (ride type icons) */}
-        <View style={[styles.categoryContainer, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          {CATEGORIES.map((cat) => (
-            <TouchableOpacity
-              key={cat.id ?? 'all'}
-              style={[styles.categoryButton, selectedCategory === cat.id && { backgroundColor: '#2ECC7115' }]}
-              onPress={() => { setSelectedCategory(cat.id); if (cat.id !== 'university') setSelectedUniversity(null); if (cat.id !== 'airport') setAirportDirection(null); }}
-            >
-              <Ionicons name={cat.icon} size={18} color={selectedCategory === cat.id ? '#2ECC71' : colors.textLight} />
-              <Text style={[styles.categoryLabel, { color: selectedCategory === cat.id ? '#2ECC71' : colors.textLight }]}>
-                {cat.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+      {/* ── Filters ── */}
+      <View style={[styles.filterShell, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
 
-        {/* Type Filter Chips */}
-        <View style={[styles.filterRow, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          {[
-            { id: null, label: '🗺️ All', color: '#1D3557' },
-            { id: 'offers', label: '🚗 Offering Seat', color: '#2ECC71' },
-            { id: 'requests', label: '🙋 Need a Seat', color: '#9B59B6' },
-          ].map((f) => (
-            <TouchableOpacity
-              key={f.id ?? 'all'}
-              style={[styles.filterChip, {
-                backgroundColor: activeTab === f.id ? f.color + '18' : 'transparent',
-                borderColor: activeTab === f.id ? f.color : colors.border,
-              }]}
-              onPress={() => setActiveTab(f.id)}
-            >
-              <Text style={[styles.filterChipText, {
-                color: activeTab === f.id ? f.color : colors.textLight,
-                fontWeight: activeTab === f.id ? '700' : '500',
-              }]}>
-                {f.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Sort Row */}
-        <View style={[styles.sortRow, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <Ionicons name="swap-vertical-outline" size={14} color={colors.textLight} style={{ marginRight: 6 }} />
-          <Text style={[styles.sortLabel, { color: colors.textLight }]}>Sort:</Text>
-          {[
-            { id: 'recent', label: 'Recently Added', icon: 'time-outline' },
-            { id: 'time',   label: 'Ride Time',      icon: 'calendar-outline' },
-          ].map((s) => (
-            <TouchableOpacity
-              key={s.id}
-              style={[styles.sortChip, {
-                backgroundColor: sortBy === s.id ? '#2ECC7118' : 'transparent',
-                borderColor: sortBy === s.id ? '#2ECC71' : colors.border,
-              }]}
-              onPress={() => setSortBy(s.id)}
-            >
-              <Ionicons name={s.icon} size={12} color={sortBy === s.id ? '#2ECC71' : colors.textLight} />
-              <Text style={[styles.sortChipText, { color: sortBy === s.id ? '#2ECC71' : colors.textLight, fontWeight: sortBy === s.id ? '700' : '500' }]}>
-                {s.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* University Sub-filter */}
-        {selectedCategory === 'university' && (
-          <View style={[styles.universityRow, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-            {UNIVERSITIES.map((uni) => (
+        {/* Row 1: Category icons */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catRow}>
+          {CATEGORIES.map((cat) => {
+            const active = selectedCategory === cat.id;
+            return (
               <TouchableOpacity
-                key={uni.id}
-                style={[styles.universityChip, {
-                  backgroundColor: selectedUniversity === uni.id ? uni.color + '18' : colors.surface,
-                  borderColor: selectedUniversity === uni.id ? uni.color : colors.border,
-                }]}
-                onPress={() => setSelectedUniversity(selectedUniversity === uni.id ? null : uni.id)}
+                key={cat.id ?? 'all'}
+                style={[styles.catBtn, active && { backgroundColor: colors.secondary + '18' }]}
+                onPress={() => selectCategory(cat.id)}
               >
-                <Image source={uni.logo} style={styles.universityChipLogo} resizeMode="contain" />
-                <Text style={[styles.universityChipText, {
-                  color: selectedUniversity === uni.id ? uni.color : colors.textSecondary,
-                  fontWeight: selectedUniversity === uni.id ? '700' : '500',
-                }]}>
-                  {uni.label}
+                <Ionicons
+                  name={cat.icon}
+                  size={17}
+                  color={active ? colors.secondary : colors.textLight}
+                />
+                <Text style={[styles.catLabel, { color: active ? colors.secondary : colors.textLight, fontWeight: active ? '700' : '500' }]}>
+                  {cat.label}
                 </Text>
               </TouchableOpacity>
-            ))}
-          </View>
+            );
+          })}
+        </ScrollView>
+
+        {/* Row 2: Type + Sort chips */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+          {[
+            { id: null,       label: 'All',      color: colors.secondary },
+            { id: 'offers',   label: '🚗 Offering', color: OFFER_ACCENT },
+            { id: 'requests', label: '🙋 Needed',   color: REQUEST_ACCENT },
+          ].map((f) => {
+            const active = activeTab === f.id;
+            return (
+              <TouchableOpacity
+                key={f.id ?? 'all'}
+                style={[styles.chip, {
+                  backgroundColor: active ? f.color + '18' : 'transparent',
+                  borderColor: active ? f.color : colors.border,
+                }]}
+                onPress={() => setActiveTab(f.id)}
+              >
+                <Text style={[styles.chipText, { color: active ? f.color : colors.textLight, fontWeight: active ? '700' : '500' }]}>
+                  {f.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          {[
+            { id: 'time',   label: 'By Time',   icon: 'calendar-outline' },
+            { id: 'recent', label: 'Newest',     icon: 'time-outline' },
+          ].map((s) => {
+            const active = sortBy === s.id;
+            return (
+              <TouchableOpacity
+                key={s.id}
+                style={[styles.chip, {
+                  backgroundColor: active ? '#2ECC7118' : 'transparent',
+                  borderColor: active ? '#2ECC71' : colors.border,
+                }]}
+                onPress={() => setSortBy(s.id)}
+              >
+                <Ionicons name={s.icon} size={12} color={active ? '#2ECC71' : colors.textLight} />
+                <Text style={[styles.chipText, { color: active ? '#2ECC71' : colors.textLight, fontWeight: active ? '700' : '500' }]}>
+                  {s.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* University sub-filter */}
+        {selectedCategory === 'university' && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+            {UNIVERSITIES.map((uni) => {
+              const active = selectedUniversity === uni.id;
+              return (
+                <TouchableOpacity
+                  key={uni.id}
+                  style={[styles.chip, {
+                    backgroundColor: active ? uni.color + '18' : 'transparent',
+                    borderColor: active ? uni.color : colors.border,
+                    flexDirection: 'row', gap: 6, alignItems: 'center',
+                  }]}
+                  onPress={() => setSelectedUniversity(active ? null : uni.id)}
+                >
+                  <Image source={uni.logo} style={{ width: 16, height: 16, borderRadius: 3 }} resizeMode="contain" />
+                  <Text style={[styles.chipText, { color: active ? uni.color : colors.textLight, fontWeight: active ? '700' : '500' }]}>
+                    {uni.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         )}
 
-        {/* Airport Direction Sub-filter */}
+        {/* Airport sub-filter */}
         {selectedCategory === 'airport' && (
-          <View style={[styles.universityRow, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
             {[
               { id: 'to',   label: '✈️ To Airport' },
               { id: 'from', label: '🏠 From Airport' },
-            ].map((dir) => (
-              <TouchableOpacity
-                key={dir.id}
-                style={[styles.airportChip, {
-                  backgroundColor: airportDirection === dir.id ? '#1D355720' : colors.surface,
-                  borderColor: airportDirection === dir.id ? colors.secondary : colors.border,
-                }]}
-                onPress={() => setAirportDirection(airportDirection === dir.id ? null : dir.id)}
-              >
-                <Text style={[styles.airportChipLabel, { color: airportDirection === dir.id ? colors.secondary : colors.textSecondary, fontWeight: airportDirection === dir.id ? '700' : '500' }]}>
-                  {dir.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+            ].map((dir) => {
+              const active = airportDirection === dir.id;
+              return (
+                <TouchableOpacity
+                  key={dir.id}
+                  style={[styles.chip, {
+                    backgroundColor: active ? colors.secondary + '18' : 'transparent',
+                    borderColor: active ? colors.secondary : colors.border,
+                  }]}
+                  onPress={() => setAirportDirection(active ? null : dir.id)}
+                >
+                  <Text style={[styles.chipText, { color: active ? colors.secondary : colors.textLight, fontWeight: active ? '700' : '500' }]}>
+                    {dir.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         )}
-
       </View>
 
-      {/* Content */}
+      {/* ── Content ── */}
       {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2ECC71" />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Finding rides...</Text>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={OFFER_ACCENT} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Finding rides…</Text>
         </View>
-      ) : rides.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>{activeTab === 'requests' ? '🙋' : '🚗'}</Text>
+      ) : sorted.length === 0 ? (
+        <View style={styles.center}>
+          <View style={[styles.emptyIcon, { backgroundColor: colors.surface }]}>
+            <Ionicons name="car-outline" size={40} color={colors.textLight} />
+          </View>
           <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-            {activeTab === 'requests' ? 'No seat requests yet' : 'No carpools yet'}
+            {searchQuery
+              ? 'No rides match your search'
+              : activeTab === 'requests'
+                ? 'No seat requests in St. Louis yet'
+                : 'No carpools in St. Louis yet'}
           </Text>
-          <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-            {activeTab === 'requests' ? 'Need a seat? Post your request!' : 'Be the first to share a ride in St. Louis!'}
+          <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
+            {searchQuery
+              ? 'Try a different St. Louis location or neighborhood'
+              : 'Be the first to share a ride with the St. Louis community!'}
           </Text>
+          {!searchQuery && (
+            <TouchableOpacity
+              style={[styles.emptyAction, { backgroundColor: OFFER_ACCENT }]}
+              onPress={() => navigation.navigate('PostRide')}
+            >
+              <Text style={styles.emptyActionText}>Share a Ride</Text>
+            </TouchableOpacity>
+          )}
         </View>
       ) : (
         <FlatList
-          data={getSortedRides()}
+          data={sorted}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <RideCard
@@ -333,80 +455,110 @@ export default function BrowseRidesScreen({ navigation }) {
             />
           )}
           contentContainerStyle={styles.listContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2ECC71" />}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={OFFER_ACCENT} />
+          }
         />
       )}
-
-      {/* Post Button */}
-      <TouchableOpacity
-        style={[styles.postButton, { backgroundColor: '#2ECC71' }]}
-        onPress={() => navigation.navigate('PostRide')}
-      >
-        <Text style={styles.postButtonText}>+ Share Ride</Text>
-      </TouchableOpacity>
-
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  headerBar: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 },
-  headerTitle: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
-  searchContainer: { paddingVertical: 10 },
-  searchInput: { fontSize: 14, paddingVertical: 10 },
-  filterRow: { flexDirection: 'row', paddingHorizontal: 10, paddingVertical: 8, gap: 8, borderBottomWidth: 0.5 },
-  filterChip: { flex: 1, borderRadius: 20, paddingVertical: 7, paddingHorizontal: 6, alignItems: 'center', borderWidth: 1.5 },
-  filterChipText: { fontSize: 11 },
-  categoryContainer: { flexDirection: 'row', padding: 10, borderBottomWidth: 0.5 },
-  categoryButton: { flex: 1, alignItems: 'center', padding: 6, borderRadius: 8 },
-  categoryLabel: { fontSize: 10, marginTop: 2, textAlign: 'center' },
-  universityRow: { flexDirection: 'row', paddingHorizontal: 10, paddingVertical: 8, gap: 8, borderBottomWidth: 0.5 },
-  airportChip: { flex: 1, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 6, alignItems: 'center', borderWidth: 1.5, gap: 2 },
-  airportChipLabel: { fontSize: 12 },
-  airportChipSub: { fontSize: 10 },
-  universityChip: { flex: 1, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 4, alignItems: 'center', borderWidth: 1.5, gap: 4 },
-  universityChipLogo: { width: 32, height: 32 },
-  universityChipText: { fontSize: 10 },
-  sortRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 0.5 },
-  sortLabel: { fontSize: 11, fontWeight: '600', marginRight: 8 },
-  sortChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 16, borderWidth: 1.5, marginRight: 6 },
-  sortChipText: { fontSize: 11 },
-  cashNotice: { padding: 10, alignItems: 'center' },
-  cashNoticeText: { fontSize: 12, fontWeight: '500' },
-  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  loadingText: { marginTop: 10, fontSize: 14 },
-  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
-  emptyEmoji: { fontSize: 48, marginBottom: 12 },
-  emptyTitle: { fontSize: 18, fontWeight: '600' },
-  emptySubtitle: { fontSize: 14, marginTop: 6, textAlign: 'center' },
-  listContent: { padding: 10, paddingBottom: 80 },
-  card: {
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+
+  // Header
+  headerBar: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8,
   },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  typeBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  headerTitle:   { fontSize: 26, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
+  headerMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  headerSub:     { fontSize: 11, color: 'rgba(255,255,255,0.55)' },
+  cityPill:      { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  cityPillText:  { fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: '500' },
+  postFab: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: OFFER_ACCENT, borderRadius: 20,
+    paddingVertical: 8, paddingHorizontal: 14,
+  },
+  postFabText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+
+  // Search
+  searchWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.13)',
+    marginHorizontal: 16, marginBottom: 10,
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9,
+  },
+  searchInput: { flex: 1, color: '#fff', fontSize: 14, padding: 0 },
+
+  // Filters
+  filterShell: { borderBottomWidth: 0.5 },
+  catRow: { paddingHorizontal: 12, paddingVertical: 8, gap: 4 },
+  catBtn: { alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, gap: 3 },
+  catLabel: { fontSize: 10 },
+  chipRow: { paddingHorizontal: 12, paddingBottom: 8, gap: 6, alignItems: 'center' },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1.5,
+  },
+  chipText: { fontSize: 12 },
+  divider: { width: 1, height: 20, marginHorizontal: 2 },
+
+  // List
+  listContent: { padding: 12, paddingBottom: 90 },
+
+  // Card
+  card: {
+    borderRadius: 16, padding: 14, marginBottom: 10,
+    borderWidth: 1,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
+  },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  posterRow: { flexDirection: 'row', alignItems: 'center', gap: 9, flex: 1, marginRight: 8 },
+  posterAvatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  posterAvatarText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  posterName: { fontSize: 14, fontWeight: '700' },
+  posterMeta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  uniLogo: { width: 14, height: 14, borderRadius: 3 },
+  ratingText: { fontSize: 11, fontWeight: '700', color: '#F39C12' },
+  typeBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20, borderWidth: 1,
+  },
   typeBadgeText: { fontSize: 11, fontWeight: '700' },
-  categoryEmoji: { fontSize: 20 },
-  uniLogo: { width: 28, height: 28, borderRadius: 6 },
-  routeBlock: { flexDirection: 'row', marginBottom: 12 },
-  routeIndicator: { width: 16, alignItems: 'center', paddingTop: 4 },
-  dotOrigin: { width: 10, height: 10, borderRadius: 5 },
-  dotDest: { width: 10, height: 10, borderRadius: 5, borderWidth: 2, backgroundColor: 'transparent' },
-  routeLine: { width: 2, flex: 1, marginVertical: 3 },
-  routeText: { flex: 1, marginLeft: 10 },
+
+  // Route
+  routeBlock: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  routeTrack: { width: 14, alignItems: 'center', paddingTop: 4 },
+  dotFilled: { width: 10, height: 10, borderRadius: 5 },
+  dotRing: { width: 10, height: 10, borderRadius: 5, borderWidth: 2, backgroundColor: 'transparent' },
+  routeLine: { width: 2, flex: 1, marginVertical: 3, borderRadius: 1 },
+  routeLabels: { flex: 1, justifyContent: 'space-between' },
   locationText: { fontSize: 14, fontWeight: '600' },
+
+  // Stops
+  stopsRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 },
+  stopsText: { fontSize: 12, fontWeight: '500', flex: 1 },
+
+  // Pills
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20 },
   pillText: { fontSize: 11, fontWeight: '500' },
-  postButton: { position: 'absolute', bottom: 20, right: 20, borderRadius: 25, paddingVertical: 12, paddingHorizontal: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 4 },
-  postButtonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+
+  // States
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
+  loadingText: { marginTop: 12, fontSize: 14 },
+  emptyIcon: {
+    width: 80, height: 80, borderRadius: 24,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+  },
+  emptyTitle: { fontSize: 17, fontWeight: '700', textAlign: 'center' },
+  emptySub: { fontSize: 14, marginTop: 6, textAlign: 'center', lineHeight: 20 },
+  emptyAction: {
+    marginTop: 20, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 28,
+  },
+  emptyActionText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });

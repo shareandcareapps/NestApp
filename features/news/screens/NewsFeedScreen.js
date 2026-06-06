@@ -77,6 +77,10 @@ export default function NewsFeedScreen({ navigation }) {
       <SafeAreaView style={{ backgroundColor: colors.secondary }}>
         <View style={[styles.headerBar, { backgroundColor: colors.secondary }]}>
           <Text style={[styles.headerTitle, { color: '#fff' }]}>News</Text>
+          <View style={styles.cityPill}>
+            <Ionicons name="location-sharp" size={10} color="rgba(255,255,255,0.7)" />
+            <Text style={styles.cityPillText}>St. Louis, MO</Text>
+          </View>
         </View>
       </SafeAreaView>
       <View style={[styles.filterContainer, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
@@ -103,9 +107,9 @@ export default function NewsFeedScreen({ navigation }) {
       ) : news.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyEmoji}>📭</Text>
-          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No news yet</Text>
+          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No St. Louis news yet</Text>
           <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-            Check back soon for St. Louis Indian community news
+            Check back soon — local news for the St. Louis Indian community will appear here
           </Text>
         </View>
       ) : (
@@ -126,7 +130,9 @@ export default function NewsFeedScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   headerBar: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12 },
-  headerTitle: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
+  headerTitle: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5, color: '#fff' },
+  cityPill: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
+  cityPillText: { fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: '500' },
   filterContainer: { flexDirection: 'row', padding: 12, borderBottomWidth: 0.5, gap: 8 },
   filterButton: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 0.5 },
   filterLabel: { fontSize: 13, fontWeight: '500' },
@@ -136,7 +142,7 @@ const styles = StyleSheet.create({
   emptyEmoji: { fontSize: 48, marginBottom: 12 },
   emptyTitle: { fontSize: 18, fontWeight: '600' },
   emptySubtitle: { fontSize: 14, marginTop: 6, textAlign: 'center', lineHeight: 20 },
-  listContent: { padding: 12 },
+  listContent: { padding: 12, paddingBottom: 80 },
   card: { borderRadius: 12, marginBottom: 12, borderWidth: 0.5, overflow: 'hidden' },
   cardBanner: { height: 80, alignItems: 'center', justifyContent: 'center' },
   bannerEmoji: { fontSize: 36 },

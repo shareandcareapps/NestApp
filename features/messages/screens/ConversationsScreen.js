@@ -1,18 +1,22 @@
 // features/messages/screens/ConversationsScreen.js
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, SafeAreaView, TextInput } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, SafeAreaView, TextInput, Alert, Image } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { getConversations, getUnreadCountPerConversation } from '../services/messagesService';
 import useAppStore from '../../../core/store/index';
 import { useTheme } from '../../../core/theme/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../../../core/database/index';
+import { formatDisplayName } from '../../../core/components/UserProfileModal';
+import { getPendingVerificationForBuyer, resolveVerification } from '../../../core/services/salesService';
+import RatingModal from '../../../core/components/RatingModal';
 
 function ConversationCard({ item, currentUserId, hasUnread, onPress, colors }) {
   const otherUserId = item.participant_1 === currentUserId
     ? item.participant_2
     : item.participant_1;
 
-  const rawName = item.otherProfile?.username || item.otherProfile?.full_name || 'Community Member';
-  const name = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+  const name = formatDisplayName(item.otherProfile?.username);
   const initials = name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
 
   const timeAgo = (date) => {
@@ -28,39 +32,53 @@ function ConversationCard({ item, currentUserId, hasUnread, onPress, colors }) {
 
   const avatarColors = ['#E63946', '#1D3557', '#2ECC71', '#3498DB', '#9B59B6', '#F39C12'];
   const colorIndex = name.charCodeAt(0) % avatarColors.length;
+  const avatarColor = avatarColors[colorIndex];
 
   return (
     <TouchableOpacity
-      style={[styles.card, {
-        backgroundColor: hasUnread ? colors.surfaceSecondary : colors.card,
-        borderBottomColor: colors.borderLight,
-      }]}
-      onPress={() => onPress(item, item.otherProfile || { id: otherUserId, full_name: name })}
+      activeOpacity={0.7}
+      style={[styles.card, { backgroundColor: colors.card }]}
+      onPress={() => onPress(item, item.otherProfile || { id: otherUserId, username: name })}
     >
       {/* Avatar */}
-      <View style={[styles.avatarWrap]}>
-        <View style={[styles.avatar, { backgroundColor: avatarColors[colorIndex] }]}>
+      <View style={styles.avatarWrap}>
+        <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
           <Text style={styles.avatarText}>{initials}</Text>
         </View>
-        {hasUnread && <View style={[styles.onlineDot, { backgroundColor: '#9B59B6' }]} />}
+        {hasUnread && <View style={[styles.unreadRing, { borderColor: colors.card }]} />}
       </View>
 
       <View style={styles.cardContent}>
         <View style={styles.cardHeader}>
-          <Text style={[styles.cardName, { color: colors.textPrimary, fontWeight: hasUnread ? '700' : '600' }]} numberOfLines={1}>
+          <Text style={[styles.cardName, { color: colors.textPrimary, fontWeight: hasUnread ? '800' : '600' }]} numberOfLines={1}>
             {name}
           </Text>
-          <Text style={[styles.cardTime, { color: hasUnread ? '#9B59B6' : colors.textLight, fontWeight: hasUnread ? '600' : '400' }]}>
+          <Text style={[styles.cardTime, { color: hasUnread ? '#9B59B6' : colors.textLight, fontWeight: hasUnread ? '700' : '400' }]}>
             {timeAgo(item.last_message_at)}
           </Text>
         </View>
+
+        {item.listingTitle ? (
+          <View style={[styles.listingTag, { backgroundColor: avatarColor + '14' }]}>
+            <Ionicons name="pricetag" size={10} color={avatarColor} />
+            <Text style={[styles.listingTagText, { color: avatarColor }]} numberOfLines={1}>
+              {item.listingTitle}
+            </Text>
+          </View>
+        ) : null}
+
         <View style={styles.cardBottom}>
-          <Text style={[styles.cardLastMessage, {
-            color: hasUnread ? colors.textPrimary : colors.textSecondary,
-            fontWeight: hasUnread ? '600' : '400',
-            flex: 1,
-          }]} numberOfLines={1}>
-            {item.last_message || 'Start a conversation...'}
+          <Text
+            style={[styles.cardLastMessage, {
+              color: hasUnread ? colors.textPrimary : colors.textSecondary,
+              fontWeight: hasUnread ? '600' : '400',
+              flex: 1,
+            }]}
+            numberOfLines={1}
+          >
+            {item.last_message
+              ? `${item.lastSenderId === currentUserId ? 'You: ' : ''}${item.last_message}`
+              : 'Start a conversation…'}
           </Text>
           {hasUnread && <View style={styles.badge} />}
         </View>
@@ -77,6 +95,8 @@ export default function ConversationsScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [pendingVerification, setPendingVerification] = useState(null);
+  const [ratingModal, setRatingModal] = useState({ visible: false, toUserId: null, toUsername: null, referenceId: null });
   const user = useAppStore((state) => state.user);
   const unreadConversationIds = useAppStore((state) => state.unreadConversationIds);
   const addUnreadConversation = useAppStore((state) => state.addUnreadConversation);
@@ -96,41 +116,55 @@ export default function ConversationsScreen({ navigation }) {
   }, [unreadConversationIds]);
 
   const allConversationsRef = useRef([]);
-  const lastSnapshotRef = useRef('');
 
-  useEffect(() => {
-    fetchConversations();
-    const interval = setInterval(pollConversations, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  async function pollConversations() {
+  async function refreshPendingVerification() {
+    if (!user?.id) return;
     try {
-      const data = await getConversations(user.id);
-      if (!data) return;
-
-      const snapshot = data.map(c => `${c.id}:${c.last_message_at}`).join('|');
-      if (snapshot === lastSnapshotRef.current) return;
-      lastSnapshotRef.current = snapshot;
-
-      // Detect which conversations have new messages FROM THE OTHER PERSON
-      data.forEach(conv => {
-        const prev = allConversationsRef.current.find(c => c.id === conv.id);
-        const isNewer = prev && conv.last_message_at !== prev.last_message_at;
-        const fromOther = conv.lastSenderId && conv.lastSenderId !== user.id;
-        const alreadyUnread = unreadMapRef.current[conv.id];
-        if (isNewer && fromOther && !alreadyUnread) {
-          addUnreadConversation(conv.id);
-        }
-      });
-
-      allConversationsRef.current = data;
-      setAllConversations(data);
-      setConversations(data);
-    } catch (_) {}
+      const pending = await getPendingVerificationForBuyer(user.id);
+      setPendingVerification(pending);
+    } catch (e) {
+      console.error('pending verification check:', e);
+    }
   }
 
+  useEffect(() => {
+    if (!user?.id) return;
+    fetchConversations();
+
+    const channel = supabase
+      .channel('conversations-watch')
+      // New messages → refresh conversation list
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        async (payload) => {
+          const newMsg = payload.new;
+          const data = await getConversations(user.id).catch(() => null);
+          if (!data) return;
+          const fromOther = newMsg.sender_id && newMsg.sender_id !== user.id;
+          const alreadyUnread = unreadMapRef.current[newMsg.conversation_id];
+          if (fromOther && !alreadyUnread) addUnreadConversation(newMsg.conversation_id);
+          allConversationsRef.current = data;
+          setAllConversations(data);
+          setConversations(data);
+        }
+      )
+      // New sale verification targeting this user as buyer → show banner instantly
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'sale_verifications', filter: `buyer_id=eq.${user.id}` },
+        () => refreshPendingVerification()
+      )
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
+  }, []);
+
+  // Re-check pending verification every time the tab regains focus (robust fallback to realtime)
+  useFocusEffect(
+    useCallback(() => { refreshPendingVerification(); }, [user?.id])
+  );
+
   async function fetchConversations() {
+    if (!user?.id) { setLoading(false); return; }
     try {
       setLoading(true);
       const [data, unreadPerConv] = await Promise.all([
@@ -140,14 +174,38 @@ export default function ConversationsScreen({ navigation }) {
       setAllConversations(data);
       setConversations(data);
       allConversationsRef.current = data;
-      lastSnapshotRef.current = data.map(c => `${c.id}:${c.last_message_at}`).join('|');
-      // Set initial unread state from DB
       const ids = Object.keys(unreadPerConv);
       setInitialUnread(ids);
+      await refreshPendingVerification();
     } catch (error) {
       console.error('Error fetching conversations:', error);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleVerifyPurchase(verify) {
+    if (!pendingVerification) return;
+    const current = pendingVerification;
+    setPendingVerification(null); // dismiss banner immediately
+
+    try {
+      await resolveVerification(current, verify);
+    } catch (e) {
+      Alert.alert('Error', 'Could not update verification. Please try again.');
+      setPendingVerification(current); // restore on failure
+      return;
+    }
+
+    if (verify) {
+      setRatingModal({
+        visible: true,
+        toUserId: current.seller_id,
+        toUsername: current.seller?.username,
+        referenceId: current.listing?.id,
+      });
+    } else {
+      Alert.alert('Noted', 'Thank you for letting us know.');
     }
   }
 
@@ -159,7 +217,6 @@ export default function ConversationsScreen({ navigation }) {
       const q = text.toLowerCase();
       setConversations(allConversations.filter(c =>
         c.otherProfile?.username?.toLowerCase().includes(q) ||
-        c.otherProfile?.full_name?.toLowerCase().includes(q) ||
         c.last_message?.toLowerCase().includes(q)
       ));
     }
@@ -170,6 +227,10 @@ export default function ConversationsScreen({ navigation }) {
     await fetchConversations();
     setRefreshing(false);
   }
+
+  // During logout the auth user briefly becomes null while this screen is still
+  // mounted — render nothing rather than dereferencing user.id.
+  if (!user?.id) return null;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -188,6 +249,60 @@ export default function ConversationsScreen({ navigation }) {
           />
         </View>
       </SafeAreaView>
+      {/* Purchase verification banner — always visible, outside list/empty state */}
+      {!loading && pendingVerification && (
+        <View style={[styles.verifyCard, { backgroundColor: colors.card }]}>
+          <View style={styles.verifyAccent} />
+          <View style={styles.verifyHeaderRow}>
+            <View style={styles.verifyIconCircle}>
+              <Ionicons name="bag-check" size={18} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.verifyTitle, { color: colors.textPrimary }]}>Confirm your purchase</Text>
+              <Text style={[styles.verifySub, { color: colors.textLight }]}>
+                {formatDisplayName(pendingVerification.seller?.username)} marked this as sold to you
+              </Text>
+            </View>
+          </View>
+
+          <View style={[styles.verifyItemCard, { backgroundColor: colors.surfaceSecondary, borderColor: colors.borderLight }]}>
+            {pendingVerification.displayImage ? (
+              <Image source={{ uri: pendingVerification.displayImage }} style={styles.verifyItemImage} />
+            ) : (
+              <View style={[styles.verifyItemImage, styles.verifyItemPlaceholder, { backgroundColor: colors.border }]}>
+                <Ionicons name="cube-outline" size={20} color={colors.textLight} />
+              </View>
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.verifyItemText, { color: colors.textPrimary }]} numberOfLines={1}>
+                {pendingVerification.displayTitle || 'Item'}
+              </Text>
+              {pendingVerification.displayPrice != null && (
+                <Text style={styles.verifyItemPrice}>${pendingVerification.displayPrice}</Text>
+              )}
+            </View>
+          </View>
+
+          <View style={styles.verifyActions}>
+            <TouchableOpacity
+              style={[styles.verifyBtn, { backgroundColor: '#2ECC71' }]}
+              activeOpacity={0.85}
+              onPress={() => handleVerifyPurchase(true)}
+            >
+              <Ionicons name="checkmark-circle" size={16} color="#fff" />
+              <Text style={styles.verifyBtnText}>Yes, I bought it</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.verifyBtnOutline, { borderColor: colors.border }]}
+              activeOpacity={0.7}
+              onPress={() => handleVerifyPurchase(false)}
+            >
+              <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: 14 }}>Not me</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#9B59B6" />
@@ -198,7 +313,7 @@ export default function ConversationsScreen({ navigation }) {
           <Text style={styles.emptyEmoji}>💬</Text>
           <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No messages yet</Text>
           <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-            Contact a listing owner or ride driver to start chatting
+            Connect with your St. Louis neighbors — contact a listing owner or carpool driver to start chatting
           </Text>
         </View>
       ) : (
@@ -217,9 +332,23 @@ export default function ConversationsScreen({ navigation }) {
               }}
             />
           )}
+          ListHeaderComponent={null}
+          ItemSeparatorComponent={() => (
+            <View style={{ height: 0.5, backgroundColor: colors.borderLight, marginLeft: 83 }} />
+          )}
+          contentContainerStyle={{ paddingBottom: 80 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#9B59B6" />}
         />
       )}
+
+      <RatingModal
+        visible={ratingModal.visible}
+        toUserId={ratingModal.toUserId}
+        toUsername={ratingModal.toUsername}
+        type="listing"
+        referenceId={ratingModal.referenceId}
+        onDone={() => setRatingModal({ visible: false, toUserId: null, toUsername: null, referenceId: null })}
+      />
     </View>
   );
 }
@@ -236,16 +365,35 @@ const styles = StyleSheet.create({
   emptyEmoji: { fontSize: 48, marginBottom: 12 },
   emptyTitle: { fontSize: 18, fontWeight: '600' },
   emptySubtitle: { fontSize: 14, marginTop: 6, textAlign: 'center', lineHeight: 20 },
-  card: { flexDirection: 'row', alignItems: 'center', padding: 14, borderBottomWidth: 0.5, gap: 12 },
+  card: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 13 },
   avatarWrap: { position: 'relative' },
-  avatar: { width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  onlineDot: { position: 'absolute', bottom: 1, right: 1, width: 13, height: 13, borderRadius: 7, borderWidth: 2, borderColor: '#fff' },
-  cardContent: { flex: 1 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 },
-  cardName: { fontSize: 15, flex: 1 },
+  avatar: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  unreadRing: { position: 'absolute', top: -1, right: -1, width: 15, height: 15, borderRadius: 8, borderWidth: 2.5, backgroundColor: '#9B59B6' },
+  cardContent: { flex: 1, gap: 3 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  cardName: { fontSize: 16, flex: 1, letterSpacing: -0.2 },
   cardTime: { fontSize: 12, marginLeft: 8 },
+  listingTag: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 },
+  listingTagText: { fontSize: 11, fontWeight: '600', maxWidth: 220 },
   cardBottom: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  cardLastMessage: { fontSize: 13 },
-  badge: { backgroundColor: '#9B59B6', borderRadius: 6, width: 12, height: 12 },
+  cardLastMessage: { fontSize: 14 },
+  badge: { backgroundColor: '#9B59B6', borderRadius: 5, width: 10, height: 10 },
+
+  // Premium purchase-confirmation card
+  verifyCard: { marginHorizontal: 14, marginTop: 12, borderRadius: 18, padding: 16, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
+  verifyAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: '#2ECC71' },
+  verifyHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
+  verifyIconCircle: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#2ECC71', alignItems: 'center', justifyContent: 'center' },
+  verifyTitle: { fontSize: 16, fontWeight: '800', letterSpacing: -0.3 },
+  verifySub: { fontSize: 12, marginTop: 1 },
+  verifyItemCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 12, padding: 10, marginBottom: 14, borderWidth: 0.5 },
+  verifyItemImage: { width: 46, height: 46, borderRadius: 9 },
+  verifyItemPlaceholder: { alignItems: 'center', justifyContent: 'center' },
+  verifyItemText: { fontSize: 14, fontWeight: '700' },
+  verifyItemPrice: { fontSize: 13, fontWeight: '700', color: '#2ECC71', marginTop: 2 },
+  verifyActions: { flexDirection: 'row', gap: 10 },
+  verifyBtn: { flex: 1, flexDirection: 'row', gap: 6, borderRadius: 12, paddingVertical: 13, alignItems: 'center', justifyContent: 'center' },
+  verifyBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  verifyBtnOutline: { borderRadius: 12, paddingVertical: 13, paddingHorizontal: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
 });

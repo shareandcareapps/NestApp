@@ -23,7 +23,7 @@ export default function MessagesNavigator() {
       <Stack.Screen
         name="Chat"
         component={ChatScreen}
-        options={{ title: '' }}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );
