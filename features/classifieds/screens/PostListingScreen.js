@@ -1,30 +1,139 @@
 // features/classifieds/screens/PostListingScreen.js
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, ActivityIndicator, Alert, Image, Switch, SafeAreaView,
+  ScrollView, ActivityIndicator, Alert, Image, Switch, Animated,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
+import Toast from 'react-native-toast-message';
 import { compressImage } from '../../../core/utils/imageUtils';
 import { createListing } from '../services/listingsService';
 import useAppStore from '../../../core/store/index';
 import { supabase } from '../../../core/database/index';
 import { useTheme } from '../../../core/theme/ThemeContext';
 import { awardPoints } from '../../../core/services/pointsService';
+import StepProgress from '../../../core/components/StepProgress';
+import { fonts, spacing, borderRadius, shadows } from '../../../core/theme/index';
 
 const CATEGORIES = [
-  { id: 'accommodation', label: 'Accommodation', emoji: '🏠' },
-  { id: 'jobs', label: 'Jobs & Work', emoji: '💼' },
-  { id: 'buysell', label: 'Buy & Sell', emoji: '🛍️' },
-  { id: 'food', label: 'Food & Tiffin', emoji: '🍱' },
+  { id: 'accommodation', label: 'Housing',    emoji: '🏠', gradient: ['#FF6B6B','#E84393'] },
+  { id: 'jobs',          label: 'Jobs',        emoji: '💼', gradient: ['#00C48C','#007A5E'] },
+  { id: 'buysell',       label: 'Buy & Sell',  emoji: '🛍️', gradient: ['#0099FF','#0055CC'] },
+  { id: 'food',          label: 'Food & Tiffin',emoji: '🍱', gradient: ['#F4A833','#E68A00'] },
 ];
 
-const BUY_SELL_CATEGORIES = [
-  'Cars', 'Furniture', 'Electronics', 'Toys & Games',
-  'Clothing & Apparel', 'Books', 'Appliances', 'Other',
-];
+const BUY_SELL_CATEGORIES = ['Cars','Furniture','Electronics','Toys & Games','Clothing & Apparel','Books','Appliances','Other'];
 
+// ─── Shared form sub-components ───────────────────────────────────────────────
+
+function FormLabel({ children, optional, theme }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, marginTop: 18 }}>
+      <Text style={[fStyles.label, { color: theme.textPrimary }]}>{children}</Text>
+      {optional && <Text style={[fStyles.optional, { color: theme.textLight }]}>optional</Text>}
+    </View>
+  );
+}
+const fStyles = StyleSheet.create({
+  label: { fontSize: fonts.sizes.sm, fontWeight: '700', letterSpacing: 0.2 },
+  optional: { fontSize: 11, fontStyle: 'italic' },
+});
+
+function FormInput({ value, onChangeText, placeholder, multiline, keyboardType, editable = true, theme, numberOfLines }) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <TextInput
+      style={[inputStyle.base, multiline && inputStyle.area, { backgroundColor: theme.inputBackground, borderColor: focused ? '#F4A833' : theme.border, color: theme.textPrimary }]}
+      value={value} onChangeText={onChangeText} placeholder={placeholder}
+      placeholderTextColor={theme.textLight} multiline={multiline}
+      keyboardType={keyboardType || 'default'} editable={editable}
+      numberOfLines={numberOfLines} textAlignVertical={multiline ? 'top' : 'auto'}
+      onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+    />
+  );
+}
+const inputStyle = StyleSheet.create({
+  base: { borderRadius: borderRadius.md, padding: 14, fontSize: fonts.sizes.md, borderWidth: 1.5 },
+  area: { minHeight: 100, textAlignVertical: 'top' },
+});
+
+function ToggleRow({ options, selected, onSelect, activeColor, theme }) {
+  return (
+    <View style={{ flexDirection: 'row', gap: 10 }}>
+      {options.map(opt => {
+        const isActive = selected === opt.id;
+        return (
+          <TouchableOpacity
+            key={opt.id}
+            style={[tStyles.btn, { backgroundColor: isActive ? activeColor + '18' : theme.card, borderColor: isActive ? activeColor : theme.border, borderWidth: isActive ? 2 : 1 }]}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onSelect(opt.id); }}
+          >
+            <Text style={[tStyles.txt, { color: isActive ? activeColor : theme.textSecondary, fontWeight: isActive ? '700' : '500' }]}>{opt.label}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+const tStyles = StyleSheet.create({
+  btn: { flex: 1, borderRadius: borderRadius.md, padding: 12, alignItems: 'center' },
+  txt: { fontSize: fonts.sizes.sm },
+});
+
+function SwitchRow({ label, value, onValueChange, color, theme }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+      <Text style={[{ color: theme.textSecondary, fontSize: fonts.sizes.sm }]}>{label}</Text>
+      <Switch value={value} onValueChange={onValueChange} trackColor={{ false: theme.border, true: color }} thumbColor={value ? '#fff' : '#ccc'} />
+    </View>
+  );
+}
+
+function PhotosSection({ images, uploading, uploadProgress, onAdd, onRemove, accentColor, theme }) {
+  return (
+    <View style={photoStyles.row}>
+      {images.map((uri, i) => (
+        <View key={i} style={photoStyles.wrap}>
+          <Image source={{ uri }} style={photoStyles.img} />
+          <TouchableOpacity style={photoStyles.remove} onPress={() => onRemove(i)}>
+            <Ionicons name="close" size={12} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      ))}
+      {images.length < 4 && (
+        <TouchableOpacity style={[photoStyles.addBtn, { backgroundColor: theme.card, borderColor: accentColor }]} onPress={onAdd} disabled={uploading}>
+          {uploading
+            ? <View style={{ alignItems: 'center', gap: 4 }}>
+                <ActivityIndicator color={accentColor} size="small" />
+                <View style={{ width: 50, height: 3, backgroundColor: theme.border, borderRadius: 2 }}>
+                  <View style={{ width: `${uploadProgress}%`, height: 3, backgroundColor: accentColor, borderRadius: 2 }} />
+                </View>
+              </View>
+            : <>
+                <Ionicons name="camera" size={22} color={accentColor} />
+                <Text style={[photoStyles.addTxt, { color: accentColor }]}>Add Photo</Text>
+              </>
+          }
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+const photoStyles = StyleSheet.create({
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  wrap: { position: 'relative' },
+  img: { width: 80, height: 80, borderRadius: borderRadius.md },
+  remove: { position: 'absolute', top: -6, right: -6, backgroundColor: '#FF6B6B', borderRadius: 10, width: 20, height: 20, alignItems: 'center', justifyContent: 'center' },
+  addBtn: { width: 80, height: 80, borderRadius: borderRadius.md, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  addTxt: { fontSize: 10, fontWeight: '600' },
+});
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function PostListingScreen({ navigation, route }) {
   const preselected = route?.params?.preselectedCategory || null;
   const [category, setCategory] = useState(preselected);
@@ -34,15 +143,17 @@ export default function PostListingScreen({ navigation, route }) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [images, setImages] = useState([]);
   const user = useAppStore((state) => state.user);
-  const colors = useTheme();
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const btnScale = useRef(new Animated.Value(1)).current;
 
-  // ─── Accommodation fields ──────────────────
+  // Accommodation
   const [acTitle, setAcTitle] = useState('');
   const [acDescription, setAcDescription] = useState('');
   const [acPrice, setAcPrice] = useState('');
   const [acLocation, setAcLocation] = useState('');
 
-  // ─── Jobs fields ───────────────────────────
+  // Jobs
   const [jobRole, setJobRole] = useState('');
   const [jobCompany, setJobCompany] = useState('');
   const [jobSalary, setJobSalary] = useState('');
@@ -53,7 +164,7 @@ export default function PostListingScreen({ navigation, route }) {
   const [jobJoining, setJobJoining] = useState('immediate');
   const [jobDescription, setJobDescription] = useState('');
 
-  // ─── Buy & Sell fields ─────────────────────
+  // Buy & Sell
   const [bsProductName, setBsProductName] = useState('');
   const [bsDescription, setBsDescription] = useState('');
   const [bsPrice, setBsPrice] = useState('');
@@ -62,7 +173,7 @@ export default function PostListingScreen({ navigation, route }) {
   const [bsCondition, setBsCondition] = useState('used');
   const [bsPickupLocation, setBsPickupLocation] = useState('');
 
-  // ─── Food & Tiffin fields ──────────────────
+  // Food
   const [foodTitle, setFoodTitle] = useState('');
   const [foodDescription, setFoodDescription] = useState('');
   const [foodPrice, setFoodPrice] = useState('');
@@ -70,766 +181,310 @@ export default function PostListingScreen({ navigation, route }) {
   const [foodPickup, setFoodPickup] = useState(false);
   const [foodDelivery, setFoodDelivery] = useState(false);
 
+  const activeCat = CATEGORIES.find(c => c.id === category);
+  const accentColor = activeCat?.gradient?.[0] || '#F4A833';
+
   async function pickImage() {
-    if (images.length >= 4) { Alert.alert('Maximum 4 photos allowed'); return; }
+    if (images.length >= 4) { Toast.show({ type: 'warning', text1: 'Max 4 photos' }); return; }
     Alert.alert('Add Photo', 'Choose a source', [
-      {
-        text: '📷 Camera',
-        onPress: async () => {
-          const permission = await ImagePicker.requestCameraPermissionsAsync();
-          if (!permission.granted) {
-            Alert.alert('Permission needed', 'Please allow access to your camera.');
-            return;
-          }
-          const result = await ImagePicker.launchCameraAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: false,
-            quality: 0.8,
-          });
-          if (!result.canceled) await uploadImage(result.assets[0]);
-        },
-      },
-      {
-        text: '🖼️ Photo Library',
-        onPress: async () => {
-          const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-          if (!permission.granted) {
-            Alert.alert('Permission needed', 'Please allow access to your photos.');
-            return;
-          }
-          const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: false,
-            quality: 0.8,
-          });
-          if (!result.canceled) await uploadImage(result.assets[0]);
-        },
-      },
+      { text: '📷 Camera', onPress: async () => {
+        const p = await ImagePicker.requestCameraPermissionsAsync();
+        if (!p.granted) { Toast.show({ type: 'error', text1: 'Permission needed', text2: 'Allow camera access.' }); return; }
+        const r = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
+        if (!r.canceled) await uploadImage(r.assets[0]);
+      }},
+      { text: '🖼️ Photo Library', onPress: async () => {
+        const p = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!p.granted) { Toast.show({ type: 'error', text1: 'Permission needed', text2: 'Allow photo access.' }); return; }
+        const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
+        if (!r.canceled) await uploadImage(r.assets[0]);
+      }},
       { text: 'Cancel', style: 'cancel' },
     ]);
   }
 
   async function uploadImage(imageAsset) {
     try {
-      setUploading(true);
-      setUploadProgress(10);
+      setUploading(true); setUploadProgress(10);
       const compressedUri = await compressImage(imageAsset.uri);
-      const ext = 'jpg';
-      const fileName = `${user.id}/${Date.now()}.${ext}`;
+      const fileName = `${user.id}/${Date.now()}.jpg`;
       setUploadProgress(30);
       const response = await fetch(compressedUri);
       const blob = await response.blob();
       const arrayBuffer = await new Response(blob).arrayBuffer();
       setUploadProgress(60);
-      const { error } = await supabase.storage.from('listings').upload(fileName, arrayBuffer, { contentType: `image/${ext}` });
+      const { error } = await supabase.storage.from('listings').upload(fileName, arrayBuffer, { contentType: 'image/jpg' });
       if (error) throw error;
       setUploadProgress(90);
       const { data: urlData } = supabase.storage.from('listings').getPublicUrl(fileName);
-      setImages((prev) => [...prev, urlData.publicUrl]);
+      setImages(prev => [...prev, urlData.publicUrl]);
       setUploadProgress(100);
     } catch (error) {
-      Alert.alert('Upload failed', `Could not upload image: ${error.message}`);
-    } finally {
-      setUploading(false);
-      setUploadProgress(0);
-    }
+      Toast.show({ type: 'error', text1: 'Upload failed', text2: error.message });
+    } finally { setUploading(false); setUploadProgress(0); }
   }
 
-  function removeImage(index) {
-    setImages((prev) => prev.filter((_, i) => i !== index));
-  }
+  function removeImage(index) { setImages(prev => prev.filter((_, i) => i !== index)); }
 
   function buildListingData() {
     const base = { user_id: user.id, category, city: 'St. Louis', state: 'Missouri', images };
-
-    if (category === 'accommodation') {
-      return {
-        ...base,
-        title: acTitle,
-        description: acDescription,
-        price: acPrice ? parseFloat(acPrice) : null,
-        metadata: { location: acLocation },
-      };
-    }
-
-    if (category === 'jobs') {
-      return {
-        ...base,
-        title: jobRole,
-        description: jobDescription,
-        price: jobSalaryOpen ? null : jobSalary ? parseFloat(jobSalary) : null,
-        metadata: {
-          company: jobCompany,
-          salary_open: jobSalaryOpen,
-          job_type: jobType,
-          hours_per_week: jobHours,
-          location: jobLocation,
-          joining: jobJoining,
-        },
-      };
-    }
-
-    if (category === 'buysell') {
-      return {
-        ...base,
-        title: bsProductName,
-        description: bsDescription,
-        price: bsPrice ? parseFloat(bsPrice) : null,
-        metadata: {
-          negotiable: bsNegotiable,
-          product_category: bsProductCategory,
-          condition: bsCondition,
-          pickup_location: bsPickupLocation,
-        },
-      };
-    }
-
-    if (category === 'food') {
-      return {
-        ...base,
-        title: foodTitle,
-        description: foodDescription,
-        price: foodPrice ? parseFloat(foodPrice) : null,
-        metadata: {
-          negotiable: foodNegotiable,
-          pickup: foodPickup,
-          delivery: foodDelivery,
-        },
-      };
-    }
+    if (category === 'accommodation') return { ...base, title: acTitle, description: acDescription, price: acPrice ? parseFloat(acPrice) : null, metadata: { location: acLocation } };
+    if (category === 'jobs') return { ...base, title: jobRole, description: jobDescription, price: jobSalaryOpen ? null : jobSalary ? parseFloat(jobSalary) : null, metadata: { company: jobCompany, salary_open: jobSalaryOpen, job_type: jobType, hours_per_week: jobHours, location: jobLocation, joining: jobJoining } };
+    if (category === 'buysell') return { ...base, title: bsProductName, description: bsDescription, price: bsPrice ? parseFloat(bsPrice) : null, metadata: { negotiable: bsNegotiable, product_category: bsProductCategory, condition: bsCondition, pickup_location: bsPickupLocation } };
+    if (category === 'food') return { ...base, title: foodTitle, description: foodDescription, price: foodPrice ? parseFloat(foodPrice) : null, metadata: { negotiable: foodNegotiable, pickup: foodPickup, delivery: foodDelivery } };
   }
 
   function validateForm() {
-    if (!category) { Alert.alert('Error', 'Please select a category'); return false; }
-    if (category === 'accommodation' && !acTitle) { Alert.alert('Error', 'Please enter a title'); return false; }
-    if (category === 'jobs' && !jobRole) { Alert.alert('Error', 'Please enter job role'); return false; }
-    if (category === 'jobs' && !jobCompany) { Alert.alert('Error', 'Please enter company/store name'); return false; }
-    if (category === 'buysell' && !bsProductName) { Alert.alert('Error', 'Please enter product name'); return false; }
-    if (category === 'food' && !foodTitle) { Alert.alert('Error', 'Please enter a title'); return false; }
+    if (!category) { Toast.show({ type: 'warning', text1: 'Select a category' }); return false; }
+    if (category === 'accommodation' && !acTitle) { Toast.show({ type: 'warning', text1: 'Add a title' }); return false; }
+    if (category === 'jobs' && (!jobRole || !jobCompany)) { Toast.show({ type: 'warning', text1: 'Add job role and company' }); return false; }
+    if (category === 'buysell' && !bsProductName) { Toast.show({ type: 'warning', text1: 'Add product name' }); return false; }
+    if (category === 'food' && !foodTitle) { Toast.show({ type: 'warning', text1: 'Add a title' }); return false; }
     return true;
   }
 
   async function handlePost() {
     if (!validateForm()) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     try {
       const newListing = await createListing(buildListingData());
-      // Check if this is their first listing
-      const { count } = await supabase
-        .from('listings').select('id', { count: 'exact', head: true }).eq('user_id', user.id);
+      const { count } = await supabase.from('listings').select('id', { count: 'exact', head: true }).eq('user_id', user.id);
       await awardPoints(user.id, count === 1 ? 'first_listing' : 'post_listing', newListing.id);
       const pts = count === 1 ? 20 : 5;
-      Alert.alert('Posted! 🎉', `Your listing is live.\n+${pts} community points earned!`, [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Toast.show({ type: 'success', text1: 'Posted! 🎉', text2: `Your listing is live. +${pts} community points earned!` });
+      navigation.goBack();
     } catch (error) {
-      Alert.alert('Error', error?.message || 'Failed to post listing. Please try again.');
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
+      Toast.show({ type: 'error', text1: 'Error', text2: error?.message || 'Failed to post listing.' });
+    } finally { setLoading(false); }
   }
 
+  const step = category ? 1 : 0;
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SafeAreaView style={{ backgroundColor: colors.secondary }}>
-        <View style={[styles.headerBar, { backgroundColor: colors.secondary }]}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+    <View style={[styles.root, { backgroundColor: theme.background }]}>
+      {/* Header */}
+      <LinearGradient colors={['#2D1B69','#1A0F3D']} style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Ionicons name="chevron-back" size={22} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Post a Listing</Text>
-          <View style={{ width: 60 }} />
+          <View style={{ width: 40 }} />
         </View>
-      </SafeAreaView>
-    <ScrollView keyboardShouldPersistTaps="handled">
-      <View style={styles.inner}>
+        <StepProgress steps={['Category', 'Details', 'Publish']} currentStep={step} style={{ marginTop: 12 }} />
+      </LinearGradient>
 
-        {/* Category Selector — hidden if pre-selected from browse */}
-{!categoryLocked && (
-  <>
-    <Text style={[styles.label, { color: colors.textPrimary }]}>Category *</Text>
-    <View style={styles.categoryGrid}>
-      {CATEGORIES.map((cat) => (
-        <TouchableOpacity
-          key={cat.id}
-          style={[styles.categoryCard, {
-            backgroundColor: category === cat.id ? colors.errorBackground : colors.surface,
-            borderColor: category === cat.id ? colors.primary : colors.border,
-            borderWidth: category === cat.id ? 2 : 0.5,
-          }]}
-          onPress={() => setCategory(cat.id)}
-        >
-          <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
-          <Text style={[styles.categoryLabel, {
-            color: category === cat.id ? colors.primary : colors.textSecondary,
-          }]}>
-            {cat.label}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  </>
-)}
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.inner, { paddingBottom: insets.bottom + 40 }]}>
 
+        {/* Category selector */}
+        {!categoryLocked && (
+          <>
+            <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Choose Category</Text>
+            <View style={styles.catGrid}>
+              {CATEGORIES.map(cat => {
+                const isActive = category === cat.id;
+                return (
+                  <TouchableOpacity
+                    key={cat.id}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setCategory(cat.id); }}
+                    activeOpacity={0.85}
+                    style={styles.catCardWrap}
+                  >
+                    {isActive
+                      ? <LinearGradient colors={cat.gradient} style={styles.catCard}>
+                          <Text style={styles.catEmoji}>{cat.emoji}</Text>
+                          <Text style={[styles.catLabel, { color: '#fff' }]}>{cat.label}</Text>
+                        </LinearGradient>
+                      : <View style={[styles.catCard, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1.5 }]}>
+                          <Text style={styles.catEmoji}>{cat.emoji}</Text>
+                          <Text style={[styles.catLabel, { color: theme.textSecondary }]}>{cat.label}</Text>
+                        </View>
+                    }
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </>
+        )}
 
-        {/* ─── ACCOMMODATION FORM ─── */}
+        {categoryLocked && activeCat && (
+          <LinearGradient colors={activeCat.gradient} style={styles.lockedBadge} start={{x:0,y:0}} end={{x:1,y:0}}>
+            <Text style={{ fontSize: 24 }}>{activeCat.emoji}</Text>
+            <View>
+              <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '600', letterSpacing: 0.5 }}>CATEGORY</Text>
+              <Text style={{ color: '#fff', fontSize: fonts.sizes.lg, fontWeight: '800' }}>{activeCat.label}</Text>
+            </View>
+          </LinearGradient>
+        )}
+
+        {/* ─── ACCOMMODATION ─── */}
         {category === 'accommodation' && (
-          <>
-            <Text style={[styles.sectionHeader, { color: colors.primary, borderBottomColor: colors.border }]}>
-              🏠 Accommodation Details
-            </Text>
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Title *</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-              placeholder="e.g. Room near Wash U, utilities included"
-              placeholderTextColor={colors.textLight}
-              value={acTitle}
-              onChangeText={setAcTitle}
-            />
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Description</Text>
-            <TextInput
-              style={[styles.input, styles.textArea, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-              placeholder="Describe the property..."
-              placeholderTextColor={colors.textLight}
-              value={acDescription}
-              onChangeText={setAcDescription}
-              multiline
-              numberOfLines={4}
-            />
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Monthly Rent (USD)</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-              placeholder="e.g. 650"
-              placeholderTextColor={colors.textLight}
-              value={acPrice}
-              onChangeText={setAcPrice}
-              keyboardType="numeric"
-            />
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Location / Neighborhood</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-              placeholder="e.g. Clayton, Creve Coeur, Brentwood"
-              placeholderTextColor={colors.textLight}
-              value={acLocation}
-              onChangeText={setAcLocation}
-            />
-            {/* Photos */}
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Photos (up to 4)</Text>
-            <View style={styles.photosContainer}>
-              {images.map((uri, index) => (
-                <View key={index} style={styles.photoWrapper}>
-                  <Image source={{ uri }} style={styles.photo} />
-                  <TouchableOpacity style={styles.removePhoto} onPress={() => removeImage(index)} accessibilityLabel="Remove photo">
-                    <Text style={styles.removePhotoText}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-              {images.length < 4 && (
-                <TouchableOpacity
-                  style={[styles.addPhotoButton, { backgroundColor: colors.surface, borderColor: colors.primary }]}
-                  onPress={pickImage}
-                  disabled={uploading}
-                >
-                  {uploading ? (
-                    <View style={{ alignItems: 'center', gap: 6 }}>
-                      <ActivityIndicator color={colors.primary} />
-                      <Text style={[styles.addPhotoText, { color: colors.primary }]}>{uploadProgress}%</Text>
-                      <View style={{ width: 60, height: 3, backgroundColor: colors.border, borderRadius: 2 }}>
-                        <View style={{ width: `${uploadProgress}%`, height: 3, backgroundColor: colors.primary, borderRadius: 2 }} />
-                      </View>
-                    </View>
-                  ) : (
-                    <>
-                      <Text style={styles.addPhotoIcon}>📷</Text>
-                      <Text style={[styles.addPhotoText, { color: colors.primary }]}>Add Photo</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              )}
-            </View>
-          </>
+          <View style={[styles.formCard, { backgroundColor: theme.card }]}>
+            <View style={styles.formCardHeader}><LinearGradient colors={['#FF6B6B','#E84393']} style={styles.formAccent} /><Text style={[styles.formCardTitle, { color: theme.textPrimary }]}>🏠 Housing Details</Text></View>
+            <FormLabel theme={theme}>Title</FormLabel>
+            <FormInput theme={theme} value={acTitle} onChangeText={setAcTitle} placeholder="e.g. Room near Wash U, utilities included" />
+            <FormLabel theme={theme} optional>Description</FormLabel>
+            <FormInput theme={theme} value={acDescription} onChangeText={setAcDescription} placeholder="Describe the property..." multiline />
+            <FormLabel theme={theme} optional>Monthly Rent (USD)</FormLabel>
+            <FormInput theme={theme} value={acPrice} onChangeText={setAcPrice} placeholder="e.g. 650" keyboardType="numeric" />
+            <FormLabel theme={theme} optional>Location / Neighborhood</FormLabel>
+            <FormInput theme={theme} value={acLocation} onChangeText={setAcLocation} placeholder="e.g. Clayton, Creve Coeur" />
+            <FormLabel theme={theme} optional>Photos (up to 4)</FormLabel>
+            <PhotosSection images={images} uploading={uploading} uploadProgress={uploadProgress} onAdd={pickImage} onRemove={removeImage} accentColor="#FF6B6B" theme={theme} />
+          </View>
         )}
 
-        {/* ─── JOBS FORM ─── */}
+        {/* ─── JOBS ─── */}
         {category === 'jobs' && (
-          <>
-            <Text style={[styles.sectionHeader, { color: '#2ECC71', borderBottomColor: colors.border }]}>
-              💼 Job Details
-            </Text>
-
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Job Role / Position *</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-              placeholder="e.g. Cashier, Server, Tutor"
-              placeholderTextColor={colors.textLight}
-              value={jobRole}
-              onChangeText={setJobRole}
-            />
-
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Company / Store Name *</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-              placeholder="e.g. Patel Brothers, Curry House"
-              placeholderTextColor={colors.textLight}
-              value={jobCompany}
-              onChangeText={setJobCompany}
-            />
-
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Job Type *</Text>
-            <View style={styles.toggleRow}>
-              {[
-                { id: 'part_time', label: 'Part Time' },
-                { id: 'full_time', label: 'Full Time' },
-              ].map((t) => (
-                <TouchableOpacity
-                  key={t.id}
-                  style={[styles.toggleButton, {
-                    backgroundColor: jobType === t.id ? '#2ECC7120' : colors.surface,
-                    borderColor: jobType === t.id ? '#2ECC71' : colors.border,
-                    borderWidth: jobType === t.id ? 2 : 0.5,
-                  }]}
-                  onPress={() => setJobType(t.id)}
-                >
-                  <Text style={[styles.toggleLabel, {
-                    color: jobType === t.id ? '#27AE60' : colors.textSecondary,
-                    fontWeight: jobType === t.id ? '700' : '500',
-                  }]}>
-                    {t.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Hours per Week</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-              placeholder="e.g. 20"
-              placeholderTextColor={colors.textLight}
-              value={jobHours}
-              onChangeText={setJobHours}
-              keyboardType="numeric"
-            />
-
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Salary (USD/hr)</Text>
-            <View style={[styles.salaryRow]}>
-              <TextInput
-                style={[styles.input, styles.salaryInput, {
-                  backgroundColor: jobSalaryOpen ? colors.surfaceSecondary : colors.surface,
-                  borderColor: colors.border,
-                  color: colors.textPrimary,
-                  opacity: jobSalaryOpen ? 0.5 : 1,
-                }]}
-                placeholder="e.g. 15"
-                placeholderTextColor={colors.textLight}
-                value={jobSalary}
-                onChangeText={setJobSalary}
-                keyboardType="numeric"
-                editable={!jobSalaryOpen}
-              />
-              <View style={styles.switchRow}>
-                <Text style={[styles.switchLabel, { color: colors.textSecondary }]}>Open to discuss</Text>
-                <Switch
-                  value={jobSalaryOpen}
-                  onValueChange={setJobSalaryOpen}
-                  trackColor={{ false: colors.border, true: '#2ECC71' }}
-                  thumbColor={jobSalaryOpen ? '#27AE60' : '#fff'}
-                />
-              </View>
-            </View>
-
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Work Location</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-              placeholder="e.g. Clayton, St. Louis"
-              placeholderTextColor={colors.textLight}
-              value={jobLocation}
-              onChangeText={setJobLocation}
-            />
-
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Joining</Text>
-            <View style={styles.toggleRow}>
-              {[
-                { id: 'immediate', label: '⚡ Immediate' },
-                { id: 'flexible', label: '📅 Flexible' },
-              ].map((t) => (
-                <TouchableOpacity
-                  key={t.id}
-                  style={[styles.toggleButton, {
-                    backgroundColor: jobJoining === t.id ? '#2ECC7120' : colors.surface,
-                    borderColor: jobJoining === t.id ? '#2ECC71' : colors.border,
-                    borderWidth: jobJoining === t.id ? 2 : 0.5,
-                  }]}
-                  onPress={() => setJobJoining(t.id)}
-                >
-                  <Text style={[styles.toggleLabel, {
-                    color: jobJoining === t.id ? '#27AE60' : colors.textSecondary,
-                    fontWeight: jobJoining === t.id ? '700' : '500',
-                  }]}>
-                    {t.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Job Description</Text>
-            <TextInput
-              style={[styles.input, styles.textArea, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-              placeholder="Describe the job role, requirements..."
-              placeholderTextColor={colors.textLight}
-              value={jobDescription}
-              onChangeText={setJobDescription}
-              multiline
-              numberOfLines={4}
-            />
-          </>
+          <View style={[styles.formCard, { backgroundColor: theme.card }]}>
+            <View style={styles.formCardHeader}><LinearGradient colors={['#00C48C','#007A5E']} style={styles.formAccent} /><Text style={[styles.formCardTitle, { color: theme.textPrimary }]}>💼 Job Details</Text></View>
+            <FormLabel theme={theme}>Job Role / Position</FormLabel>
+            <FormInput theme={theme} value={jobRole} onChangeText={setJobRole} placeholder="e.g. Cashier, Server, Tutor" />
+            <FormLabel theme={theme}>Company / Store Name</FormLabel>
+            <FormInput theme={theme} value={jobCompany} onChangeText={setJobCompany} placeholder="e.g. Patel Brothers, Curry House" />
+            <FormLabel theme={theme}>Job Type</FormLabel>
+            <ToggleRow options={[{id:'part_time',label:'Part Time'},{id:'full_time',label:'Full Time'}]} selected={jobType} onSelect={setJobType} activeColor="#00C48C" theme={theme} />
+            <FormLabel theme={theme} optional>Hours per Week</FormLabel>
+            <FormInput theme={theme} value={jobHours} onChangeText={setJobHours} placeholder="e.g. 20" keyboardType="numeric" />
+            <FormLabel theme={theme} optional>Salary (USD/hr)</FormLabel>
+            <FormInput theme={theme} value={jobSalary} onChangeText={setJobSalary} placeholder="e.g. 15" keyboardType="numeric" editable={!jobSalaryOpen} />
+            <SwitchRow label="Open to discuss salary" value={jobSalaryOpen} onValueChange={setJobSalaryOpen} color="#00C48C" theme={theme} />
+            <FormLabel theme={theme} optional>Work Location</FormLabel>
+            <FormInput theme={theme} value={jobLocation} onChangeText={setJobLocation} placeholder="e.g. Clayton, St. Louis" />
+            <FormLabel theme={theme}>Joining</FormLabel>
+            <ToggleRow options={[{id:'immediate',label:'⚡ Immediate'},{id:'flexible',label:'📅 Flexible'}]} selected={jobJoining} onSelect={setJobJoining} activeColor="#00C48C" theme={theme} />
+            <FormLabel theme={theme} optional>Job Description</FormLabel>
+            <FormInput theme={theme} value={jobDescription} onChangeText={setJobDescription} placeholder="Describe the role and requirements..." multiline />
+          </View>
         )}
 
-        {/* ─── BUY & SELL FORM ─── */}
+        {/* ─── BUY & SELL ─── */}
         {category === 'buysell' && (
-          <>
-            <Text style={[styles.sectionHeader, { color: '#3498DB', borderBottomColor: colors.border }]}>
-              🛍️ Product Details
-            </Text>
-
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Product Name *</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-              placeholder="e.g. IKEA Desk, iPhone 13"
-              placeholderTextColor={colors.textLight}
-              value={bsProductName}
-              onChangeText={setBsProductName}
-            />
-
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Product Category</Text>
-            <View style={styles.productCategoryGrid}>
-              {BUY_SELL_CATEGORIES.map((cat) => (
-                <TouchableOpacity
-                  key={cat}
-                  style={[styles.productCategoryChip, {
-                    backgroundColor: bsProductCategory === cat ? '#3498DB20' : colors.surface,
-                    borderColor: bsProductCategory === cat ? '#3498DB' : colors.border,
-                    borderWidth: bsProductCategory === cat ? 2 : 0.5,
-                  }]}
-                  onPress={() => setBsProductCategory(cat)}
-                >
-                  <Text style={[styles.productCategoryChipText, {
-                    color: bsProductCategory === cat ? '#3498DB' : colors.textSecondary,
-                    fontWeight: bsProductCategory === cat ? '600' : '400',
-                  }]}>
-                    {cat}
-                  </Text>
+          <View style={[styles.formCard, { backgroundColor: theme.card }]}>
+            <View style={styles.formCardHeader}><LinearGradient colors={['#0099FF','#0055CC']} style={styles.formAccent} /><Text style={[styles.formCardTitle, { color: theme.textPrimary }]}>🛍️ Product Details</Text></View>
+            <FormLabel theme={theme}>Product Name</FormLabel>
+            <FormInput theme={theme} value={bsProductName} onChangeText={setBsProductName} placeholder="e.g. IKEA Desk, iPhone 13" />
+            <FormLabel theme={theme} optional>Category</FormLabel>
+            <View style={styles.chipWrap}>
+              {BUY_SELL_CATEGORIES.map(cat => (
+                <TouchableOpacity key={cat} onPress={() => setBsProductCategory(cat)} style={[styles.chip, { backgroundColor: bsProductCategory === cat ? '#0099FF20' : theme.inputBackground, borderColor: bsProductCategory === cat ? '#0099FF' : theme.border, borderWidth: bsProductCategory === cat ? 2 : 1 }]}>
+                  <Text style={[styles.chipTxt, { color: bsProductCategory === cat ? '#0099FF' : theme.textSecondary, fontWeight: bsProductCategory === cat ? '700' : '500' }]}>{cat}</Text>
                 </TouchableOpacity>
               ))}
             </View>
-
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Condition</Text>
-            <View style={styles.toggleRow}>
-              {[
-                { id: 'new', label: '✨ New' },
-                { id: 'used', label: '🔄 Used' },
-              ].map((c) => (
-                <TouchableOpacity
-                  key={c.id}
-                  style={[styles.toggleButton, {
-                    backgroundColor: bsCondition === c.id ? '#3498DB20' : colors.surface,
-                    borderColor: bsCondition === c.id ? '#3498DB' : colors.border,
-                    borderWidth: bsCondition === c.id ? 2 : 0.5,
-                  }]}
-                  onPress={() => setBsCondition(c.id)}
-                >
-                  <Text style={[styles.toggleLabel, {
-                    color: bsCondition === c.id ? '#3498DB' : colors.textSecondary,
-                    fontWeight: bsCondition === c.id ? '700' : '500',
-                  }]}>
-                    {c.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Description</Text>
-            <TextInput
-              style={[styles.input, styles.textArea, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-              placeholder="Describe the product, any defects..."
-              placeholderTextColor={colors.textLight}
-              value={bsDescription}
-              onChangeText={setBsDescription}
-              multiline
-              numberOfLines={4}
-            />
-
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Price (USD)</Text>
-            <View style={styles.salaryRow}>
-              <TextInput
-                style={[styles.input, styles.salaryInput, {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                  color: colors.textPrimary,
-                }]}
-                placeholder="e.g. 50"
-                placeholderTextColor={colors.textLight}
-                value={bsPrice}
-                onChangeText={setBsPrice}
-                keyboardType="numeric"
-              />
-              <View style={styles.switchRow}>
-                <Text style={[styles.switchLabel, { color: colors.textSecondary }]}>Negotiable</Text>
-                <Switch
-                  value={bsNegotiable}
-                  onValueChange={setBsNegotiable}
-                  trackColor={{ false: colors.border, true: '#3498DB' }}
-                  thumbColor={bsNegotiable ? '#3498DB' : '#fff'}
-                />
-              </View>
-            </View>
-
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Pickup Location</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-              placeholder="e.g. Clayton, St. Louis"
-              placeholderTextColor={colors.textLight}
-              value={bsPickupLocation}
-              onChangeText={setBsPickupLocation}
-            />
-
-            {/* Photos */}
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Photos (up to 4)</Text>
-            <View style={styles.photosContainer}>
-              {images.map((uri, index) => (
-                <View key={index} style={styles.photoWrapper}>
-                  <Image source={{ uri }} style={styles.photo} />
-                  <TouchableOpacity style={styles.removePhoto} onPress={() => removeImage(index)} accessibilityLabel="Remove photo">
-                    <Text style={styles.removePhotoText}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-              {images.length < 4 && (
-                <TouchableOpacity
-                  style={[styles.addPhotoButton, { backgroundColor: colors.surface, borderColor: '#3498DB' }]}
-                  onPress={pickImage}
-                  disabled={uploading}
-                >
-                  {uploading ? <ActivityIndicator color="#3498DB" /> : (
-                    <>
-                      <Text style={styles.addPhotoIcon}>📷</Text>
-                      <Text style={[styles.addPhotoText, { color: '#3498DB' }]}>Add Photo</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              )}
-            </View>
-          </>
+            <FormLabel theme={theme}>Condition</FormLabel>
+            <ToggleRow options={[{id:'new',label:'✨ New'},{id:'used',label:'🔄 Used'}]} selected={bsCondition} onSelect={setBsCondition} activeColor="#0099FF" theme={theme} />
+            <FormLabel theme={theme} optional>Description</FormLabel>
+            <FormInput theme={theme} value={bsDescription} onChangeText={setBsDescription} placeholder="Describe the product, any defects..." multiline />
+            <FormLabel theme={theme} optional>Price (USD)</FormLabel>
+            <FormInput theme={theme} value={bsPrice} onChangeText={setBsPrice} placeholder="e.g. 50" keyboardType="numeric" />
+            <SwitchRow label="Price is negotiable" value={bsNegotiable} onValueChange={setBsNegotiable} color="#0099FF" theme={theme} />
+            <FormLabel theme={theme} optional>Pickup Location</FormLabel>
+            <FormInput theme={theme} value={bsPickupLocation} onChangeText={setBsPickupLocation} placeholder="e.g. Clayton, St. Louis" />
+            <FormLabel theme={theme} optional>Photos (up to 4)</FormLabel>
+            <PhotosSection images={images} uploading={uploading} uploadProgress={uploadProgress} onAdd={pickImage} onRemove={removeImage} accentColor="#0099FF" theme={theme} />
+          </View>
         )}
 
-        {/* ─── FOOD & TIFFIN FORM ─── */}
+        {/* ─── FOOD ─── */}
         {category === 'food' && (
-          <>
-            <Text style={[styles.sectionHeader, { color: '#F39C12', borderBottomColor: colors.border }]}>
-              🍱 Food & Tiffin Details
-            </Text>
-
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Title *</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-              placeholder="e.g. Home cooked tiffin service, Biryani catering"
-              placeholderTextColor={colors.textLight}
-              value={foodTitle}
-              onChangeText={setFoodTitle}
-            />
-
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Description & Menu Details</Text>
-            <TextInput
-              style={[styles.input, styles.textArea, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-              placeholder="Describe your food, menu items, dietary options..."
-              placeholderTextColor={colors.textLight}
-              value={foodDescription}
-              onChangeText={setFoodDescription}
-              multiline
-              numberOfLines={4}
-            />
-
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Price (USD)</Text>
-            <View style={styles.salaryRow}>
-              <TextInput
-                style={[styles.input, styles.salaryInput, {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                  color: colors.textPrimary,
-                }]}
-                placeholder="e.g. 8 per day"
-                placeholderTextColor={colors.textLight}
-                value={foodPrice}
-                onChangeText={setFoodPrice}
-                keyboardType="numeric"
-              />
-              <View style={styles.switchRow}>
-                <Text style={[styles.switchLabel, { color: colors.textSecondary }]}>Negotiable</Text>
-                <Switch
-                  value={foodNegotiable}
-                  onValueChange={setFoodNegotiable}
-                  trackColor={{ false: colors.border, true: '#F39C12' }}
-                  thumbColor={foodNegotiable ? '#F39C12' : '#fff'}
-                />
-              </View>
-            </View>
-
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Service Options</Text>
-            <View style={styles.serviceOptions}>
-              <TouchableOpacity
-                style={[styles.serviceOption, {
-                  backgroundColor: foodPickup ? '#F39C1220' : colors.surface,
-                  borderColor: foodPickup ? '#F39C12' : colors.border,
-                  borderWidth: foodPickup ? 2 : 0.5,
-                }]}
-                onPress={() => setFoodPickup(!foodPickup)}
-              >
-                <Text style={styles.serviceOptionEmoji}>🏪</Text>
-                <Text style={[styles.serviceOptionLabel, {
-                  color: foodPickup ? '#F39C12' : colors.textSecondary,
-                  fontWeight: foodPickup ? '700' : '500',
-                }]}>Pickup</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.serviceOption, {
-                  backgroundColor: foodDelivery ? '#F39C1220' : colors.surface,
-                  borderColor: foodDelivery ? '#F39C12' : colors.border,
-                  borderWidth: foodDelivery ? 2 : 0.5,
-                }]}
-                onPress={() => setFoodDelivery(!foodDelivery)}
-              >
-                <Text style={styles.serviceOptionEmoji}>🚴</Text>
-                <Text style={[styles.serviceOptionLabel, {
-                  color: foodDelivery ? '#F39C12' : colors.textSecondary,
-                  fontWeight: foodDelivery ? '700' : '500',
-                }]}>Delivery</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Photos */}
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Photos (up to 4)</Text>
-            <View style={styles.photosContainer}>
-              {images.map((uri, index) => (
-                <View key={index} style={styles.photoWrapper}>
-                  <Image source={{ uri }} style={styles.photo} />
-                  <TouchableOpacity style={styles.removePhoto} onPress={() => removeImage(index)} accessibilityLabel="Remove photo">
-                    <Text style={styles.removePhotoText}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-              {images.length < 4 && (
-                <TouchableOpacity
-                  style={[styles.addPhotoButton, { backgroundColor: colors.surface, borderColor: '#F39C12' }]}
-                  onPress={pickImage}
-                  disabled={uploading}
-                >
-                  {uploading ? <ActivityIndicator color="#F39C12" /> : (
-                    <>
-                      <Text style={styles.addPhotoIcon}>📷</Text>
-                      <Text style={[styles.addPhotoText, { color: '#F39C12' }]}>Add Photo</Text>
-                    </>
-                  )}
+          <View style={[styles.formCard, { backgroundColor: theme.card }]}>
+            <View style={styles.formCardHeader}><LinearGradient colors={['#F4A833','#E68A00']} style={styles.formAccent} /><Text style={[styles.formCardTitle, { color: theme.textPrimary }]}>🍱 Food & Tiffin Details</Text></View>
+            <FormLabel theme={theme}>Title</FormLabel>
+            <FormInput theme={theme} value={foodTitle} onChangeText={setFoodTitle} placeholder="e.g. Home cooked tiffin service, Biryani catering" />
+            <FormLabel theme={theme} optional>Description & Menu</FormLabel>
+            <FormInput theme={theme} value={foodDescription} onChangeText={setFoodDescription} placeholder="Describe your food, menu items, dietary options..." multiline />
+            <FormLabel theme={theme} optional>Price (USD)</FormLabel>
+            <FormInput theme={theme} value={foodPrice} onChangeText={setFoodPrice} placeholder="e.g. 8 per day" keyboardType="numeric" />
+            <SwitchRow label="Price is negotiable" value={foodNegotiable} onValueChange={setFoodNegotiable} color="#F4A833" theme={theme} />
+            <FormLabel theme={theme}>Service Options</FormLabel>
+            <View style={styles.serviceRow}>
+              {[{key:'pickup',label:'🏪 Pickup',val:foodPickup,set:setFoodPickup},{key:'delivery',label:'🚴 Delivery',val:foodDelivery,set:setFoodDelivery}].map(s => (
+                <TouchableOpacity key={s.key} onPress={() => s.set(!s.val)} style={[styles.serviceBtn, { backgroundColor: s.val ? '#F4A83320' : theme.card, borderColor: s.val ? '#F4A833' : theme.border, borderWidth: s.val ? 2 : 1 }]}>
+                  <Text style={styles.serviceEmoji}>{s.label.split(' ')[0]}</Text>
+                  <Text style={[styles.serviceTxt, { color: s.val ? '#F4A833' : theme.textSecondary, fontWeight: s.val ? '700' : '500' }]}>{s.label.split(' ')[1]}</Text>
                 </TouchableOpacity>
-              )}
+              ))}
             </View>
-          </>
+            <FormLabel theme={theme} optional>Photos (up to 4)</FormLabel>
+            <PhotosSection images={images} uploading={uploading} uploadProgress={uploadProgress} onAdd={pickImage} onRemove={removeImage} accentColor="#F4A833" theme={theme} />
+          </View>
         )}
 
-        {/* Post Button — only show when category selected */}
+        {/* Post button */}
         {category && (
           <>
-            <View style={[styles.infoBox, { backgroundColor: colors.infoBackground }]}>
-              <Text style={[styles.infoText, { color: colors.secondary }]}>
-                💡 Your listing will be visible to the St. Louis Indian community immediately after posting.
+            <View style={[styles.infoBanner, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <Ionicons name="information-circle" size={16} color="#F4A833" />
+              <Text style={[styles.infoText, { color: theme.textSecondary }]}>
+                Your listing will be visible to the community immediately after posting.
               </Text>
             </View>
             <TouchableOpacity
-              style={[styles.postButton, {
-                backgroundColor:
-                  category === 'accommodation' ? colors.primary :
-                  category === 'jobs' ? '#2ECC71' :
-                  category === 'buysell' ? '#3498DB' : '#F39C12',
-              }]}
+              onPressIn={() => Animated.spring(btnScale, { toValue: 0.96, useNativeDriver: true }).start()}
+              onPressOut={() => Animated.spring(btnScale, { toValue: 1, useNativeDriver: true }).start()}
               onPress={handlePost}
               disabled={loading || uploading}
+              activeOpacity={1}
             >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.postButtonText}>Post Listing</Text>
-              )}
+              <Animated.View style={{ transform: [{ scale: btnScale }] }}>
+                <LinearGradient
+                  colors={loading ? ['#888','#666'] : (activeCat?.gradient || ['#F4A833','#FF6B6B'])}
+                  start={{x:0,y:0}} end={{x:1,y:0}}
+                  style={styles.postBtn}
+                >
+                  {loading ? <ActivityIndicator color="#fff" /> : <><Text style={styles.postBtnTxt}>Publish Listing</Text><Ionicons name="rocket" size={18} color="#fff" /></> }
+                </LinearGradient>
+              </Animated.View>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
-              <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>Cancel</Text>
+            <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation.goBack()}>
+              <Text style={[styles.cancelTxt, { color: theme.textSecondary }]}>Cancel</Text>
             </TouchableOpacity>
           </>
         )}
-
-      </View>
-    </ScrollView>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  headerBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 12 },
-  headerTitle: { color: '#fff', fontSize: 17, fontWeight: '500' },
-  backButton: { flexDirection: 'row', alignItems: 'center', gap: 4, width: 60 },
-  backText: { color: '#fff', fontSize: 15 },
-  inner: { padding: 20, paddingBottom: 40 },
-  sectionHeader: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginTop: 20,
-    marginBottom: 4,
-    paddingBottom: 8,
-    borderBottomWidth: 0.5,
-  },
-  label: { fontSize: 13, fontWeight: '500', marginBottom: 8, marginTop: 16 },
-  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  categoryCard: { width: '47%', borderRadius: 12, padding: 14, alignItems: 'center' },
-  categoryEmoji: { fontSize: 24, marginBottom: 6 },
-  categoryLabel: { fontSize: 12, fontWeight: '500', textAlign: 'center' },
-  input: { borderRadius: 10, padding: 12, fontSize: 15, borderWidth: 0.5 },
-  textArea: { minHeight: 100, textAlignVertical: 'top' },
-  toggleRow: { flexDirection: 'row', gap: 10 },
-  toggleButton: { flex: 1, borderRadius: 10, padding: 12, alignItems: 'center' },
-  toggleLabel: { fontSize: 14 },
-  salaryRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  salaryInput: { flex: 1 },
-  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  switchLabel: { fontSize: 13 },
-  productCategoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  productCategoryChip: { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
-  productCategoryChipText: { fontSize: 13 },
-  serviceOptions: { flexDirection: 'row', gap: 10 },
-  serviceOption: { flex: 1, borderRadius: 12, padding: 16, alignItems: 'center', gap: 6 },
-  serviceOptionEmoji: { fontSize: 24 },
-  serviceOptionLabel: { fontSize: 14 },
-  photosContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  photoWrapper: { position: 'relative' },
-  photo: { width: 80, height: 80, borderRadius: 8 },
-  removePhoto: { position: 'absolute', top: -8, right: -8, backgroundColor: '#E63946', borderRadius: 13, width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
-  removePhotoText: { color: '#fff', fontSize: 10, fontWeight: '700' },
-  addPhotoButton: { width: 80, height: 80, borderRadius: 8, borderWidth: 1, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 4 },
-  addPhotoIcon: { fontSize: 20 },
-  addPhotoText: { fontSize: 10, fontWeight: '500' },
-  infoBox: { borderRadius: 10, padding: 12, marginTop: 20 },
-  infoText: { fontSize: 13, lineHeight: 18 },
-  postButton: { borderRadius: 12, padding: 15, alignItems: 'center', marginTop: 20 },
-  postButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  cancelButton: { borderRadius: 12, padding: 15, alignItems: 'center', marginTop: 10 },
-  cancelButtonText: { fontSize: 15 },
-  lockedCategory: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  borderRadius: 10,
-  padding: 12,
-  borderWidth: 1,
-  gap: 8,
-  marginBottom: 8,
-},
-lockedCategoryEmoji: { fontSize: 20 },
-lockedCategoryText: { fontSize: 14, fontWeight: '600' },
-});
+  root: { flex: 1 },
+  header: { paddingHorizontal: spacing.md, paddingBottom: 20 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerTitle: { color: '#fff', fontSize: fonts.sizes.lg, fontWeight: '800' },
+  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
+  inner: { padding: spacing.md },
+  sectionTitle: { fontSize: fonts.sizes.lg, fontWeight: '800', marginBottom: 14, marginTop: 8 },
 
+  catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 8 },
+  catCardWrap: { width: '47%' },
+  catCard: { borderRadius: borderRadius.lg, padding: 16, alignItems: 'center', gap: 8 },
+  catEmoji: { fontSize: 28 },
+  catLabel: { fontSize: fonts.sizes.sm, fontWeight: '700', textAlign: 'center' },
+
+  lockedBadge: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: borderRadius.lg, padding: 16, marginBottom: 4 },
+
+  formCard: { borderRadius: borderRadius.xl, padding: 16, marginBottom: 16, ...shadows.small },
+  formCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
+  formAccent: { width: 4, height: 22, borderRadius: 2 },
+  formCardTitle: { fontSize: fonts.sizes.lg, fontWeight: '800' },
+
+  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { borderRadius: borderRadius.full, paddingHorizontal: 12, paddingVertical: 6 },
+  chipTxt: { fontSize: fonts.sizes.sm },
+
+  serviceRow: { flexDirection: 'row', gap: 10 },
+  serviceBtn: { flex: 1, borderRadius: borderRadius.lg, padding: 16, alignItems: 'center', gap: 6 },
+  serviceEmoji: { fontSize: 24 },
+  serviceTxt: { fontSize: fonts.sizes.sm },
+
+  infoBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderRadius: borderRadius.md, padding: 12, marginBottom: 14, borderWidth: 1 },
+  infoText: { flex: 1, fontSize: fonts.sizes.sm, lineHeight: 19 },
+
+  postBtn: { borderRadius: borderRadius.full, height: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, ...shadows.glow },
+  postBtnTxt: { color: '#fff', fontSize: fonts.sizes.lg, fontWeight: '800' },
+  cancelBtn: { alignItems: 'center', paddingVertical: 16 },
+  cancelTxt: { fontSize: fonts.sizes.md },
+});

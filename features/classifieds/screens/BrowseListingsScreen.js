@@ -3,159 +3,138 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, ActivityIndicator, RefreshControl, SafeAreaView,
-  ScrollView, Dimensions, Image,
+  ActivityIndicator, RefreshControl, ScrollView, Dimensions, Image, Animated,
 } from 'react-native';
-import { getListings, searchListings } from '../services/listingsService';
-import useAppStore from '../../../core/store/index';
-import { useTheme } from '../../../core/theme/ThemeContext';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
+import { getListings, searchListings } from '../services/listingsService';
+import { useTheme } from '../../../core/theme/ThemeContext';
+import SearchBar from '../../../core/components/SearchBar';
+import EmptyState from '../../../core/components/EmptyState';
+import { CardSkeleton, ListItemSkeleton } from '../../../core/components/SkeletonLoader';
+import { fonts, spacing, borderRadius, shadows } from '../../../core/theme/index';
 import { formatDisplayName } from '../../../core/components/UserProfileModal';
 
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - 36) / 2;
+const CARD_W = (width - spacing.md * 2 - 10) / 2;
 
+// ─── Category config ──────────────────────────────────────────────────────────
 const CATEGORIES = [
-  { id: null,            label: 'All',      icon: 'apps-outline',       color: '#E63946' },
-  { id: 'accommodation', label: 'Housing',  icon: 'home-outline',       color: '#457B9D' },
-  { id: 'jobs',          label: 'Jobs',     icon: 'briefcase-outline',  color: '#2ECC71' },
-  { id: 'buysell',       label: 'Buy & Sell', icon: 'pricetag-outline', color: '#3498DB' },
-  { id: 'food',          label: 'Food',     icon: 'restaurant-outline', color: '#F39C12' },
+  { id: null,            label: 'All',       icon: 'apps',          gradient: ['#F4A833','#FF6B6B'] },
+  { id: 'accommodation', label: 'Housing',   icon: 'business',      gradient: ['#FF6B6B','#E84393'] },
+  { id: 'jobs',          label: 'Jobs',      icon: 'briefcase',     gradient: ['#00C48C','#007A5E'] },
+  { id: 'buysell',       label: 'Buy & Sell',icon: 'bag',           gradient: ['#0099FF','#0055CC'] },
+  { id: 'food',          label: 'Food',      icon: 'restaurant',    gradient: ['#F4A833','#E68A00'] },
 ];
 
-const CATEGORY_COLORS = {
-  accommodation: '#457B9D',
-  jobs: '#2ECC71',
-  buysell: '#3498DB',
-  food: '#F39C12',
+const CAT_META = {
+  accommodation: { gradient: ['#FF6B6B','#E84393'], icon: 'business' },
+  jobs:          { gradient: ['#00C48C','#007A5E'], icon: 'briefcase' },
+  buysell:       { gradient: ['#0099FF','#0055CC'], icon: 'bag' },
+  food:          { gradient: ['#F4A833','#E68A00'], icon: 'restaurant' },
 };
 
-const CATEGORY_GRADIENTS = {
-  accommodation: ['#EBF4FA', '#D6EAF8'],
-  jobs: ['#EAFAF1', '#D5F5E3'],
-  buysell: ['#EBF5FB', '#D6EAF8'],
-  food: ['#FEF9E7', '#FDEBD0'],
-};
+// ─── Card components ──────────────────────────────────────────────────────────
 
-const CATEGORY_EMOJIS = {
-  accommodation: '🏠',
-  jobs: '💼',
-  buysell: '🛍️',
-  food: '🍱',
-};
-
-// Grid card for buy/sell, food, housing
-function GridCard({ item, onPress, colors }) {
-  const color = CATEGORY_COLORS[item.category] || '#E63946';
-  const bgColor = CATEGORY_GRADIENTS[item.category]?.[0] || '#F5F5F5';
-  const hasImages = item.images && item.images.length > 0;
+function GridCard({ item, onPress, theme }) {
+  const meta = CAT_META[item.category] || CAT_META.buysell;
+  const hasImg = item.images?.length > 0;
+  const scale = useRef(new Animated.Value(1)).current;
 
   return (
     <TouchableOpacity
-      style={[styles.gridCard, { backgroundColor: colors.surface }]}
-      onPress={() => onPress(item)}
-      activeOpacity={0.92}
+      onPressIn={() => Animated.spring(scale, { toValue: 0.96, useNativeDriver: true }).start()}
+      onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start()}
+      onPress={onPress}
+      activeOpacity={1}
     >
-      {/* Image / Placeholder */}
-      <View style={[styles.gridImageBox, { backgroundColor: bgColor }]}>
-        {hasImages ? (
-          <Image source={{ uri: item.images[0] }} style={styles.gridImage} resizeMode="cover" />
-        ) : (
-          <Text style={styles.gridEmoji}>{CATEGORY_EMOJIS[item.category] || '📦'}</Text>
-        )}
-        {item.is_boosted && (
-          <View style={styles.featuredBadge}>
-            <Ionicons name="star" size={9} color="#fff" />
-            <Text style={styles.featuredText}>Featured</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Info */}
-      <View style={styles.gridInfo}>
-        <Text style={[styles.gridPrice, { color: color }]} numberOfLines={1}>
-          {item.price ? `$${item.price}` : 'Free'}
-        </Text>
-        <Text style={[styles.gridTitle, { color: colors.textPrimary }]} numberOfLines={2}>
-          {item.title}
-        </Text>
-        <View style={styles.gridMeta}>
-          <Ionicons name="location-outline" size={10} color={colors.textLight} />
-          <Text style={[styles.gridLocation, { color: colors.textLight }]} numberOfLines={1}>
-            {item.city}
-          </Text>
+      <Animated.View style={[gcStyles.card, { backgroundColor: theme.card, transform: [{ scale }], ...shadows.medium }]}>
+        <View style={gcStyles.imgWrap}>
+          {hasImg
+            ? <Image source={{ uri: item.images[0] }} style={gcStyles.img} resizeMode="cover" />
+            : <LinearGradient colors={meta.gradient} style={gcStyles.imgPlaceholder}><Ionicons name={meta.icon} size={28} color="rgba(255,255,255,0.7)" /></LinearGradient>
+          }
+          {item.is_boosted && (
+            <LinearGradient colors={['#F4A833','#FF6B6B']} style={gcStyles.boostBadge}>
+              <Ionicons name="star" size={9} color="#fff" />
+              <Text style={gcStyles.boostText}>Featured</Text>
+            </LinearGradient>
+          )}
+          <TouchableOpacity style={gcStyles.heart}>
+            <Ionicons name="heart-outline" size={14} color="#fff" />
+          </TouchableOpacity>
         </View>
-      </View>
+        <View style={gcStyles.body}>
+          <Text style={[gcStyles.price, { color: '#F4A833' }]}>
+            {item.price ? `$${item.price}` : 'Free'}
+          </Text>
+          <Text style={[gcStyles.title, { color: theme.textPrimary }]} numberOfLines={2}>{item.title}</Text>
+          <View style={gcStyles.meta}>
+            <Ionicons name="location-outline" size={10} color={theme.textLight} />
+            <Text style={[gcStyles.loc, { color: theme.textLight }]} numberOfLines={1}>{item.city}</Text>
+          </View>
+        </View>
+      </Animated.View>
     </TouchableOpacity>
   );
 }
+const gcStyles = StyleSheet.create({
+  card: { width: CARD_W, borderRadius: borderRadius.lg, overflow: 'hidden' },
+  imgWrap: { position: 'relative' },
+  img: { width: '100%', height: CARD_W * 0.88, resizeMode: 'cover' },
+  imgPlaceholder: { width: '100%', height: CARD_W * 0.88, alignItems: 'center', justifyContent: 'center' },
+  boostBadge: { position: 'absolute', top: 8, left: 8, flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: borderRadius.full, paddingHorizontal: 8, paddingVertical: 3 },
+  boostText: { color: '#fff', fontSize: 9, fontWeight: '700' },
+  heart: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' },
+  body: { padding: 10, gap: 3 },
+  price: { fontSize: fonts.sizes.md, fontWeight: '800' },
+  title: { fontSize: fonts.sizes.sm, fontWeight: '600', lineHeight: 17 },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
+  loc: { fontSize: 10 },
+});
 
-// Full-width card for jobs
-function JobCard({ item, onPress, colors }) {
-  const meta = item.metadata || null;
-
-  const isFullTime = meta?.job_type === 'full_time';
-
+function JobCard({ item, onPress, theme }) {
+  const meta = item.metadata || {};
+  const isFullTime = meta.job_type === 'full_time';
   return (
-    <TouchableOpacity
-      style={[styles.jobCard, { backgroundColor: colors.surface }]}
-      onPress={() => onPress(item)}
-      activeOpacity={0.92}
-    >
-      {/* Left accent bar */}
-      <View style={[styles.jobAccent, { backgroundColor: '#2ECC71' }]} />
-
-      <View style={styles.jobContent}>
-        <View style={styles.jobTop}>
-          <View style={[styles.jobIconBox, { backgroundColor: '#EAFAF1' }]}>
-            <Text style={{ fontSize: 22 }}>💼</Text>
-          </View>
-          <View style={styles.jobText}>
-            <Text style={[styles.jobTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-              {item.title}
-            </Text>
-            <Text style={[styles.jobCompany, { color: colors.textSecondary }]} numberOfLines={1}>
-              {meta?.company || formatDisplayName(item.poster?.username)}
+    <TouchableOpacity onPress={onPress} activeOpacity={0.88} style={[jcStyles.card, { backgroundColor: theme.card, ...shadows.medium }]}>
+      <LinearGradient colors={['#00C48C22','#00C48C06']} style={jcStyles.accentBar} start={{x:0,y:0}} end={{x:0,y:1}} />
+      <View style={jcStyles.body}>
+        <View style={jcStyles.top}>
+          <LinearGradient colors={['#00C48C','#007A5E']} style={jcStyles.iconBox}>
+            <Text style={{ fontSize: 18 }}>💼</Text>
+          </LinearGradient>
+          <View style={{ flex: 1 }}>
+            <Text style={[jcStyles.title, { color: theme.textPrimary }]} numberOfLines={1}>{item.title}</Text>
+            <Text style={[jcStyles.company, { color: theme.textSecondary }]} numberOfLines={1}>
+              {meta.company || formatDisplayName(item.poster?.username)}
             </Text>
           </View>
-          <View style={styles.jobPriceBox}>
-            <Text style={[styles.jobRate, { color: '#27AE60' }]}>
-              {meta?.salary_open ? 'Open' : item.price ? `$${item.price}/hr` : '—'}
-            </Text>
-          </View>
+          <Text style={jcStyles.rate}>
+            {meta.salary_open ? 'Open' : item.price ? `$${item.price}/hr` : '—'}
+          </Text>
         </View>
-
-        <View style={styles.jobPills}>
-          <View style={[styles.pill, { backgroundColor: isFullTime ? '#EAFAF1' : '#FEF9E7', borderColor: isFullTime ? '#A9DFBF' : '#FAD7A0' }]}>
-            <Ionicons name="time-outline" size={11} color={isFullTime ? '#27AE60' : '#E67E22'} />
-            <Text style={[styles.pillText, { color: isFullTime ? '#27AE60' : '#E67E22' }]}>
-              {isFullTime ? 'Full Time' : 'Part Time'}
-            </Text>
+        <View style={jcStyles.pills}>
+          <View style={[jcStyles.pill, { backgroundColor: isFullTime ? '#00C48C18' : '#F4A83318', borderColor: isFullTime ? '#00C48C' : '#F4A833' }]}>
+            <Text style={[jcStyles.pillTxt, { color: isFullTime ? '#00C48C' : '#F4A833' }]}>{isFullTime ? 'Full Time' : 'Part Time'}</Text>
           </View>
-          {meta?.hours_per_week ? (
-            <View style={[styles.pill, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
-              <Ionicons name="hourglass-outline" size={11} color={colors.textSecondary} />
-              <Text style={[styles.pillText, { color: colors.textSecondary }]}>{meta.hours_per_week} hrs/wk</Text>
+          {meta.hours_per_week ? (
+            <View style={[jcStyles.pill, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <Text style={[jcStyles.pillTxt, { color: theme.textSecondary }]}>{meta.hours_per_week} hrs/wk</Text>
             </View>
           ) : null}
-          {meta?.joining ? (
-            <View style={[styles.pill, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
-              <Ionicons name="calendar-outline" size={11} color={colors.textSecondary} />
-              <Text style={[styles.pillText, { color: colors.textSecondary }]}>
-                {meta.joining === 'immediate' ? 'Immediate' : 'Flexible'}
-              </Text>
+          {meta.joining && (
+            <View style={[jcStyles.pill, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <Text style={[jcStyles.pillTxt, { color: theme.textSecondary }]}>{meta.joining === 'immediate' ? '⚡ Immediate' : '📅 Flexible'}</Text>
             </View>
-          ) : null}
+          )}
         </View>
-
-        <View style={styles.jobFooter}>
-          <View style={styles.jobFooterLeft}>
-            <Ionicons name="location-outline" size={11} color={colors.textLight} />
-            <Text style={[styles.jobLocation, { color: colors.textLight }]}>
-              {meta?.location || item.city}
-            </Text>
-          </View>
-          <Text style={[styles.jobDate, { color: colors.textLight }]}>
+        <View style={jcStyles.footer}>
+          <Ionicons name="location-outline" size={11} color={theme.textLight} />
+          <Text style={[jcStyles.loc, { color: theme.textLight }]}>{meta.location || item.city}</Text>
+          <Text style={[jcStyles.date, { color: theme.textLight }]}>
             {new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
           </Text>
         </View>
@@ -163,50 +142,54 @@ function JobCard({ item, onPress, colors }) {
     </TouchableOpacity>
   );
 }
+const jcStyles = StyleSheet.create({
+  card: { flexDirection: 'row', borderRadius: borderRadius.lg, marginBottom: 10, overflow: 'hidden' },
+  accentBar: { width: 5 },
+  body: { flex: 1, padding: 14 },
+  top: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
+  iconBox: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: fonts.sizes.md, fontWeight: '700' },
+  company: { fontSize: fonts.sizes.sm, marginTop: 1 },
+  rate: { fontSize: fonts.sizes.md, fontWeight: '800', color: '#00C48C' },
+  pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
+  pill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: borderRadius.full, borderWidth: 1 },
+  pillTxt: { fontSize: 11, fontWeight: '600' },
+  footer: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  loc: { flex: 1, fontSize: 11 },
+  date: { fontSize: 11 },
+});
 
-// Full-width card for housing
-function HousingCard({ item, onPress, colors }) {
-  const hasImages = item.images && item.images.length > 0;
+function HousingCard({ item, onPress, theme }) {
+  const hasImg = item.images?.length > 0;
   return (
-    <TouchableOpacity
-      style={[styles.housingCard, { backgroundColor: colors.surface }]}
-      onPress={() => onPress(item)}
-      activeOpacity={0.92}
-    >
-      <View style={[styles.housingImage, { backgroundColor: '#EBF4FA' }]}>
-        {hasImages ? (
-          <Image source={{ uri: item.images[0] }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-        ) : (
-          <Text style={{ fontSize: 40 }}>🏠</Text>
-        )}
+    <TouchableOpacity onPress={onPress} activeOpacity={0.88} style={[hcStyles.card, { backgroundColor: theme.card, ...shadows.medium }]}>
+      <View style={hcStyles.imgWrap}>
+        {hasImg
+          ? <Image source={{ uri: item.images[0] }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          : <LinearGradient colors={['#FF6B6B','#E84393']} style={StyleSheet.absoluteFill}><View style={hcStyles.placeholder}><Text style={{ fontSize: 40 }}>🏠</Text></View></LinearGradient>
+        }
+        <LinearGradient colors={['transparent','rgba(15,10,30,0.7)']} style={hcStyles.imgGradient} />
         {item.is_boosted && (
-          <View style={styles.featuredBadge}>
+          <LinearGradient colors={['#F4A833','#FF6B6B']} style={hcStyles.boostBadge}>
             <Ionicons name="star" size={9} color="#fff" />
-            <Text style={styles.featuredText}>Featured</Text>
+            <Text style={hcStyles.boostText}>Featured</Text>
+          </LinearGradient>
+        )}
+        {item.price && (
+          <View style={hcStyles.priceBadge}>
+            <Text style={hcStyles.priceText}>${item.price}</Text>
+            <Text style={hcStyles.priceUnit}>/mo</Text>
           </View>
         )}
-        {item.price ? (
-          <View style={styles.housingPriceBadge}>
-            <Text style={styles.housingPriceText}>${item.price}</Text>
-          </View>
-        ) : null}
       </View>
-      <View style={styles.housingInfo}>
-        <Text style={[styles.housingTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-          {item.title}
-        </Text>
-        {item.description ? (
-          <Text style={[styles.housingDesc, { color: colors.textSecondary }]} numberOfLines={2}>
-            {item.description}
-          </Text>
-        ) : null}
-        <View style={styles.housingMeta}>
-          <Ionicons name="location-outline" size={12} color={colors.textLight} />
-          <Text style={[styles.housingLocation, { color: colors.textLight }]}>
-            {item.city}, {item.state}
-          </Text>
-          <Text style={[styles.housingDot, { color: colors.textLight }]}>·</Text>
-          <Text style={[styles.housingDate, { color: colors.textLight }]}>
+      <View style={hcStyles.body}>
+        <Text style={[hcStyles.title, { color: theme.textPrimary }]} numberOfLines={1}>{item.title}</Text>
+        {item.description ? <Text style={[hcStyles.desc, { color: theme.textSecondary }]} numberOfLines={2}>{item.description}</Text> : null}
+        <View style={hcStyles.meta}>
+          <Ionicons name="location-outline" size={12} color={theme.textLight} />
+          <Text style={[hcStyles.loc, { color: theme.textLight }]}>{item.city}, {item.state}</Text>
+          <Text style={[hcStyles.dot, { color: theme.textLight }]}>·</Text>
+          <Text style={[hcStyles.date, { color: theme.textLight }]}>
             {new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
           </Text>
         </View>
@@ -214,7 +197,26 @@ function HousingCard({ item, onPress, colors }) {
     </TouchableOpacity>
   );
 }
+const hcStyles = StyleSheet.create({
+  card: { borderRadius: borderRadius.lg, marginBottom: 10, overflow: 'hidden' },
+  imgWrap: { height: 170, position: 'relative' },
+  imgGradient: { ...StyleSheet.absoluteFillObject },
+  placeholder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  boostBadge: { position: 'absolute', top: 10, left: 10, flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: borderRadius.full, paddingHorizontal: 8, paddingVertical: 3 },
+  boostText: { color: '#fff', fontSize: 9, fontWeight: '700' },
+  priceBadge: { position: 'absolute', bottom: 10, left: 12, flexDirection: 'row', alignItems: 'baseline', gap: 2, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: borderRadius.md, paddingHorizontal: 10, paddingVertical: 4 },
+  priceText: { color: '#fff', fontWeight: '800', fontSize: fonts.sizes.lg },
+  priceUnit: { color: 'rgba(255,255,255,0.6)', fontSize: 11 },
+  body: { padding: 14 },
+  title: { fontSize: fonts.sizes.lg, fontWeight: '700', marginBottom: 4 },
+  desc: { fontSize: fonts.sizes.sm, lineHeight: 19, marginBottom: 8 },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  loc: { flex: 1, fontSize: 12 },
+  dot: { fontSize: 12 },
+  date: { fontSize: 12 },
+});
 
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function BrowseListingsScreen({ navigation, route }) {
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -222,8 +224,8 @@ export default function BrowseListingsScreen({ navigation, route }) {
   const [fetchError, setFetchError] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(route.params?.category ?? null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchFocused, setSearchFocused] = useState(false);
-  const colors = useTheme();
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const appliedParamCategory = useRef(route.params?.category ?? null);
 
   useFocusEffect(
@@ -233,7 +235,6 @@ export default function BrowseListingsScreen({ navigation, route }) {
         appliedParamCategory.current = incoming;
         setSelectedCategory(incoming);
       } else {
-        // Same category — refetch so sold/archived items drop off the grid
         fetchListings();
       }
     }, [route.params?.category])
@@ -247,8 +248,7 @@ export default function BrowseListingsScreen({ navigation, route }) {
       setFetchError(false);
       const data = await getListings(selectedCategory);
       setListings(data);
-    } catch (error) {
-      console.error('Error fetching listings:', error);
+    } catch {
       setFetchError(true);
     } finally {
       setLoading(false);
@@ -261,7 +261,7 @@ export default function BrowseListingsScreen({ navigation, route }) {
       try {
         const data = await searchListings(text, selectedCategory);
         setListings(data);
-      } catch (error) { console.error(error); }
+      } catch {}
     } else if (text.length === 0) {
       fetchListings();
     }
@@ -273,321 +273,163 @@ export default function BrowseListingsScreen({ navigation, route }) {
     setRefreshing(false);
   }
 
-  function renderItem({ item, index }) {
-    if (item.__type === 'grid_pair') {
-      return (
-        <View style={styles.gridRow}>
-          <GridCard item={item.left} onPress={(l) => navigation.navigate('ListingDetail', { listing: l })} colors={colors} />
-          {item.right ? (
-            <GridCard item={item.right} onPress={(l) => navigation.navigate('ListingDetail', { listing: l })} colors={colors} />
-          ) : (
-            <View style={{ width: CARD_WIDTH }} />
-          )}
-        </View>
-      );
-    }
-    if (item.category === 'jobs') {
-      return <JobCard item={item} onPress={(l) => navigation.navigate('ListingDetail', { listing: l })} colors={colors} />;
-    }
-    if (item.category === 'accommodation') {
-      return <HousingCard item={item} onPress={(l) => navigation.navigate('ListingDetail', { listing: l })} colors={colors} />;
-    }
-    return null;
+  function handleCategorySelect(id) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedCategory(id);
   }
 
-  // Build render data — group consecutive buysell/food into grid pairs, keep jobs/housing as rows
   function buildRenderData(data) {
     const result = [];
     let pendingGrid = null;
-
     for (const item of data) {
       const isGrid = item.category === 'buysell' || item.category === 'food' || !item.category;
       if (isGrid) {
-        if (pendingGrid) {
-          result.push({ __type: 'grid_pair', left: pendingGrid, right: item });
-          pendingGrid = null;
-        } else {
-          pendingGrid = item;
-        }
+        if (pendingGrid) { result.push({ __type: 'grid_pair', left: pendingGrid, right: item }); pendingGrid = null; }
+        else { pendingGrid = item; }
       } else {
-        if (pendingGrid) {
-          result.push({ __type: 'grid_pair', left: pendingGrid, right: null });
-          pendingGrid = null;
-        }
+        if (pendingGrid) { result.push({ __type: 'grid_pair', left: pendingGrid, right: null }); pendingGrid = null; }
         result.push(item);
       }
     }
     if (pendingGrid) result.push({ __type: 'grid_pair', left: pendingGrid, right: null });
-
     return result;
   }
 
+  function renderItem({ item }) {
+    if (item.__type === 'grid_pair') {
+      return (
+        <View style={styles.gridRow}>
+          <GridCard item={item.left} onPress={() => navigation.navigate('ListingDetail', { listing: item.left })} theme={theme} />
+          {item.right
+            ? <GridCard item={item.right} onPress={() => navigation.navigate('ListingDetail', { listing: item.right })} theme={theme} />
+            : <View style={{ width: CARD_W }} />
+          }
+        </View>
+      );
+    }
+    if (item.category === 'jobs') return <JobCard item={item} onPress={() => navigation.navigate('ListingDetail', { listing: item })} theme={theme} />;
+    if (item.category === 'accommodation') return <HousingCard item={item} onPress={() => navigation.navigate('ListingDetail', { listing: item })} theme={theme} />;
+    return null;
+  }
+
+  const activeCat = CATEGORIES.find(c => c.id === selectedCategory) || CATEGORIES[0];
   const renderData = buildRenderData(listings);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SafeAreaView style={{ backgroundColor: colors.secondary }}>
-        {/* Header */}
-        <View style={[styles.header, { backgroundColor: colors.secondary }]}>
-          <View style={styles.headerTop}>
-            <View>
-              <Text style={[styles.headerTitle, { color: '#fff' }]}>Marketplace</Text>
-              <View style={styles.cityPill}>
-                <Ionicons name="location-sharp" size={10} color="rgba(255,255,255,0.8)" />
-                <Text style={styles.cityPillText}>St. Louis, MO</Text>
-              </View>
+    <View style={[styles.root, { backgroundColor: theme.background }]}>
+      {/* Header */}
+      <LinearGradient colors={['#2D1B69','#1A0F3D']} style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.headerTitle}>Marketplace</Text>
+            <View style={styles.cityRow}>
+              <Ionicons name="location" size={11} color="#F4A833" />
+              <Text style={styles.cityText}>St. Louis, MO</Text>
             </View>
           </View>
-
-          {/* Search bar */}
-          <View style={[styles.searchBar, {
-            backgroundColor: 'rgba(255,255,255,0.15)',
-            borderColor: searchFocused ? '#fff' : 'transparent',
-            borderWidth: searchFocused ? 1 : 1,
-          }]}>
-            <Ionicons name="search-outline" size={16} color="rgba(255,255,255,0.7)" />
-            <TextInput
-              style={[styles.searchInput, { color: '#fff' }]}
-              placeholder="Search St. Louis listings..."
-              placeholderTextColor="rgba(255,255,255,0.5)"
-              value={searchQuery}
-              onChangeText={handleSearch}
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => setSearchFocused(false)}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => { setSearchQuery(''); fetchListings(); }} accessibilityLabel="Clear search">
-                <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.7)" />
-              </TouchableOpacity>
-            )}
-          </View>
+          <TouchableOpacity
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); navigation.navigate('PostListing', { preselectedCategory: selectedCategory }); }}
+            activeOpacity={0.85}
+          >
+            <LinearGradient colors={['#F4A833','#FF6B6B']} style={styles.postBtn} start={{x:0,y:0}} end={{x:1,y:0}}>
+              <Ionicons name="add" size={16} color="#fff" />
+              <Text style={styles.postBtnTxt}>Post</Text>
+            </LinearGradient>
+          </TouchableOpacity>
         </View>
+        <SearchBar
+          value={searchQuery}
+          onChangeText={handleSearch}
+          placeholder="Search listings..."
+          style={styles.searchBar}
+        />
+      </LinearGradient>
 
-        {/* Category pills */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={[styles.categoryScroll, { backgroundColor: colors.surface, borderBottomColor: colors.borderLight }]}
-          contentContainerStyle={styles.categoryContent}
-        >
+      {/* Category chips */}
+      <View style={[styles.chipsWrapper, { backgroundColor: theme.surface, borderBottomColor: theme.borderLight }]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
           {CATEGORIES.map((cat) => {
-            const active = selectedCategory === cat.id;
+            const isActive = selectedCategory === cat.id;
             return (
-              <TouchableOpacity
-                key={cat.label}
-                style={[
-                  styles.categoryChip,
-                  active
-                    ? { backgroundColor: cat.color, borderColor: cat.color }
-                    : { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
-                ]}
-                onPress={() => setSelectedCategory(cat.id)}
-                activeOpacity={0.8}
-              >
-                <Ionicons
-                  name={cat.icon}
-                  size={14}
-                  color={active ? '#fff' : colors.textSecondary}
-                />
-                <Text style={[
-                  styles.categoryChipText,
-                  { color: active ? '#fff' : colors.textSecondary },
-                  active && { fontWeight: '700' },
-                ]}>
-                  {cat.label}
-                </Text>
+              <TouchableOpacity key={cat.label} onPress={() => handleCategorySelect(cat.id)} style={styles.chipWrap} activeOpacity={0.8}>
+                {isActive
+                  ? <LinearGradient colors={cat.gradient} style={styles.chip} start={{x:0,y:0}} end={{x:1,y:0}}>
+                      <Ionicons name={cat.icon} size={13} color="#fff" />
+                      <Text style={[styles.chipTxt, styles.chipTxtActive]}>{cat.label}</Text>
+                    </LinearGradient>
+                  : <View style={[styles.chip, styles.chipInactive, { borderColor: theme.border, backgroundColor: theme.card }]}>
+                      <Ionicons name={`${cat.icon}-outline`} size={13} color={theme.textSecondary} />
+                      <Text style={[styles.chipTxt, { color: theme.textSecondary }]}>{cat.label}</Text>
+                    </View>
+                }
               </TouchableOpacity>
             );
           })}
         </ScrollView>
-      </SafeAreaView>
+      </View>
 
-      {/* Food banner — always visible when food category is selected */}
+      {/* Food banner */}
       {selectedCategory === 'food' && (
         <TouchableOpacity
-          style={styles.foodBanner}
+          style={[styles.foodBanner, { backgroundColor: theme.card }]}
           onPress={() => navigation.navigate('PostListing', { preselectedCategory: 'food' })}
           activeOpacity={0.85}
         >
-          <Text style={styles.foodBannerEmoji}>🍱</Text>
+          <Text style={styles.foodEmoji}>🍱</Text>
           <View style={{ flex: 1 }}>
-            <Text style={styles.foodBannerTitle}>Got a food business or tiffin service?</Text>
-            <Text style={styles.foodBannerSub}>List your home kitchen, catering, or local food business — reach your community in minutes.</Text>
+            <Text style={[styles.foodTitle, { color: theme.textPrimary }]}>Got a tiffin or food business?</Text>
+            <Text style={[styles.foodSub, { color: theme.textSecondary }]}>List your home kitchen or catering — reach your community in minutes.</Text>
           </View>
-          <Ionicons name="chevron-forward" size={16} color="#F39C12" />
+          <Ionicons name="chevron-forward" size={16} color="#F4A833" />
         </TouchableOpacity>
       )}
 
       {/* Content */}
       {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading listings...</Text>
-        </View>
+        <ScrollView contentContainerStyle={{ padding: spacing.md }}>
+          {[0,1,2].map(i => <ListItemSkeleton key={i} />)}
+        </ScrollView>
       ) : fetchError ? (
-        <View style={styles.emptyContainer}>
-          <View style={[styles.emptyIconBox, { backgroundColor: colors.surfaceSecondary }]}>
-            <Text style={{ fontSize: 40 }}>📡</Text>
-          </View>
-          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Couldn't load listings</Text>
-          <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-            Check your connection and try again.
-          </Text>
-          <TouchableOpacity
-            style={[styles.retryButton, { backgroundColor: colors.primary }]}
-            onPress={fetchListings}
-          >
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
+        <EmptyState type="search" title="Couldn't load listings" body="Check your connection and try again." ctaLabel="Retry" onCta={fetchListings} />
       ) : listings.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <View style={[styles.emptyIconBox, { backgroundColor: colors.surfaceSecondary }]}>
-            <Text style={{ fontSize: 40 }}>📭</Text>
-          </View>
-          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No listings yet</Text>
-          <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-            Be the first to post in St. Louis!
-          </Text>
-        </View>
+        <EmptyState type="listings" title="No listings yet" body="Be the first to post in your community!" ctaLabel="Post a Listing" onCta={() => navigation.navigate('PostListing')} />
       ) : (
         <FlatList
           data={renderData}
           keyExtractor={(item, i) => item.__type === 'grid_pair' ? `pair-${i}` : item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#F4A833" colors={['#F4A833']} />}
         />
       )}
-
-      {/* Floating post button */}
-      <TouchableOpacity
-        style={[styles.postButton, { backgroundColor: colors.primary }]}
-        onPress={() => navigation.navigate('PostListing', { preselectedCategory: selectedCategory })}
-        activeOpacity={0.9}
-      >
-        <Ionicons name="add" size={18} color="#fff" />
-        <Text style={styles.postButtonText}>Post Listing</Text>
-      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  root: { flex: 1 },
+  header: { paddingHorizontal: spacing.md, paddingBottom: 14 },
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 },
+  headerTitle: { color: '#fff', fontSize: fonts.sizes.xxl, fontWeight: '800' },
+  cityRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
+  cityText: { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '500' },
+  postBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 16, paddingVertical: 9, borderRadius: borderRadius.full, ...shadows.glow },
+  postBtnTxt: { color: '#fff', fontSize: fonts.sizes.sm, fontWeight: '700' },
+  searchBar: { marginTop: 2 },
 
-  // Header
-  header: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10 },
-  headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  headerTitle: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
-  cityPill: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
-  cityPillText: { fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: '500' },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
-  locationText: { fontSize: 12 },
+  chipsWrapper: { borderBottomWidth: 1 },
+  chipsRow: { paddingHorizontal: spacing.md, paddingVertical: 10, gap: 8 },
+  chipWrap: {},
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 13, paddingVertical: 7, borderRadius: borderRadius.full },
+  chipInactive: { borderWidth: 1.5 },
+  chipTxt: { fontSize: fonts.sizes.sm, fontWeight: '600' },
+  chipTxtActive: { color: '#fff' },
 
-  postButton: { position: 'absolute', bottom: 20, right: 20, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingVertical: 13, borderRadius: 28, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 6 },
-  postButtonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  foodBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, margin: 12, marginBottom: 0, padding: 14, borderRadius: borderRadius.lg, ...shadows.small },
+  foodEmoji: { fontSize: 28 },
+  foodTitle: { fontSize: fonts.sizes.sm, fontWeight: '700', marginBottom: 2 },
+  foodSub: { fontSize: 11, lineHeight: 16 },
 
-  searchBar: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7, gap: 6 },
-  searchInput: { flex: 1, fontSize: 13, padding: 0 },
-
-  // Categories
-  categoryScroll: { borderBottomWidth: 1 },
-  categoryContent: { paddingHorizontal: 14, paddingVertical: 10, gap: 8 },
-  categoryChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
-  categoryChipText: { fontSize: 13, fontWeight: '500' },
-
-  // Loading / Empty
-  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  loadingText: { marginTop: 10, fontSize: 14 },
-  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
-  emptyIconBox: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  emptyTitle: { fontSize: 19, fontWeight: '700' },
-  emptySubtitle: { fontSize: 14, marginTop: 6, textAlign: 'center' },
-  retryButton: { marginTop: 20, paddingHorizontal: 28, paddingVertical: 12, borderRadius: 22 },
-  retryButtonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  emptyPostBtn: { marginTop: 20, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 22 },
-  emptyPostText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-
-  listContent: { padding: 12, paddingBottom: 40 },
-  foodBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FFF8EC', borderColor: '#F39C1240', borderWidth: 1, borderRadius: 14, padding: 14, margin: 12, marginBottom: 0 },
-  foodBannerEmoji: { fontSize: 28 },
-  foodBannerTitle: { fontSize: 13, fontWeight: '700', color: '#B7770D', marginBottom: 3 },
-  foodBannerSub: { fontSize: 12, color: '#8a6200', lineHeight: 17 },
-
-  // Grid cards (buy/sell, food)
   gridRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  gridCard: {
-    width: CARD_WIDTH,
-    borderRadius: 14,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  gridImageBox: { width: '100%', height: CARD_WIDTH * 0.85, alignItems: 'center', justifyContent: 'center' },
-  gridImage: { width: '100%', height: '100%' },
-  gridEmoji: { fontSize: 44 },
-  featuredBadge: { position: 'absolute', top: 8, left: 8, flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#F39C12', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
-  featuredText: { color: '#fff', fontSize: 9, fontWeight: '700' },
-  gridInfo: { padding: 10 },
-  gridPrice: { fontSize: 16, fontWeight: '800', marginBottom: 2 },
-  gridTitle: { fontSize: 13, fontWeight: '500', lineHeight: 18, marginBottom: 5 },
-  gridMeta: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  gridLocation: { fontSize: 11 },
-
-  // Job cards
-  jobCard: {
-    flexDirection: 'row',
-    borderRadius: 14,
-    marginBottom: 10,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  jobAccent: { width: 4 },
-  jobContent: { flex: 1, padding: 14 },
-  jobTop: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
-  jobIconBox: { width: 46, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  jobText: { flex: 1 },
-  jobTitle: { fontSize: 15, fontWeight: '700' },
-  jobCompany: { fontSize: 12, marginTop: 2 },
-  jobPriceBox: { alignItems: 'flex-end' },
-  jobRate: { fontSize: 15, fontWeight: '800' },
-  jobPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
-  pill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
-  pillText: { fontSize: 11, fontWeight: '600' },
-  jobFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  jobFooterLeft: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  jobLocation: { fontSize: 11 },
-  jobDate: { fontSize: 11 },
-
-  // Housing cards
-  housingCard: {
-    borderRadius: 14,
-    marginBottom: 10,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  housingImage: { height: 160, alignItems: 'center', justifyContent: 'center' },
-  housingPriceBadge: { position: 'absolute', bottom: 10, left: 12, backgroundColor: 'rgba(0,0,0,0.65)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  housingPriceText: { color: '#fff', fontWeight: '800', fontSize: 15 },
-  housingInfo: { padding: 14 },
-  housingTitle: { fontSize: 16, fontWeight: '700', marginBottom: 4 },
-  housingDesc: { fontSize: 13, lineHeight: 18, marginBottom: 8 },
-  housingMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  housingLocation: { fontSize: 12 },
-  housingDot: { fontSize: 12 },
-  housingDate: { fontSize: 12 },
+  listContent: { padding: spacing.md, paddingBottom: 120 },
 });
