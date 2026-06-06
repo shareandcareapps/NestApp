@@ -6,8 +6,22 @@ import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
+import {
+  useFonts,
+  Nunito_400Regular,
+  Nunito_600SemiBold,
+  Nunito_700Bold,
+  Nunito_800ExtraBold,
+} from '@expo-google-fonts/nunito';
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+} from '@expo-google-fonts/inter';
+import Toast from 'react-native-toast-message';
 import RootNavigator from './core/navigation';
 import { ThemeProvider } from './core/theme/ThemeContext';
+import { toastConfig } from './core/components/ToastNotification';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -20,7 +34,7 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, info) {
-    console.error('App crash caught by ErrorBoundary:', error, info);
+    console.error('App crash:', error, info);
   }
 
   render() {
@@ -46,6 +60,17 @@ class ErrorBoundary extends React.Component {
 }
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    Nunito_400Regular,
+    Nunito_600SemiBold,
+    Nunito_700Bold,
+    Nunito_800ExtraBold,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+  });
+
+  // Fonts load async — app still renders; system font is fine fallback
   return (
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
@@ -55,6 +80,7 @@ export default function App() {
             <NavigationContainer>
               <RootNavigator />
             </NavigationContainer>
+            <Toast config={toastConfig} />
           </ThemeProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>
@@ -63,10 +89,10 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  errorContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, backgroundColor: '#fff' },
+  errorContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, backgroundColor: '#0F0A1E' },
   errorEmoji: { fontSize: 52, marginBottom: 16 },
-  errorTitle: { fontSize: 22, fontWeight: '700', color: '#1a1a1a', marginBottom: 10 },
-  errorMessage: { fontSize: 14, color: '#666', textAlign: 'center', lineHeight: 21, marginBottom: 28 },
-  errorButton: { backgroundColor: '#E63946', borderRadius: 12, paddingHorizontal: 32, paddingVertical: 14 },
-  errorButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  errorTitle: { fontSize: 22, fontWeight: '700', color: '#F5F0FF', marginBottom: 10 },
+  errorMessage: { fontSize: 14, color: '#B8ACCC', textAlign: 'center', lineHeight: 21, marginBottom: 28 },
+  errorButton: { backgroundColor: '#F4A833', borderRadius: 14, paddingHorizontal: 32, paddingVertical: 14 },
+  errorButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import {
   View, Text, ActivityIndicator, TouchableOpacity, StyleSheet,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { premiumTransition, withFadeOnFocus } from './transitions';
@@ -11,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../database/index';
 import useAppStore from '../store/index';
 import { useTheme } from '../theme/ThemeContext';
+import FloatingTabBar from '../components/FloatingTabBar';
 import LoginScreen from '../auth/screens/LoginScreen';
 import SignupScreen from '../auth/screens/SignupScreen';
 import SettingsScreen from '../screens/SettingsScreen';
@@ -40,12 +42,12 @@ const FadedMessagesNavigator = withFadeOnFocus(MessagesNavigator);
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-const colors = {
-  primary: '#E63946',
-  secondary: '#1D3557',
+const NAV_COLORS = {
+  primary: '#F4A833',
+  secondary: '#2D1B69',
   surface: '#FFFFFF',
-  border: '#E0E0E0',
-  textLight: '#999999',
+  border: '#E8DFD0',
+  textLight: '#9B8FAD',
 };
 
 function AvatarButton({ onPress, name }) {
@@ -88,46 +90,17 @@ function MainTabs({ navigation }) {
   }
 
   const sharedHeaderOptions = {
-    headerStyle: { backgroundColor: colors.secondary },
+    headerStyle: { backgroundColor: NAV_COLORS.secondary },
     headerTintColor: '#fff',
-    headerTitleStyle: { fontWeight: '500', fontSize: 17 },
+    headerTitleStyle: { fontWeight: '700', fontSize: 17 },
   };
 
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarActiveTintColor: theme.primary,
-        tabBarInactiveTintColor: 'rgba(255,255,255,0.45)',
-        tabBarStyle: {
-          backgroundColor: theme.secondary,
-          borderTopColor: 'rgba(255,255,255,0.1)',
-          borderTopWidth: 0.5,
-          height: 84,
-          paddingBottom: 28,
-          paddingTop: 8,
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '500',
-        },
-        tabBarIcon: ({ color, size, focused }) => {
-          const icons = {
-            Home: focused ? 'home' : 'home-outline',
-            Classifieds: focused ? 'grid' : 'grid-outline',
-            Carpool: focused ? 'car' : 'car-outline',
-            News: focused ? 'newspaper' : 'newspaper-outline',
-            Messages: focused ? 'chatbubble' : 'chatbubble-outline',
-          };
-          return (
-            <Ionicons
-              name={icons[route.name]}
-              size={22}
-              color={color}
-              style={{ opacity: focused ? 1 : 0.55 }}
-            />
-          );
-        },
-      })}
+      tabBar={(props) => <FloatingTabBar {...props} unreadMessages={unreadMessages} />}
+      screenOptions={{
+        tabBarStyle: { display: 'none' },
+      }}
     >
       <Tab.Screen
         name="Home"
@@ -191,9 +164,9 @@ function MainTabs({ navigation }) {
 function MainApp() {
   const sharedScreenOptions = {
     ...premiumTransition,
-    headerStyle: { backgroundColor: '#1D3557' },
+    headerStyle: { backgroundColor: '#2D1B69' },
     headerTintColor: '#fff',
-    headerTitleStyle: { fontWeight: '500' },
+    headerTitleStyle: { fontWeight: '700' },
     headerBackTitleVisible: false,
   };
   return (
@@ -230,15 +203,18 @@ function AuthStack() {
 
 function LoadingScreen() {
   return (
-    <View style={{
-      flex: 1, alignItems: 'center', justifyContent: 'center',
-      backgroundColor: '#1D3557',
-    }}>
-      <Text style={{ fontSize: 36, fontWeight: 'bold', color: '#fff', marginBottom: 20 }}>
+    <LinearGradient
+      colors={['#0F0A1E', '#2D1B69', '#4A2D9C']}
+      style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+    >
+      <Text style={{ fontSize: 42, fontWeight: '800', color: '#fff', marginBottom: 6, letterSpacing: 1 }}>
         NestApp
       </Text>
-      <ActivityIndicator color="#E63946" size="large" />
-    </View>
+      <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.55)', marginBottom: 36, letterSpacing: 2 }}>
+        WHERE CULTURE MEETS COMMUNITY
+      </Text>
+      <ActivityIndicator color="#F4A833" size="large" />
+    </LinearGradient>
   );
 }
 

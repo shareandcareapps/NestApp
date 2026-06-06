@@ -1,56 +1,108 @@
 // core/theme/index.js
-// CORE FILE — DO NOT MODIFY STRUCTURE
-// All app colors, fonts and sizes live here
-
 export const lightColors = {
-  primary: '#E63946',
-  secondary: '#1D3557',
-  accent: '#457B9D',
-  background: '#F8F9FA',
+  // Brand
+  primary: '#F4A833',
+  secondary: '#2D1B69',
+  accent: '#FF6B6B',
+
+  // Backgrounds
+  background: '#FEFAF4',
   surface: '#FFFFFF',
-  border: '#E0E0E0',
-  textPrimary: '#1A1A1A',
-  textSecondary: '#666666',
-  textLight: '#999999',
+  card: '#FFF8EE',
+  inputBackground: '#F5F0E8',
+
+  // Borders
+  border: '#E8DFD0',
+  borderLight: '#F0EAE0',
+
+  // Text
+  textPrimary: '#1A1035',
+  textSecondary: '#5A4F6E',
+  textLight: '#9B8FAD',
   textWhite: '#FFFFFF',
-  success: '#2ECC71',
-  warning: '#F39C12',
-  error: '#E74C3C',
-  info: '#3498DB',
-  classifieds: '#E63946',
-  rides: '#2ECC71',
-  news: '#3498DB',
+  textMuted: '#C4B9D4',
+
+  // States
+  success: '#00C48C',
+  warning: '#F4A833',
+  error: '#FF6B6B',
+  info: '#0099FF',
+
+  // Feature accent colors
+  classifieds: '#FF6B6B',
+  rides: '#00C48C',
+  news: '#0099FF',
   messages: '#9B59B6',
-  card: '#FFFFFF',
-  inputBackground: '#F8F9FA',
+
+  // Gradients (arrays for LinearGradient)
+  gradientPrimary: ['#F4A833', '#FF6B6B'],
+  gradientSecondary: ['#2D1B69', '#4A2D9C'],
+  gradientCard: ['#FFF8EE', '#FFF0DC'],
+  gradientSuccess: ['#00C48C', '#00A878'],
+
+  // Overlay
+  overlay: 'rgba(45, 27, 105, 0.6)',
+  overlayLight: 'rgba(45, 27, 105, 0.15)',
+  glass: 'rgba(255, 255, 255, 0.75)',
+  glassBorder: 'rgba(255, 255, 255, 0.4)',
 };
 
 export const darkColors = {
-  primary: '#E63946',
-  secondary: '#1D3557',
-  accent: '#457B9D',
-  background: '#121212',
-  surface: '#1E1E1E',
-  border: '#333333',
-  textPrimary: '#F5F5F5',
-  textSecondary: '#AAAAAA',
-  textLight: '#777777',
+  // Brand
+  primary: '#F4A833',
+  secondary: '#1A1035',
+  accent: '#FF6B6B',
+
+  // Backgrounds
+  background: '#0F0A1E',
+  surface: '#1A1035',
+  card: '#221650',
+  inputBackground: '#1A1035',
+
+  // Borders
+  border: '#2D1B69',
+  borderLight: '#3D2B79',
+
+  // Text
+  textPrimary: '#F5F0FF',
+  textSecondary: '#B8ACCC',
+  textLight: '#7B6F8F',
   textWhite: '#FFFFFF',
-  success: '#2ECC71',
-  warning: '#F39C12',
-  error: '#E74C3C',
-  info: '#3498DB',
-  classifieds: '#E63946',
-  rides: '#2ECC71',
-  news: '#3498DB',
+  textMuted: '#4A3F5E',
+
+  // States
+  success: '#00C48C',
+  warning: '#F4A833',
+  error: '#FF6B6B',
+  info: '#0099FF',
+
+  // Feature accent colors
+  classifieds: '#FF6B6B',
+  rides: '#00C48C',
+  news: '#0099FF',
   messages: '#9B59B6',
-  card: '#2A2A2A',
-  inputBackground: '#2A2A2A',
+
+  // Gradients
+  gradientPrimary: ['#F4A833', '#FF6B6B'],
+  gradientSecondary: ['#2D1B69', '#4A2D9C'],
+  gradientCard: ['#1A1035', '#221650'],
+  gradientSuccess: ['#00C48C', '#00A878'],
+
+  // Overlay
+  overlay: 'rgba(15, 10, 30, 0.8)',
+  overlayLight: 'rgba(244, 168, 51, 0.12)',
+  glass: 'rgba(26, 16, 53, 0.75)',
+  glassBorder: 'rgba(244, 168, 51, 0.2)',
 };
 
 export const fonts = {
-  regular: 'System',
-  bold: 'System',
+  regular: 'Nunito_400Regular',
+  medium: 'Nunito_600SemiBold',
+  bold: 'Nunito_700Bold',
+  extraBold: 'Nunito_800ExtraBold',
+  body: 'Inter_400Regular',
+  bodyMedium: 'Inter_500Medium',
+  bodySemiBold: 'Inter_600SemiBold',
   sizes: {
     xs: 11,
     sm: 13,
@@ -59,6 +111,7 @@ export const fonts = {
     xl: 20,
     xxl: 24,
     xxxl: 30,
+    display: 38,
   },
 };
 
@@ -69,29 +122,46 @@ export const spacing = {
   lg: 24,
   xl: 32,
   xxl: 48,
+  xxxl: 64,
 };
 
 export const borderRadius = {
-  sm: 6,
-  md: 12,
+  xs: 4,
+  sm: 8,
+  md: 14,
   lg: 20,
+  xl: 28,
   full: 999,
 };
 
 export const shadows = {
   small: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowColor: '#2D1B69',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
   },
   medium: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowColor: '#2D1B69',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  large: {
+    shadowColor: '#2D1B69',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  glow: {
+    shadowColor: '#F4A833',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 8,
   },
 };
 

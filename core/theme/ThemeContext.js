@@ -1,93 +1,41 @@
 // core/theme/ThemeContext.js
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext } from 'react';
 import { useColorScheme } from 'react-native';
 import useAppStore from '../store/index';
+import { lightColors, darkColors } from './index';
 
-export const lightColors = {
-  background: '#F8F9FA',
-  surface: '#FFFFFF',
-  surfaceSecondary: '#F0F0F0',
-  card: '#FFFFFF',
-  inputBackground: '#F8F9FA',
-  navBackground: '#1D3557',
+// Extend with semantic tokens used across components
+const buildTheme = (base, isDark) => ({
+  ...base,
+  isDark,
+  // surface variants
+  surfaceSecondary: isDark ? '#221650' : '#F5F0E8',
+  navBackground: isDark ? '#0F0A1E' : '#2D1B69',
   navText: '#FFFFFF',
-  tabBackground: '#FFFFFF',
-  primary: '#E63946',
-  secondary: '#1D3557',
-  accent: '#457B9D',
-  textPrimary: '#1A1A1A',
-  textSecondary: '#666666',
-  textLight: '#999999',
-  textWhite: '#FFFFFF',
-  textInverse: '#FFFFFF',
-  border: '#E0E0E0',
-  borderLight: '#F0F0F0',
-  success: '#2ECC71',
-  successBackground: '#E8F8F0',
-  successText: '#27AE60',
-  warning: '#F39C12',
-  warningBackground: '#FFF9E6',
-  warningText: '#856404',
-  error: '#E74C3C',
-  errorBackground: '#FFF5F5',
-  info: '#3498DB',
-  infoBackground: '#E8F4FD',
-  classifieds: '#E63946',
-  rides: '#2ECC71',
-  news: '#3498DB',
-  messages: '#9B59B6',
-  overlay: 'rgba(0,0,0,0.5)',
-};
+  tabBackground: isDark ? '#1A1035' : '#FFFFFF',
+  // state semantic backgrounds
+  successBackground: isDark ? '#003D2E' : '#E0FAF2',
+  successText: '#00C48C',
+  warningBackground: isDark ? '#3D2800' : '#FFF8E6',
+  warningText: '#F4A833',
+  errorBackground: isDark ? '#3D0A0A' : '#FFF0F0',
+  infoBackground: isDark ? '#00214D' : '#E6F4FF',
+  // overlay
+  overlay: isDark ? 'rgba(15,10,30,0.8)' : 'rgba(45,27,105,0.6)',
+  // keep legacy keys for screens not yet revamped
+  textInverse: isDark ? '#000000' : '#FFFFFF',
+});
 
-export const darkColors = {
-  background: '#0D0D0D',
-  surface: '#1A1A1A',
-  surfaceSecondary: '#252525',
-  card: '#1E1E1E',
-  inputBackground: '#252525',
-  navBackground: '#0F1F2E',
-  navText: '#FFFFFF',
-  tabBackground: '#1A1A1A',
-  primary: '#E63946',
-  secondary: '#457B9D',
-  accent: '#457B9D',
-  textPrimary: '#F5F5F5',
-  textSecondary: '#AAAAAA',
-  textLight: '#666666',
-  textWhite: '#FFFFFF',
-  textInverse: '#000000',
-  border: '#333333',
-  borderLight: '#2A2A2A',
-  success: '#2ECC71',
-  successBackground: '#0D2B1A',
-  successText: '#2ECC71',
-  warning: '#F39C12',
-  warningBackground: '#2B1F0A',
-  warningText: '#F39C12',
-  error: '#E74C3C',
-  errorBackground: '#2B0D0D',
-  info: '#3498DB',
-  infoBackground: '#0D1F2B',
-  classifieds: '#E63946',
-  rides: '#2ECC71',
-  news: '#3498DB',
-  messages: '#9B59B6',
-  overlay: 'rgba(0,0,0,0.7)',
-};
-
-const ThemeContext = createContext(lightColors);
+const ThemeContext = createContext(buildTheme(lightColors, false));
 
 export function ThemeProvider({ children }) {
   const systemTheme = useColorScheme();
   const themeMode = useAppStore((state) => state.themeMode);
-
-  const isDark = themeMode === 'dark' ||
-    (themeMode === 'auto' && systemTheme === 'dark');
-
-  const colors = isDark ? darkColors : lightColors;
+  const isDark = themeMode === 'dark' || (themeMode === 'auto' && systemTheme === 'dark');
+  const theme = buildTheme(isDark ? darkColors : lightColors, isDark);
 
   return (
-    <ThemeContext.Provider value={colors}>
+    <ThemeContext.Provider value={theme}>
       {children}
     </ThemeContext.Provider>
   );
