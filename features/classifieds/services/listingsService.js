@@ -10,6 +10,8 @@ export async function getListings(category = null) {
     .from('listings')
     .select('*')
     .eq('status', 'active')
+    .is('deleted_at', null)
+    .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
     .order('is_boosted', { ascending: false })
     .order('created_at', { ascending: false });
 
@@ -48,6 +50,9 @@ export async function getListingById(id) {
 
 // ─── Create new listing ────────────────────────
 export async function createListing(listing) {
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 60);
+
   const { data, error } = await supabase
     .from('listings')
     .insert({
@@ -55,6 +60,7 @@ export async function createListing(listing) {
       status: 'active',
       is_active: true,
       is_boosted: false,
+      expires_at: expiresAt.toISOString(),
     })
     .select()
     .single();
@@ -101,15 +107,33 @@ export async function updateListing(id, updates) {
   return data;
 }
 
-// ─── Delete listing ────────────────────────────
+// ─── Soft-delete listing ───────────────────────
+// Sets deleted_at — pg_cron hard-deletes after 30 days.
 export async function deleteListing(id) {
   const { error } = await supabase
     .from('listings')
-    .delete()
+    .update({ deleted_at: new Date().toISOString(), status: 'archived', is_active: false })
     .eq('id', id);
 
   if (error) throw error;
   return true;
+}
+
+// ─── Renew listing ─────────────────────────────
+// Resets expires_at to 60 days from now and re-activates.
+export async function renewListing(id) {
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 60);
+
+  const { data, error } = await supabase
+    .from('listings')
+    .update({ expires_at: expiresAt.toISOString(), status: 'active', is_active: true })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
 }
 
 // ─── Search listings ───────────────────────────

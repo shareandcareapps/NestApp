@@ -130,6 +130,7 @@ export default function PostRideScreen({ navigation }) {
         ride_date:       anyTime
           ? new Date(rideDate.getFullYear(), rideDate.getMonth(), rideDate.getDate(), 12, 0).toISOString()
           : combinedDateTime.toISOString(),
+        any_time:        anyTime,
         seats_available: postType === 'offer' ? seats : peopleCount,
         category,
         university:      category === 'university' ? university : null,

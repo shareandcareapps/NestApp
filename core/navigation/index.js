@@ -4,7 +4,8 @@ import {
   View, Text, ActivityIndicator, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createStackNavigator, TransitionPresets } from '@react-navigation/stack';
+import { createStackNavigator } from '@react-navigation/stack';
+import { premiumTransition, withFadeOnFocus } from './transitions';
 import { CommonActions } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../database/index';
@@ -29,6 +30,12 @@ import ClassifiedsNavigator from '../../features/classifieds/index';
 import RidesNavigator from '../../features/rides/index';
 import NewsNavigator from '../../features/news/index';
 import MessagesNavigator from '../../features/messages/index';
+
+const FadedHomeScreen = withFadeOnFocus(HomeScreen);
+const FadedClassifiedsNavigator = withFadeOnFocus(ClassifiedsNavigator);
+const FadedRidesNavigator = withFadeOnFocus(RidesNavigator);
+const FadedNewsNavigator = withFadeOnFocus(NewsNavigator);
+const FadedMessagesNavigator = withFadeOnFocus(MessagesNavigator);
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -124,66 +131,56 @@ function MainTabs({ navigation }) {
     >
       <Tab.Screen
         name="Home"
-        component={HomeScreen}
+        component={FadedHomeScreen}
         options={{ headerShown: false }}
-        listeners={({ navigation, route }) => ({
+        listeners={({ navigation }) => ({
           tabPress: (e) => {
-            if (navigation.isFocused()) {
-              e.preventDefault();
-              navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: route.name }] }));
-            }
+            e.preventDefault();
+            navigation.navigate('Home');
           },
         })}
       />
       <Tab.Screen
         name="Classifieds"
-        component={ClassifiedsNavigator}
+        component={FadedClassifiedsNavigator}
         options={{ headerShown: false }}
-        listeners={({ navigation, route }) => ({
+        listeners={({ navigation }) => ({
           tabPress: (e) => {
-            if (navigation.isFocused()) {
-              e.preventDefault();
-              navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: route.name }] }));
-            }
+            e.preventDefault();
+            navigation.navigate('Classifieds', { screen: 'BrowseListings' });
           },
         })}
       />
       <Tab.Screen
         name="Carpool"
-        component={RidesNavigator}
+        component={FadedRidesNavigator}
         options={{ headerShown: false }}
-        listeners={({ navigation, route }) => ({
+        listeners={({ navigation }) => ({
           tabPress: (e) => {
-            if (navigation.isFocused()) {
-              e.preventDefault();
-              navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: route.name }] }));
-            }
+            e.preventDefault();
+            navigation.navigate('Carpool', { screen: 'BrowseRides' });
           },
         })}
       />
       <Tab.Screen
         name="News"
-        component={NewsNavigator}
+        component={FadedNewsNavigator}
         options={{ headerShown: false }}
-        listeners={({ navigation, route }) => ({
+        listeners={({ navigation }) => ({
           tabPress: (e) => {
-            if (navigation.isFocused()) {
-              e.preventDefault();
-              navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: route.name }] }));
-            }
+            e.preventDefault();
+            navigation.navigate('News', { screen: 'NewsFeed' });
           },
         })}
       />
       <Tab.Screen
         name="Messages"
-        component={MessagesNavigator}
+        component={FadedMessagesNavigator}
         options={{ headerShown: false, tabBarBadge: unreadMessages > 0 ? (unreadMessages > 99 ? '99+' : unreadMessages) : undefined }}
-        listeners={({ navigation, route }) => ({
+        listeners={({ navigation }) => ({
           tabPress: (e) => {
-            if (navigation.isFocused()) {
-              e.preventDefault();
-              navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: route.name }] }));
-            }
+            e.preventDefault();
+            navigation.navigate('Messages', { screen: 'Conversations' });
           },
         })}
       />
@@ -193,14 +190,14 @@ function MainTabs({ navigation }) {
 
 function MainApp() {
   const sharedScreenOptions = {
-    ...TransitionPresets.SlideFromRightIOS,
+    ...premiumTransition,
     headerStyle: { backgroundColor: '#1D3557' },
     headerTintColor: '#fff',
     headerTitleStyle: { fontWeight: '500' },
     headerBackTitleVisible: false,
   };
   return (
-    <Stack.Navigator screenOptions={{ ...TransitionPresets.SlideFromRightIOS }}>
+    <Stack.Navigator screenOptions={{ ...premiumTransition }}>
       <Stack.Screen
         name="Tabs"
         component={MainTabs}
@@ -224,7 +221,7 @@ function MainApp() {
 
 function AuthStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ ...premiumTransition, headerShown: false }}>
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Signup" component={SignupScreen} />
     </Stack.Navigator>
@@ -268,7 +265,7 @@ export default function RootNavigator() {
   if (loading) return <LoadingScreen />;
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ ...premiumTransition, headerShown: false }}>
       {isAuthenticated ? (
         <Stack.Screen name="Main" component={MainApp} />
       ) : (

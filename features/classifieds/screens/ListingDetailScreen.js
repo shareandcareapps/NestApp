@@ -43,6 +43,20 @@ export default function ListingDetailScreen({ route, navigation }) {
 
   useEffect(() => { if (!poster) loadProfile(); }, []);
 
+  useEffect(() => {
+    if (!navigation.canGoBack()) {
+      navigation.setOptions({
+        headerLeft: () => (
+          <TouchableOpacity
+            onPress={() => navigation.navigate('BrowseListings')}
+            style={{ paddingHorizontal: 12, paddingVertical: 4 }}>
+            <Ionicons name="chevron-back" size={26} color="#fff" />
+          </TouchableOpacity>
+        ),
+      });
+    }
+  }, [navigation]);
+
   async function loadProfile() {
     const profile = await getProfile(listing.user_id);
     if (profile) setPoster(profile);
@@ -60,6 +74,7 @@ export default function ListingDetailScreen({ route, navigation }) {
             conversation,
             otherProfile: poster || { username: 'Community Member' },
             listingTitle: listing.title,
+            contextType: 'listing',
           },
         },
       });

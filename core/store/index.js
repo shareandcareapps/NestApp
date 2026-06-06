@@ -13,7 +13,14 @@ const useAppStore = create((set) => ({
 
   setUser: (user) => set({ user, isAuthenticated: !!user }),
   setSession: (session) => set({ session }),
-  clearAuth: () => set({ user: null, session: null, isAuthenticated: false }),
+  clearAuth: () => set({
+    user: null,
+    session: null,
+    isAuthenticated: false,
+    unreadMessages: 0,
+    unreadConversationIds: [],
+    readConversationIds: [],
+  }),
 
   // ─── App State ────────────────────────────────
   // St. Louis only — multi-city support reserved for future release

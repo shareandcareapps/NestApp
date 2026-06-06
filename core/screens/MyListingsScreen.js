@@ -8,7 +8,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import useAppStore from '../store/index';
 import { useTheme } from '../theme/ThemeContext';
-import { getMyListings, setListingStatus, deleteListing } from '../../features/classifieds/services/listingsService';
+import { getMyListings, setListingStatus, deleteListing, renewListing } from '../../features/classifieds/services/listingsService';
 import MarkSoldModal from '../components/MarkSoldModal';
 
 const categoryColors = { accommodation: '#E63946', jobs: '#2ECC71', buysell: '#3498DB', food: '#F39C12' };
@@ -91,10 +91,31 @@ export default function MyListingsScreen({ navigation }) {
     setListings((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
   }
 
+  async function handleRenew(listing) {
+    try {
+      const updated = await renewListing(listing.id);
+      setListings((prev) => prev.map((l) => (l.id === listing.id ? updated : l)));
+      Alert.alert('Renewed', 'Your listing is live for another 60 days.');
+    } catch (e) {
+      Alert.alert('Error', e?.message || 'Could not renew.');
+    }
+  }
+
   const statusOf = (l) => l.status || (l.is_active === false ? 'archived' : 'active');
-  const visible = listings.filter((l) =>
-    tab === 'active' ? statusOf(l) === 'active' : statusOf(l) !== 'active'
-  );
+
+  function expiryInfo(listing) {
+    if (!listing.expires_at) return null;
+    const now = new Date();
+    const exp = new Date(listing.expires_at);
+    const daysLeft = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
+    return { daysLeft, isExpired: daysLeft <= 0 };
+  }
+
+  const visible = listings.filter((l) => {
+    const st = statusOf(l);
+    if (tab === 'active') return st === 'active';
+    return st !== 'active';
+  });
 
   if (loading) {
     return (
@@ -107,8 +128,12 @@ export default function MyListingsScreen({ navigation }) {
   function renderCard({ item }) {
     const st = statusOf(item);
     const isSellable = item.category === 'buysell' || item.category === 'food';
+    const expiry = expiryInfo(item);
+    const isExpired = expiry?.isExpired;
+    const expiringSoon = expiry && !isExpired && expiry.daysLeft <= 7;
+
     return (
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: isExpired ? '#E63946' : expiringSoon ? '#F39C12' : colors.border }]}>
         <View style={styles.cardHeader}>
           <View style={[styles.categoryBadge, { backgroundColor: categoryColors[item.category] + '20' }]}>
             <Text style={styles.categoryEmoji}>{categoryEmojis[item.category]}</Text>
@@ -128,12 +153,22 @@ export default function MyListingsScreen({ navigation }) {
           <Text style={[styles.cardDate, { color: colors.textLight }]}>
             Posted {new Date(item.created_at).toLocaleDateString()}
           </Text>
-          {st === 'sold' && (
+          {isExpired && (
+            <View style={[styles.statusBadge, { backgroundColor: '#E6394620' }]}>
+              <Text style={{ color: '#E63946', fontSize: 11, fontWeight: '700' }}>⏰ EXPIRED</Text>
+            </View>
+          )}
+          {expiringSoon && (
+            <View style={[styles.statusBadge, { backgroundColor: '#F39C1220' }]}>
+              <Text style={{ color: '#F39C12', fontSize: 11, fontWeight: '700' }}>⚠️ {expiry.daysLeft}d left</Text>
+            </View>
+          )}
+          {st === 'sold' && !isExpired && (
             <View style={[styles.statusBadge, { backgroundColor: '#2ECC7120' }]}>
               <Text style={{ color: '#2ECC71', fontSize: 11, fontWeight: '700' }}>✓ SOLD</Text>
             </View>
           )}
-          {st === 'archived' && (
+          {st === 'archived' && !isExpired && (
             <View style={[styles.statusBadge, { backgroundColor: colors.surfaceSecondary }]}>
               <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '700' }}>📦 ARCHIVED</Text>
             </View>
@@ -141,8 +176,31 @@ export default function MyListingsScreen({ navigation }) {
         </View>
 
         <View style={[styles.cardActions, { borderTopColor: colors.borderLight }]}>
-          {st === 'active' ? (
+          {isExpired ? (
             <>
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: '#2ECC7115', borderColor: '#2ECC71', flex: 1 }]}
+                onPress={() => handleRenew(item)}
+              >
+                <Text style={{ color: '#1a7a45', fontSize: 12, fontWeight: '700' }}>🔄 Renew for 60 days</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: colors.errorBackground, borderColor: colors.error }]}
+                onPress={() => handleDelete(item.id)}
+              >
+                <Text style={[styles.actionText, { color: colors.error }]}>🗑️</Text>
+              </TouchableOpacity>
+            </>
+          ) : st === 'active' ? (
+            <>
+              {expiringSoon && (
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: '#F39C1215', borderColor: '#F39C12' }]}
+                  onPress={() => handleRenew(item)}
+                >
+                  <Text style={{ color: '#F39C12', fontSize: 12, fontWeight: '600' }}>🔄 Renew</Text>
+                </TouchableOpacity>
+              )}
               {isSellable && (
                 <TouchableOpacity
                   style={[styles.actionBtn, { backgroundColor: '#2ECC7115', borderColor: '#2ECC71' }]}

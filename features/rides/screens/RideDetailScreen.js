@@ -42,7 +42,7 @@ const OFFER_ACCENT   = '#1ABC9C';
 const REQUEST_ACCENT = '#9B59B6';
 
 export default function RideDetailScreen({ route, navigation }) {
-  const { ride }   = route.params;
+  const { ride, fromChat } = route.params;
   const user       = useAppStore((state) => state.user);
   const colors     = useTheme();
   const isRequest  = ride.ride_type === 'request';
@@ -58,6 +58,26 @@ export default function RideDetailScreen({ route, navigation }) {
   useEffect(() => {
     if (!poster && posterId) getRidePoster(posterId).then(setPoster).catch(() => {});
   }, []);
+
+  // When entered cross-tab (fromChat or no Carpool history), inject a back button.
+  // canGoBack() can't be trusted here — the tab navigator itself satisfies it
+  // even when there's no screen to go back to within the Carpool stack.
+  useEffect(() => {
+    if (fromChat || !navigation.canGoBack()) {
+      navigation.setOptions({
+        headerLeft: () => (
+          <TouchableOpacity
+            onPress={() => fromChat
+              ? navigation.navigate('Messages')
+              : navigation.navigate('BrowseRides')
+            }
+            style={{ paddingHorizontal: 12, paddingVertical: 4 }}>
+            <Ionicons name="chevron-back" size={26} color="#fff" />
+          </TouchableOpacity>
+        ),
+      });
+    }
+  }, [navigation]);
 
   const posterName  = formatDisplayName(poster?.username);
   const posterColor = AVATAR_COLORS[posterName.charCodeAt(0) % AVATAR_COLORS.length];
@@ -83,7 +103,11 @@ export default function RideDetailScreen({ route, navigation }) {
 
   async function handleMessage() {
     try {
-      const conversation = await getOrCreateConversation(user.id, posterId);
+      const isFlexible = !!ride.any_time;
+      const rideTitle  = isFlexible
+        ? `${ride.from_location || '?'} → ${ride.to_location || '?'}, ${dateLabel}`
+        : `${ride.from_location || '?'} → ${ride.to_location || '?'}, ${dateLabel} · ${timeLabel}`;
+      const conversation = await getOrCreateConversation(user.id, posterId, ride.id, rideTitle, ride.ride_date || null);
       navigation.navigate('Tabs', {
         screen: 'Messages',
         params: {
@@ -91,6 +115,17 @@ export default function RideDetailScreen({ route, navigation }) {
           params: {
             conversation,
             otherProfile: poster || { id: posterId, username: isRequest ? 'Rider' : 'Driver' },
+            listingTitle: rideTitle,
+            contextType: 'ride',
+            rideContext: {
+              rideId: ride.id,
+              from:   ride.from_location || '?',
+              to:     ride.to_location   || '?',
+              date:   dateLabel,
+              time:   isFlexible ? null : timeLabel,
+              seats:  ride.seats_available ?? null,
+              poster: posterName,
+            },
           },
         },
       });
@@ -152,18 +187,18 @@ export default function RideDetailScreen({ route, navigation }) {
       showsVerticalScrollIndicator={false}
     >
 
-      {/* ── Hero Banner ── */}
-      <View style={[styles.hero, { backgroundColor: accent + '16' }]}>
+      {/* ── Compact Hero Strip ── */}
+      <View style={[styles.hero, { backgroundColor: accent + '14' }]}>
         <View style={[styles.heroIconWrap, { backgroundColor: accent + '22' }]}>
           {uniData ? (
             <Image source={uniData.logo} style={styles.heroUniLogo} resizeMode="contain" />
           ) : (
-            <Ionicons name={catMeta.icon} size={32} color={accent} />
+            <Ionicons name={catMeta.icon} size={20} color={accent} />
           )}
         </View>
-        <Text style={[styles.heroLabel, { color: accent }]}>{bannerLabel}</Text>
+        <Text style={[styles.heroLabel, { color: accent }]} numberOfLines={1}>{bannerLabel}</Text>
         <View style={[styles.heroBadge, { backgroundColor: accent }]}>
-          <Ionicons name={isRequest ? 'hand-left' : 'car-sport'} size={12} color="#fff" />
+          <Ionicons name={isRequest ? 'hand-left' : 'car-sport'} size={11} color="#fff" />
           <Text style={styles.heroBadgeText}>
             {isRequest ? 'Need a Seat' : 'Offering Seat'}
           </Text>
@@ -410,16 +445,19 @@ export default function RideDetailScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
 
-  // Hero
-  hero: { paddingVertical: 28, paddingHorizontal: 20, alignItems: 'center', gap: 10 },
-  heroIconWrap: { width: 70, height: 70, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  heroUniLogo: { width: 50, height: 50, borderRadius: 12 },
-  heroLabel: { fontSize: 17, fontWeight: '700', textAlign: 'center' },
-  heroBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
+  // Hero — compact horizontal strip
+  hero: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 12, paddingHorizontal: 16,
   },
-  heroBadgeText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  heroIconWrap: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  heroUniLogo: { width: 26, height: 26, borderRadius: 6 },
+  heroLabel: { fontSize: 15, fontWeight: '700', flex: 1 },
+  heroBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
+  },
+  heroBadgeText: { color: '#fff', fontSize: 12, fontWeight: '600' },
 
   body: { padding: 16, gap: 12 },
 

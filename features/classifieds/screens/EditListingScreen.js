@@ -5,6 +5,7 @@ import {
   ScrollView, ActivityIndicator, Alert, StyleSheet, Switch, Image,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { compressImage } from '../../../core/utils/imageUtils';
 import { updateListing } from '../services/listingsService';
 import useAppStore from '../../../core/store/index';
 import { supabase } from '../../../core/database/index';
@@ -75,9 +76,10 @@ export default function EditListingScreen({ route, navigation }) {
   async function uploadImage(imageAsset) {
     try {
       setUploading(true);
-      const ext = imageAsset.uri.split('.').pop();
+      const compressedUri = await compressImage(imageAsset.uri);
+      const ext = 'jpg';
       const fileName = `${user.id}/${Date.now()}.${ext}`;
-      const response = await fetch(imageAsset.uri);
+      const response = await fetch(compressedUri);
       const blob = await response.blob();
       const arrayBuffer = await new Response(blob).arrayBuffer();
       const { error } = await supabase.storage.from('listings').upload(fileName, arrayBuffer, { contentType: `image/${ext}` });

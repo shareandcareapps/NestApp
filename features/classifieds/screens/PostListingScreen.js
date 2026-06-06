@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { compressImage } from '../../../core/utils/imageUtils';
 import { createListing } from '../services/listingsService';
 import useAppStore from '../../../core/store/index';
 import { supabase } from '../../../core/database/index';
@@ -112,10 +113,11 @@ export default function PostListingScreen({ navigation, route }) {
     try {
       setUploading(true);
       setUploadProgress(10);
-      const ext = imageAsset.uri.split('.').pop();
+      const compressedUri = await compressImage(imageAsset.uri);
+      const ext = 'jpg';
       const fileName = `${user.id}/${Date.now()}.${ext}`;
       setUploadProgress(30);
-      const response = await fetch(imageAsset.uri);
+      const response = await fetch(compressedUri);
       const blob = await response.blob();
       const arrayBuffer = await new Response(blob).arrayBuffer();
       setUploadProgress(60);
