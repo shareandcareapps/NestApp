@@ -19,9 +19,9 @@ import EmptyState from '../../../core/components/EmptyState';
 import SkeletonLoader from '../../../core/components/SkeletonLoader';
 import { fonts, spacing, borderRadius, shadows } from '../../../core/theme/index';
 
-const OFFER_COLOR    = '#00C48C';
-const REQUEST_COLOR  = '#9B59B6';
-const LONGRIDE_COLOR = '#F4A833';
+const OFFER_COLOR    = '#0099FF';
+const REQUEST_COLOR  = '#F4A833';
+const LONGRIDE_COLOR = '#00C48C';
 const AVATAR_COLORS  = ['#FF6B6B','#2D1B69','#00C48C','#0099FF','#9B59B6','#F4A833'];
 
 const CATEGORIES = [
@@ -70,8 +70,10 @@ function RideCard({ item, onPress, theme }) {
       activeOpacity={1}
     >
       <Animated.View style={[cStyles.card, { backgroundColor: theme.card, transform: [{ scale }] }, shadows.small]}>
-        {/* Accent bar */}
-        <LinearGradient colors={isRequest ? [REQUEST_COLOR, '#7B2FBE'] : isLongRide ? [LONGRIDE_COLOR,'#E68A00'] : [OFFER_COLOR,'#007A5E']} style={cStyles.accentBar} start={{x:0,y:0}} end={{x:1,y:0}} />
+        {/* Top accent bar */}
+        <LinearGradient colors={isRequest ? [REQUEST_COLOR, '#E68A00'] : isLongRide ? [LONGRIDE_COLOR,'#007A5E'] : [OFFER_COLOR,'#0055CC']} style={cStyles.accentBar} start={{x:0,y:0}} end={{x:1,y:0}} />
+        {/* Left accent bar for extra visual weight in light mode */}
+        <View style={[cStyles.accentLeft, { backgroundColor: accent }]} />
 
         {/* Header row */}
         <View style={cStyles.headerRow}>
@@ -80,14 +82,19 @@ function RideCard({ item, onPress, theme }) {
               <Text style={cStyles.avatarTxt}>{posterName.charAt(0).toUpperCase()}</Text>
             </LinearGradient>
             <View style={{ flex: 1 }}>
-              <Text style={[cStyles.posterName, { color: theme.textPrimary }]} numberOfLines={1}>{posterName}</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={[cStyles.posterName, { color: theme.textPrimary }]} numberOfLines={1}>{posterName}</Text>
                 {uniData
                   ? <Image source={uniData.logo} style={cStyles.uniLogo} resizeMode="contain" />
-                  : <Ionicons name={catIcons[item.category] || 'car-outline'} size={11} color={theme.textLight} />
+                  : <Ionicons name={catIcons[item.category] || 'car-outline'} size={18} color={theme.textLight} />
                 }
-                {showRating && <Text style={[cStyles.ratingTxt, { color: theme.textLight }]}>⭐ {item.poster.driver_rating?.toFixed(1)}</Text>}
               </View>
+              {showRating && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                  <Ionicons name="star" size={10} color="#F4A833" />
+                  <Text style={[cStyles.ratingTxt, { color: theme.textLight }]}>{item.poster.driver_rating?.toFixed(1)}</Text>
+                </View>
+              )}
             </View>
           </View>
           <View style={[cStyles.typeBadge, { backgroundColor: accent + '18', borderColor: accent + '40' }]}>
@@ -157,17 +164,18 @@ function RideCard({ item, onPress, theme }) {
 const cStyles = StyleSheet.create({
   card: { borderRadius: borderRadius.xl, marginHorizontal: spacing.md, marginBottom: 12, overflow: 'hidden' },
   accentBar: { height: 3 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, paddingBottom: 10 },
+  accentLeft: { position: 'absolute', left: 0, top: 3, bottom: 0, width: 3, borderBottomLeftRadius: borderRadius.xl },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12, paddingRight: 14, paddingBottom: 10, paddingLeft: 17 },
   posterRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   avatar: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   avatarTxt: { color: '#fff', fontSize: fonts.sizes.md, fontWeight: '800' },
   posterName: { fontSize: fonts.sizes.sm, fontWeight: '700' },
-  uniLogo: { width: 14, height: 14 },
+  uniLogo: { width: 24, height: 24 },
   ratingTxt: { fontSize: 11 },
   typeBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: borderRadius.full, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1 },
   typeBadgeTxt: { fontSize: 11, fontWeight: '700' },
 
-  routeBlock: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingBottom: 10, gap: 10 },
+  routeBlock: { flexDirection: 'row', alignItems: 'center', paddingLeft: 17, paddingRight: 14, paddingBottom: 10, gap: 10 },
   routeTrack: { alignItems: 'center', gap: 3 },
   dotFilled: { width: 10, height: 10, borderRadius: 5 },
   dashSeg: { width: 2, height: 4, borderRadius: 1 },
@@ -178,7 +186,7 @@ const cStyles = StyleSheet.create({
   stopsBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginHorizontal: 14, marginBottom: 8, borderRadius: borderRadius.full, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1 },
   stopsTxt: { fontSize: 11, fontWeight: '600', flex: 1 },
 
-  footer: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 14, paddingBottom: 14 },
+  footer: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingLeft: 17, paddingRight: 14, paddingBottom: 14 },
   metaPill: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: borderRadius.full, paddingHorizontal: 8, paddingVertical: 4 },
   metaTxt: { fontSize: 11, fontWeight: '600' },
 });
@@ -196,7 +204,7 @@ export default function BrowseRidesScreen({ navigation }) {
 
   async function loadRides() {
     try {
-      const data = await getRides({ category: filter });
+      const data = await getRides(filter);
       setRides(data);
     } catch (e) {
       console.error(e);
@@ -223,8 +231,7 @@ export default function BrowseRidesScreen({ navigation }) {
       <LinearGradient colors={['#2D1B69','#1A0F3D']} style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.headerSub}>St. Louis, MO</Text>
-            <Text style={styles.headerTitle}>Carpool 🚗</Text>
+            <Text style={styles.headerTitle}>Carpool</Text>
           </View>
           <TouchableOpacity
             style={styles.postBtn}

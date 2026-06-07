@@ -242,12 +242,51 @@ export default function ListingDetailScreen({ route, navigation }) {
             </>
           )}
 
+          {/* Buy/Sell detail chips */}
+          {listing.category === 'buysell' && meta && (
+            <>
+              <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Item Details</Text>
+              <View style={styles.chipsGrid}>
+                {meta.condition && <DetailChip label="Condition" value={meta.condition === 'new' ? 'Brand New' : meta.condition === 'like_new' ? 'Like New' : meta.condition === 'good' ? 'Good' : 'Fair'} icon="sparkles-outline" />}
+                {meta.product_category && <DetailChip label="Category" value={meta.product_category} icon="grid-outline" />}
+                {meta.negotiable !== undefined && <DetailChip label="Price" value={meta.negotiable ? 'Negotiable' : 'Fixed Price'} icon="cash-outline" />}
+                {meta.pickup_location && <DetailChip label="Pickup" value={meta.pickup_location} icon="location-outline" />}
+              </View>
+              <View style={[styles.divider, { backgroundColor: theme.border }]} />
+            </>
+          )}
+
+          {/* Food detail chips */}
+          {listing.category === 'food' && meta && (
+            <>
+              <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Order Details</Text>
+              <View style={styles.chipsGrid}>
+                {meta.negotiable !== undefined && <DetailChip label="Price" value={meta.negotiable ? 'Negotiable' : 'Fixed'} icon="cash-outline" />}
+                {meta.pickup !== undefined && <DetailChip label="Pickup" value={meta.pickup ? 'Available' : 'Not available'} icon="bag-outline" />}
+                {meta.delivery !== undefined && <DetailChip label="Delivery" value={meta.delivery ? 'Available' : 'Not available'} icon="bicycle-outline" />}
+              </View>
+              <View style={[styles.divider, { backgroundColor: theme.border }]} />
+            </>
+          )}
+
+          {/* Accommodation detail chips */}
+          {listing.category === 'accommodation' && meta && (
+            <>
+              <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Property Details</Text>
+              <View style={styles.chipsGrid}>
+                {meta.location && <DetailChip label="Area" value={meta.location} icon="location-outline" />}
+                {listing.price && <DetailChip label="Rent" value={`$${listing.price}/mo`} icon="home-outline" />}
+              </View>
+              <View style={[styles.divider, { backgroundColor: theme.border }]} />
+            </>
+          )}
+
           {/* Poster card */}
           <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Posted By</Text>
           <TouchableOpacity
             style={[styles.posterCard, { backgroundColor: theme.card, borderColor: theme.border }]}
-            onPress={() => !isOwner && setProfileModalVisible(true)}
-            activeOpacity={isOwner ? 1 : 0.8}
+            onPress={() => setProfileModalVisible(true)}
+            activeOpacity={0.8}
           >
             <LinearGradient colors={catMeta.gradient} style={styles.posterAvatar}>
               <Text style={styles.posterInitials}>{posterInitials}</Text>
@@ -257,12 +296,11 @@ export default function ListingDetailScreen({ route, navigation }) {
               {poster?.seller_rating_count >= 5 && (
                 <Text style={styles.posterRating}>{'★'.repeat(Math.round(poster.seller_rating))} {poster.seller_rating?.toFixed(1)} ({poster.seller_rating_count})</Text>
               )}
-              <Text style={[styles.posterCity, { color: theme.textSecondary }]}>
-                {listing.city}, {listing.state}
-                {!isOwner && <Text style={{ color: '#0099FF' }}>  · View profile</Text>}
+              <Text style={[styles.posterCity, { color: catMeta.color }]}>
+                View profile →
               </Text>
             </View>
-            {!isOwner && <Ionicons name="chevron-forward" size={16} color={theme.textLight} />}
+            <Ionicons name="chevron-forward" size={16} color={theme.textLight} />
           </TouchableOpacity>
 
           <UserProfileModal visible={profileModalVisible} userId={listing.user_id} onClose={() => setProfileModalVisible(false)} onMessage={!isOwner ? handleMessage : null} />

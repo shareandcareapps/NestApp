@@ -6,35 +6,15 @@ import { TransitionPresets } from '@react-navigation/stack';
 
 // ── Stack transitions ─────────────────────────────────────────────────────────
 // Exact native iOS push/pop — used in every stack navigator.
-export const premiumTransition = TransitionPresets.SlideFromRightIOS;
+// gestureEnabled + full-screen swipe zone enables left-edge swipe-back.
+export const premiumTransition = {
+  ...TransitionPresets.SlideFromRightIOS,
+  gestureEnabled: true,
+  gestureResponseDistance: 50,
+};
 
 // ── Tab transitions ───────────────────────────────────────────────────────────
-// Wraps a tab's root navigator in a fast cross-fade that fires each time the
-// tab gains focus. Native iOS tab controllers cross-dissolve, not slide.
+// No animation — instant cut, matching native iOS / Instagram tab behaviour.
 export function withFadeOnFocus(Component) {
-  return function FadedTab(props) {
-    const opacity = useRef(new Animated.Value(1)).current;
-    const isFirstFocus = useRef(true);
-
-    useFocusEffect(
-      React.useCallback(() => {
-        if (isFirstFocus.current) {
-          isFirstFocus.current = false;
-          return;
-        }
-        opacity.setValue(0);
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 180,
-          useNativeDriver: true,
-        }).start();
-      }, [])
-    );
-
-    return (
-      <Animated.View style={{ flex: 1, opacity }}>
-        <Component {...props} />
-      </Animated.View>
-    );
-  };
+  return Component;
 }

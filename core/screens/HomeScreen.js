@@ -41,10 +41,13 @@ const QUICK_ACTIONS = [
 function Greeting({ name }) {
   const hour = new Date().getHours();
   const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  const emoji = hour < 12 ? '☀️' : hour < 17 ? '🌤️' : '🌙';
+  const iconName = hour < 12 ? 'sunny-outline' : hour < 17 ? 'partly-sunny-outline' : 'moon-outline';
   return (
     <View>
-      <Text style={headerStyles.greetSmall}>{emoji}  {greet}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+        <Ionicons name={iconName} size={12} color="rgba(255,255,255,0.55)" />
+        <Text style={headerStyles.greetSmall}>{greet}</Text>
+      </View>
       <Text style={headerStyles.greetName} numberOfLines={1}>{name || 'Welcome!'}</Text>
     </View>
   );
@@ -68,8 +71,8 @@ function AvatarButton({ name, onPress }) {
   );
 }
 const avatarStyles = StyleSheet.create({
-  circle: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)' },
-  text: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  circle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.25)' },
+  text: { color: '#fff', fontSize: 12, fontWeight: '800' },
 });
 
 function PointsPill({ points }) {
@@ -117,8 +120,11 @@ function QuickActionBtn({ item, onPress }) {
       style={qStyles.wrap}
     >
       <Animated.View style={{ transform: [{ scale }] }}>
-        <LinearGradient colors={item.gradient} style={qStyles.btn} start={{x:0,y:0}} end={{x:1,y:1}}>
-          <Ionicons name={item.icon} size={22} color="#fff" />
+        {/* Gradient border ring */}
+        <LinearGradient colors={item.gradient} style={qStyles.ring} start={{x:0,y:0}} end={{x:1,y:1}}>
+          <LinearGradient colors={item.gradient} style={qStyles.btn} start={{x:0,y:0}} end={{x:1,y:1}}>
+            <Ionicons name={item.icon} size={22} color="#fff" />
+          </LinearGradient>
         </LinearGradient>
         <Text style={qStyles.label}>{item.label}</Text>
       </Animated.View>
@@ -127,7 +133,8 @@ function QuickActionBtn({ item, onPress }) {
 }
 const qStyles = StyleSheet.create({
   wrap: { alignItems: 'center', flex: 1 },
-  btn: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center', ...shadows.medium },
+  ring: { width: 62, height: 62, borderRadius: 21, alignItems: 'center', justifyContent: 'center', padding: 2.5, ...shadows.medium },
+  btn: { width: '100%', height: '100%', borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   label: { color: '#9B8FAD', fontSize: 10, fontWeight: '600', marginTop: 6, textAlign: 'center' },
 });
 
@@ -147,7 +154,12 @@ function ListingCard({ item, onPress, theme }) {
       </View>
       <View style={lcStyles.body}>
         <Text style={[lcStyles.title, { color: theme.textPrimary }]} numberOfLines={2}>{item.title}</Text>
-        {meta?.location ? <Text style={[lcStyles.location, { color: theme.textSecondary }]} numberOfLines={1}>📍 {meta.location}</Text> : null}
+        {meta?.location ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 6 }}>
+            <Ionicons name="location-outline" size={11} color={theme.textLight} />
+            <Text style={[lcStyles.location, { color: theme.textSecondary, marginBottom: 0 }]} numberOfLines={1}>{meta.location}</Text>
+          </View>
+        ) : null}
         <View style={lcStyles.priceRow}>
           <Text style={lcStyles.price}>{item.price ? `$${item.price}` : 'Free'}</Text>
           {meta?.negotiable && <Text style={[lcStyles.neg, { color: theme.textLight }]}>• Neg.</Text>}
@@ -173,58 +185,68 @@ const lcStyles = StyleSheet.create({
 });
 
 function RideCard({ item, theme, onPress }) {
+  const isRequest = item.ride_type === 'request';
+  const accent = isRequest ? '#F4A833' : '#0099FF';
+  const dateLabel = item.ride_date
+    ? new Date(item.ride_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : 'TBD';
+  const bgGrad = isRequest
+    ? ['#3D2200', '#261500']
+    : ['#0A2540', '#001830'];
+
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.88} style={[rStyles.card, { backgroundColor: theme.card, ...shadows.medium }]}>
-      <LinearGradient colors={['#00C48C22','#00C48C08']} style={rStyles.gradient}>
-        <View style={rStyles.routeRow}>
-          <View style={rStyles.routePoint}>
-            <View style={[rStyles.dot, { backgroundColor: '#00C48C' }]} />
-            <Text style={[rStyles.place, { color: theme.textPrimary }]} numberOfLines={1}>{item.from_city || 'From'}</Text>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.88} style={[rStyles.card, shadows.medium]}>
+      <LinearGradient colors={bgGrad} style={rStyles.fill} start={{x:0,y:0}} end={{x:1,y:1}}>
+        {/* Top accent stripe */}
+        <LinearGradient colors={[accent, accent + 'AA']} style={rStyles.accentBar} start={{x:0,y:0}} end={{x:1,y:0}} />
+        <View style={rStyles.body}>
+          <View style={[rStyles.typePill, { backgroundColor: accent + '30' }]}>
+            <Ionicons name={isRequest ? 'person' : 'car'} size={10} color="#fff" />
+            <Text style={rStyles.typeText}>{isRequest ? 'Seat Request' : 'Offering'}</Text>
           </View>
-          <View style={rStyles.routeLine}>
-            {[0,1,2,3,4].map(i => <View key={i} style={rStyles.dash} />)}
-            <Ionicons name="car" size={16} color="#00C48C" />
-          </View>
-          <View style={rStyles.routePoint}>
-            <View style={[rStyles.dot, { backgroundColor: '#F4A833' }]} />
-            <Text style={[rStyles.place, { color: theme.textPrimary }]} numberOfLines={1}>{item.to_city || 'To'}</Text>
-          </View>
-        </View>
-        <View style={rStyles.meta}>
-          <View style={rStyles.metaItem}>
-            <Ionicons name="calendar-outline" size={13} color={theme.textSecondary} />
-            <Text style={[rStyles.metaText, { color: theme.textSecondary }]}>
-              {item.departure_time ? new Date(item.departure_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'TBD'}
-            </Text>
-          </View>
-          <View style={rStyles.metaItem}>
-            <Ionicons name="people-outline" size={13} color={theme.textSecondary} />
-            <Text style={[rStyles.metaText, { color: theme.textSecondary }]}>{item.seats_available ?? '?'} seats</Text>
-          </View>
-          {item.price_per_seat && (
-            <View style={rStyles.priceBadge}>
-              <Text style={rStyles.priceText}>${item.price_per_seat}</Text>
+          <View style={rStyles.routeWrap}>
+            <View style={rStyles.routeTrack}>
+              <View style={rStyles.dotGreen} />
+              <View style={[rStyles.routeLineV, { backgroundColor: 'rgba(255,255,255,0.25)' }]} />
+              <Ionicons name="location" size={12} color={accent} />
             </View>
-          )}
+            <View style={{ flex: 1 }}>
+              <Text style={rStyles.place} numberOfLines={1}>
+                {item.from_location || 'From'}
+              </Text>
+              <Text style={rStyles.placeSub} numberOfLines={1}>
+                {item.to_location || 'To'}
+              </Text>
+            </View>
+          </View>
+          <View style={rStyles.meta}>
+            <Ionicons name="calendar-outline" size={11} color="rgba(255,255,255,0.5)" />
+            <Text style={rStyles.metaText}>{dateLabel}</Text>
+            <View style={rStyles.metaDot} />
+            <Ionicons name="people-outline" size={11} color="rgba(255,255,255,0.5)" />
+            <Text style={rStyles.metaText}>{item.seats_available ?? '?'} seats</Text>
+          </View>
         </View>
       </LinearGradient>
     </TouchableOpacity>
   );
 }
 const rStyles = StyleSheet.create({
-  card: { borderRadius: borderRadius.lg, marginRight: 14, width: width * 0.72, overflow: 'hidden', ...shadows.medium },
-  gradient: { padding: 16 },
-  routeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  routePoint: { flex: 1 },
-  dot: { width: 8, height: 8, borderRadius: 4, marginBottom: 4 },
-  place: { fontSize: fonts.sizes.sm, fontWeight: '700' },
-  routeLine: { flex: 1.5, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3 },
-  dash: { width: 4, height: 2, backgroundColor: '#00C48C', borderRadius: 1, opacity: 0.5 },
-  meta: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metaText: { fontSize: 11 },
-  priceBadge: { marginLeft: 'auto', backgroundColor: '#00C48C22', borderRadius: borderRadius.full, paddingHorizontal: 10, paddingVertical: 4 },
-  priceText: { color: '#00C48C', fontSize: 12, fontWeight: '800' },
+  card: { borderRadius: borderRadius.lg, marginRight: 14, width: width * 0.58, overflow: 'hidden' },
+  fill: { flex: 1 },
+  accentBar: { height: 3 },
+  body: { padding: 12 },
+  typePill: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', borderRadius: borderRadius.full, paddingHorizontal: 7, paddingVertical: 3, marginBottom: 10 },
+  typeText: { fontSize: 10, fontWeight: '700', color: '#fff' },
+  routeWrap: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginBottom: 10 },
+  routeTrack: { alignItems: 'center', paddingTop: 3 },
+  dotGreen: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#00C48C' },
+  routeLineV: { width: 1.5, height: 14, borderRadius: 1, marginVertical: 2 },
+  place: { fontSize: fonts.sizes.sm, fontWeight: '700', lineHeight: 18, marginBottom: 6, color: '#fff' },
+  placeSub: { fontSize: fonts.sizes.sm, fontWeight: '600', lineHeight: 18, color: 'rgba(255,255,255,0.65)' },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  metaText: { fontSize: 10, color: 'rgba(255,255,255,0.55)' },
+  metaDot: { width: 2, height: 2, borderRadius: 1, backgroundColor: 'rgba(0,0,0,0.2)', marginHorizontal: 2 },
 });
 
 function NewsCard({ item, theme, onPress }) {
@@ -339,6 +361,7 @@ export default function HomeScreen({ navigation }) {
   }, []);
 
   async function fetchData() {
+    if (!user?.id) return;
     try {
       setLoading(true);
       const [listingsRes, ridesRes, newsRes, profileRes, membersRes] = await Promise.all([
@@ -392,27 +415,26 @@ export default function HomeScreen({ navigation }) {
         {/* Decorative orb */}
         <View pointerEvents="none" style={styles.headerOrb} />
 
+        {/* Top bar: greeting left, logo center, avatar right */}
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <Greeting name={profileName} />
             <PointsPill points={profilePoints} />
           </View>
 
-          <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.notifBtn} onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}>
-              <Ionicons name="notifications-outline" size={22} color="#fff" />
-              <View style={styles.notifDot} />
-            </TouchableOpacity>
+          {/* Center logo */}
+          <View style={styles.logoWrap} pointerEvents="none">
+            <LinearGradient colors={['#F4A833','#FF6B6B']} style={styles.logoBubble} start={{x:0,y:0}} end={{x:1,y:1}}>
+              <Ionicons name="leaf" size={22} color="#fff" />
+            </LinearGradient>
+            <Text style={styles.logoText}>nest</Text>
+          </View>
+
+          <View style={{ flex: 1, alignItems: 'flex-end' }}>
             <AvatarButton name={profileName} onPress={() => navigation.navigate('Settings')} />
           </View>
         </View>
 
-        {/* City badge */}
-        <TouchableOpacity style={styles.cityBadge}>
-          <Ionicons name="location" size={13} color="#F4A833" />
-          <Text style={styles.cityText}>St. Louis, MO</Text>
-          <Ionicons name="chevron-down" size={12} color="rgba(255,255,255,0.4)" />
-        </TouchableOpacity>
       </LinearGradient>
 
       {/* ── Content ─────────────────────────────────────────────────── */}
@@ -490,7 +512,7 @@ export default function HomeScreen({ navigation }) {
         {rides.length > 0 && (
           <View style={[styles.section, { paddingHorizontal: 0 }]}>
             <View style={{ paddingHorizontal: spacing.md }}>
-              <SectionHeader title="Nearby Rides" theme={theme} onSeeAll={() => navigation.navigate('Carpool')} />
+              <SectionHeader title="Hot Rides" theme={theme} onSeeAll={() => navigation.navigate('Carpool')} />
             </View>
             <FlatList
               horizontal
@@ -550,7 +572,7 @@ export default function HomeScreen({ navigation }) {
         <View style={{ paddingHorizontal: spacing.md, marginTop: 4 }}>
           <LinearGradient colors={['#2D1B69', '#4A2D9C']} style={styles.banner} start={{x:0,y:0}} end={{x:1,y:1}}>
             <View style={styles.bannerOrb} />
-            <Text style={styles.bannerEmoji}>🤝</Text>
+            <View style={styles.bannerIconWrap}><Ionicons name="people" size={28} color="rgba(255,255,255,0.9)" /></View>
             <Text style={styles.bannerTitle}>Stronger Together</Text>
             <Text style={styles.bannerBody}>
               Every post, every ride shared, every connection made builds a stronger community.
@@ -569,13 +591,10 @@ const styles = StyleSheet.create({
   // Header
   header: { paddingHorizontal: spacing.md, paddingBottom: 16 },
   headerOrb: { position: 'absolute', top: -40, right: -40, width: 160, height: 160, borderRadius: 80, backgroundColor: '#F4A833', opacity: 0.06 },
-  headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 4 },
-  notifBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
-  notifDot: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF6B6B', borderWidth: 1.5, borderColor: '#2D1B69' },
-  cityBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: 12, backgroundColor: 'rgba(244,168,51,0.12)', borderRadius: borderRadius.full, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(244,168,51,0.2)' },
-  cityText: { color: '#fff', fontSize: fonts.sizes.xs, fontWeight: '700', letterSpacing: 0.3 },
-
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  logoWrap: { alignItems: 'center', gap: 3 },
+  logoBubble: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  logoText: { color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '800', letterSpacing: 2, textTransform: 'uppercase' },
   // Sections
   section: { paddingHorizontal: spacing.md, marginBottom: 8, paddingTop: 16 },
 
@@ -596,7 +615,7 @@ const styles = StyleSheet.create({
   // Banner
   banner: { borderRadius: borderRadius.xl, padding: 24, marginBottom: 8, overflow: 'hidden', alignItems: 'center' },
   bannerOrb: { position: 'absolute', top: -30, right: -30, width: 120, height: 120, borderRadius: 60, backgroundColor: '#F4A833', opacity: 0.08 },
-  bannerEmoji: { fontSize: 32, marginBottom: 8 },
+  bannerIconWrap: { marginBottom: 8 },
   bannerTitle: { color: '#fff', fontSize: fonts.sizes.xl, fontWeight: '800', marginBottom: 6 },
   bannerBody: { color: 'rgba(255,255,255,0.55)', fontSize: fonts.sizes.sm, textAlign: 'center', lineHeight: 20 },
 });

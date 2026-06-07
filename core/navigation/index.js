@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import {
   View, Text, ActivityIndicator, TouchableOpacity, StyleSheet,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -32,6 +33,7 @@ import ClassifiedsNavigator from '../../features/classifieds/index';
 import RidesNavigator from '../../features/rides/index';
 import NewsNavigator from '../../features/news/index';
 import MessagesNavigator from '../../features/messages/index';
+import OnboardingScreen from '../screens/OnboardingScreen';
 
 const FadedHomeScreen = withFadeOnFocus(HomeScreen);
 const FadedClassifiedsNavigator = withFadeOnFocus(ClassifiedsNavigator);
@@ -220,15 +222,17 @@ function LoadingScreen() {
 
 export default function RootNavigator() {
   const { isAuthenticated, setUser, setSession, clearAuth } = useAppStore();
-  const [loading, setLoading] = useState(true);
+  const [loading,      setLoading]      = useState(true);
+  const [hasOnboarded, setHasOnboarded] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession()
-      .then(({ data: { session } }) => {
+    Promise.all([
+      supabase.auth.getSession().then(({ data: { session } }) => {
         if (session) { setUser(session.user); setSession(session); }
-      })
-      .catch(err => console.error('getSession error:', err))
-      .finally(() => setLoading(false));
+      }).catch(err => console.error('getSession error:', err)),
+      AsyncStorage.getItem('@nest_onboarded').then(v => setHasOnboarded(!!v)).catch(() => setHasOnboarded(false)),
+    ]).finally(() => setLoading(false));
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         if (session) { setUser(session.user); setSession(session); }
@@ -239,6 +243,16 @@ export default function RootNavigator() {
   }, []);
 
   if (loading) return <LoadingScreen />;
+
+  if (!hasOnboarded) {
+    return (
+      <Stack.Navigator screenOptions={{ ...premiumTransition, headerShown: false }}>
+        <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+        <Stack.Screen name="Main" component={MainApp} />
+        <Stack.Screen name="Auth" component={AuthStack} />
+      </Stack.Navigator>
+    );
+  }
 
   return (
     <Stack.Navigator screenOptions={{ ...premiumTransition, headerShown: false }}>

@@ -77,7 +77,7 @@ function InputField({ label, value, onChangeText, placeholder, secureTextEntry, 
 }
 
 const inputStyles = StyleSheet.create({
-  wrap: { marginBottom: 16 },
+  wrap: { marginBottom: 12 },
   label: { color: 'rgba(255,255,255,0.6)', fontSize: fonts.sizes.sm, fontWeight: '600', marginBottom: 8, letterSpacing: 0.3 },
   field: {
     flexDirection: 'row', alignItems: 'center',
@@ -147,15 +147,10 @@ export default function LoginScreen({ navigation }) {
           {/* Logo */}
           <View style={styles.logoSection}>
             <LinearGradient colors={['#F4A833', '#FF6B6B']} style={styles.logoCircle} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-              <Text style={styles.logoLetter}>N</Text>
+              <Ionicons name="leaf" size={26} color="#fff" />
             </LinearGradient>
             <Text style={styles.appName}>NestApp</Text>
             <Text style={styles.tagline}>Where culture meets community</Text>
-            <View style={styles.communityRow}>
-              {['🇮🇳', '🇵🇰', '🇳🇵', '🇸🇦'].map((flag, i) => (
-                <Text key={i} style={styles.flag}>{flag}</Text>
-              ))}
-            </View>
           </View>
 
           {/* Glass card */}
@@ -266,24 +261,21 @@ const styles = StyleSheet.create({
   ring: { position: 'absolute', borderRadius: 999, borderWidth: 1 },
 
   // Logo
-  logoSection: { alignItems: 'center', marginBottom: 32 },
+  logoSection: { alignItems: 'center', marginBottom: 20 },
   logoCircle: {
-    width: 80, height: 80, borderRadius: 40,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 14,
+    width: 60, height: 60, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 10,
     ...shadows.glow,
   },
-  logoLetter: { color: '#fff', fontSize: 38, fontWeight: '800' },
-  appName: { color: '#fff', fontSize: fonts.sizes.xxxl, fontWeight: '800', letterSpacing: 0.5 },
-  tagline: { color: 'rgba(255,255,255,0.5)', fontSize: fonts.sizes.sm, marginTop: 6, letterSpacing: 1.5, textTransform: 'uppercase' },
-  communityRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  flag: { fontSize: 22 },
+  appName: { color: '#fff', fontSize: fonts.sizes.xxl, fontWeight: '800', letterSpacing: 0.5 },
+  tagline: { color: 'rgba(255,255,255,0.5)', fontSize: fonts.sizes.xs, marginTop: 4, letterSpacing: 1.2, textTransform: 'uppercase' },
 
   // Card
-  card: { borderRadius: borderRadius.xl, overflow: 'hidden', marginBottom: 20 },
-  cardInner: { padding: 24 },
+  card: { borderRadius: borderRadius.xl, overflow: 'hidden', marginBottom: 16 },
+  cardInner: { padding: 20 },
   cardBorder: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', borderRadius: borderRadius.xl },
-  cardTitle: { color: '#fff', fontSize: fonts.sizes.xxl, fontWeight: '800', marginBottom: 4 },
-  cardSubtitle: { color: 'rgba(255,255,255,0.5)', fontSize: fonts.sizes.sm, marginBottom: 24 },
+  cardTitle: { color: '#fff', fontSize: fonts.sizes.xl, fontWeight: '800', marginBottom: 2 },
+  cardSubtitle: { color: 'rgba(255,255,255,0.5)', fontSize: fonts.sizes.sm, marginBottom: 18 },
 
   // Forgot
   forgotWrap: { alignSelf: 'flex-end', marginBottom: 20, marginTop: -4 },
@@ -298,7 +290,7 @@ const styles = StyleSheet.create({
   signInText: { color: '#fff', fontSize: fonts.sizes.lg, fontWeight: '800' },
 
   // Divider
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
+  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 14 },
   dividerLine: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.12)' },
   dividerText: { color: 'rgba(255,255,255,0.35)', fontSize: fonts.sizes.xs, marginHorizontal: 12, letterSpacing: 0.5 },
 

@@ -10,8 +10,6 @@ export async function getListings(category = null) {
     .from('listings')
     .select('*')
     .eq('status', 'active')
-    .is('deleted_at', null)
-    .or('expires_at.is.null,expires_at.gt.' + new Date().toISOString())
     .order('is_boosted', { ascending: false })
     .order('created_at', { ascending: false });
 

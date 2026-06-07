@@ -1,296 +1,267 @@
 // core/screens/MyListingsScreen.js
-import React, { useState, useCallback } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  ActivityIndicator, Alert, RefreshControl,
+  ActivityIndicator, Alert, RefreshControl, Animated, ScrollView,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
+import * as Haptics from 'expo-haptics';
 import useAppStore from '../store/index';
 import { useTheme } from '../theme/ThemeContext';
 import { getMyListings, setListingStatus, deleteListing, renewListing } from '../../features/classifieds/services/listingsService';
 import MarkSoldModal from '../components/MarkSoldModal';
+import EmptyState from '../components/EmptyState';
+import { fonts, spacing, borderRadius, shadows } from '../theme/index';
 
-const categoryColors = { accommodation: '#E63946', jobs: '#2ECC71', buysell: '#3498DB', food: '#F39C12' };
-const categoryEmojis = { accommodation: '🏠', jobs: '💼', buysell: '🛍️', food: '🍱' };
+const CAT_META = {
+  accommodation: { emoji: '🏠', gradient: ['#FF6B6B','#E84393'],  color: '#FF6B6B' },
+  jobs:          { emoji: '💼', gradient: ['#00C48C','#007A5E'],  color: '#00C48C' },
+  buysell:       { emoji: '🛍️', gradient: ['#0099FF','#0055CC'],  color: '#0099FF' },
+  food:          { emoji: '🍱', gradient: ['#F4A833','#E68A00'],  color: '#F4A833' },
+};
 
 const TABS = [
-  { id: 'active', label: 'Active' },
-  { id: 'archived', label: 'Archived' },
+  { id: 'active',   label: 'Active',   icon: 'flash-outline' },
+  { id: 'archived', label: 'Archived', icon: 'archive-outline' },
 ];
 
+function StatusChip({ label, color, bgColor }) {
+  return (
+    <View style={[chipS.wrap, { backgroundColor: bgColor }]}>
+      <Text style={[chipS.txt, { color }]}>{label}</Text>
+    </View>
+  );
+}
+const chipS = StyleSheet.create({
+  wrap: { borderRadius: borderRadius.full, paddingHorizontal: 10, paddingVertical: 4 },
+  txt: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
+});
+
+function ListingCard({ item, onEdit, onArchive, onDelete, onRelist, onRenew, onMarkSold, theme }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const meta    = CAT_META[item.category] || { emoji: '📦', gradient: ['#2D1B69','#4A2D9C'], color: '#2D1B69' };
+  const status  = item.status || (item.is_active === false ? 'archived' : 'active');
+  const isSellable = item.category === 'buysell' || item.category === 'food';
+
+  const expiry = (() => {
+    if (!item.expires_at) return null;
+    const daysLeft = Math.ceil((new Date(item.expires_at) - new Date()) / 86400000);
+    return { daysLeft, isExpired: daysLeft <= 0 };
+  })();
+  const isExpired    = expiry?.isExpired;
+  const expiringSoon = expiry && !isExpired && expiry.daysLeft <= 7;
+
+  return (
+    <TouchableOpacity
+      onPressIn={() => Animated.spring(scale, { toValue: 0.97, useNativeDriver: true }).start()}
+      onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start()}
+      activeOpacity={1}
+    >
+      <Animated.View style={[cardS.card, { backgroundColor: theme.card, transform: [{ scale }], borderColor: isExpired ? '#FF6B6B40' : expiringSoon ? '#F4A83340' : theme.border }, shadows.small]}>
+        {/* Banner */}
+        <LinearGradient colors={meta.gradient} style={cardS.banner} start={{x:0,y:0}} end={{x:1,y:1}}>
+          <Text style={cardS.bannerEmoji}>{meta.emoji}</Text>
+          <View style={cardS.bannerRight}>
+            <View style={cardS.catBadge}><Text style={cardS.catBadgeTxt}>{item.category?.toUpperCase()}</Text></View>
+            {item.price ? <Text style={cardS.price}>${item.price}</Text> : null}
+          </View>
+        </LinearGradient>
+
+        {/* Body */}
+        <View style={cardS.body}>
+          <View style={cardS.titleRow}>
+            <Text style={[cardS.title, { color: theme.textPrimary }]} numberOfLines={1}>{item.title}</Text>
+            {/* Status chips */}
+            {status === 'sold'     && <StatusChip label="✓ SOLD"     color="#00C48C" bgColor="#00C48C18" />}
+            {status === 'archived' && !isExpired && <StatusChip label="📦 ARCHIVED" color={theme.textSecondary} bgColor={theme.border} />}
+            {isExpired             && <StatusChip label="⏰ EXPIRED"  color="#FF6B6B" bgColor="#FF6B6B18" />}
+            {expiringSoon          && <StatusChip label={`⚡ ${expiry.daysLeft}d left`} color="#F4A833" bgColor="#F4A83318" />}
+          </View>
+          {item.description && <Text style={[cardS.desc, { color: theme.textSecondary }]} numberOfLines={2}>{item.description}</Text>}
+          <Text style={[cardS.date, { color: theme.textLight }]}>Posted {new Date(item.created_at).toLocaleDateString()}</Text>
+        </View>
+
+        {/* Actions */}
+        <View style={[cardS.actions, { borderTopColor: theme.border }]}>
+          {isExpired ? (
+            <>
+              <TouchableOpacity style={[cardS.btn, { backgroundColor: '#00C48C18', borderColor: '#00C48C' }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onRenew(item); }}>
+                <Ionicons name="refresh" size={14} color="#00C48C" />
+                <Text style={[cardS.btnTxt, { color: '#00C48C' }]}>Renew 60d</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[cardS.btnIcon, { backgroundColor: '#FF6B6B18', borderColor: '#FF6B6B' }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onDelete(item.id); }}>
+                <Ionicons name="trash-outline" size={16} color="#FF6B6B" />
+              </TouchableOpacity>
+            </>
+          ) : status === 'active' ? (
+            <>
+              {expiringSoon && (
+                <TouchableOpacity style={[cardS.btn, { backgroundColor: '#F4A83318', borderColor: '#F4A833' }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onRenew(item); }}>
+                  <Ionicons name="refresh" size={14} color="#F4A833" />
+                  <Text style={[cardS.btnTxt, { color: '#F4A833' }]}>Renew</Text>
+                </TouchableOpacity>
+              )}
+              {isSellable && (
+                <TouchableOpacity style={[cardS.btn, { backgroundColor: '#00C48C18', borderColor: '#00C48C' }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onMarkSold(item); }}>
+                  <Ionicons name="checkmark-circle-outline" size={14} color="#00C48C" />
+                  <Text style={[cardS.btnTxt, { color: '#00C48C' }]}>Sold</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={[cardS.btn, { backgroundColor: '#0099FF18', borderColor: '#0099FF', flex: 1 }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onEdit(item); }}>
+                <Ionicons name="pencil-outline" size={14} color="#0099FF" />
+                <Text style={[cardS.btnTxt, { color: '#0099FF' }]}>Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[cardS.btnIcon, { backgroundColor: theme.inputBackground, borderColor: theme.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onArchive(item); }}>
+                <Ionicons name="archive-outline" size={16} color={theme.textSecondary} />
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <TouchableOpacity style={[cardS.btn, { backgroundColor: '#00C48C18', borderColor: '#00C48C', flex: 1 }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onRelist(item); }}>
+                <Ionicons name="arrow-redo-outline" size={14} color="#00C48C" />
+                <Text style={[cardS.btnTxt, { color: '#00C48C' }]}>Relist</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[cardS.btnIcon, { backgroundColor: '#FF6B6B18', borderColor: '#FF6B6B' }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onDelete(item.id); }}>
+                <Ionicons name="trash-outline" size={16} color="#FF6B6B" />
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+}
+
+const cardS = StyleSheet.create({
+  card: { borderRadius: borderRadius.xl, marginHorizontal: spacing.md, marginBottom: 14, overflow: 'hidden', borderWidth: 1 },
+  banner: { height: 70, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14 },
+  bannerEmoji: { fontSize: 32 },
+  bannerRight: { alignItems: 'flex-end', gap: 4 },
+  catBadge: { backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: borderRadius.full, paddingHorizontal: 10, paddingVertical: 3 },
+  catBadgeTxt: { color: '#fff', fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
+  price: { color: '#fff', fontSize: fonts.sizes.lg, fontWeight: '800' },
+  body: { padding: 14, gap: 4 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  title: { fontSize: fonts.sizes.md, fontWeight: '800', flex: 1 },
+  desc: { fontSize: fonts.sizes.sm, lineHeight: 18 },
+  date: { fontSize: 11, marginTop: 2 },
+  actions: { flexDirection: 'row', gap: 8, paddingHorizontal: 14, paddingBottom: 14, paddingTop: 10, borderTopWidth: 0.5 },
+  btn: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: borderRadius.md, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1 },
+  btnTxt: { fontSize: fonts.sizes.sm, fontWeight: '700' },
+  btnIcon: { width: 38, height: 38, borderRadius: borderRadius.md, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+});
+
 export default function MyListingsScreen({ navigation }) {
-  const user = useAppStore((state) => state.user);
-  const colors = useTheme();
-  const [listings, setListings] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [tab, setTab] = useState('active');
-  const [soldModal, setSoldModal] = useState({ visible: false, listing: null });
+  const user   = useAppStore(s => s.user);
+  const theme  = useTheme();
+  const insets = useSafeAreaInsets();
+
+  const [listings,    setListings]    = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [refreshing,  setRefreshing]  = useState(false);
+  const [tab,         setTab]         = useState('active');
+  const [soldModal,   setSoldModal]   = useState({ visible: false, listing: null });
 
   const fetchMyListings = useCallback(async () => {
     if (!user?.id) { setLoading(false); return; }
     try {
       const data = await getMyListings(user.id);
       setListings(data);
-    } catch (error) {
-      console.error('Error fetching listings:', error);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
   }, [user?.id]);
 
-  // Refetch whenever the screen regains focus so status changes reflect everywhere
-  useFocusEffect(
-    useCallback(() => { fetchMyListings(); }, [fetchMyListings])
-  );
+  useFocusEffect(useCallback(() => { fetchMyListings(); }, [fetchMyListings]));
 
-  async function handleRefresh() {
-    setRefreshing(true);
-    await fetchMyListings();
-    setRefreshing(false);
-  }
+  async function handleRefresh() { setRefreshing(true); await fetchMyListings(); setRefreshing(false); }
 
   function handleDelete(id) {
-    Alert.alert('Delete Listing', 'Are you sure? This cannot be undone.', [
+    Alert.alert('Delete Listing', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete', style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteListing(id);
-            setListings((prev) => prev.filter((l) => l.id !== id));
-          } catch (error) {
-            Alert.alert('Error', 'Could not delete listing.');
-          }
-        },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+          try { await deleteListing(id); setListings(p => p.filter(l => l.id !== id)); }
+          catch { Alert.alert('Error', 'Could not delete listing.'); }
+        }
       },
     ]);
   }
 
   async function handleRelist(listing) {
-    try {
-      const updated = await setListingStatus(listing.id, 'active');
-      setListings((prev) => prev.map((l) => (l.id === listing.id ? updated : l)));
-      Alert.alert('Relisted', 'Your listing is live again.');
-    } catch (e) {
-      Alert.alert('Error', e?.message || 'Could not relist.');
-    }
+    try { const u = await setListingStatus(listing.id, 'active'); setListings(p => p.map(l => l.id === listing.id ? u : l)); Alert.alert('Relisted!', 'Your listing is live again.'); }
+    catch (e) { Alert.alert('Error', e?.message || 'Could not relist.'); }
   }
 
   async function handleArchive(listing) {
-    try {
-      const updated = await setListingStatus(listing.id, 'archived');
-      setListings((prev) => prev.map((l) => (l.id === listing.id ? updated : l)));
-    } catch (e) {
-      Alert.alert('Error', e?.message || 'Could not archive.');
-    }
-  }
-
-  function onSold(updated) {
-    setListings((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+    try { const u = await setListingStatus(listing.id, 'archived'); setListings(p => p.map(l => l.id === listing.id ? u : l)); }
+    catch (e) { Alert.alert('Error', e?.message || 'Could not archive.'); }
   }
 
   async function handleRenew(listing) {
-    try {
-      const updated = await renewListing(listing.id);
-      setListings((prev) => prev.map((l) => (l.id === listing.id ? updated : l)));
-      Alert.alert('Renewed', 'Your listing is live for another 60 days.');
-    } catch (e) {
-      Alert.alert('Error', e?.message || 'Could not renew.');
-    }
+    try { const u = await renewListing(listing.id); setListings(p => p.map(l => l.id === listing.id ? u : l)); Alert.alert('Renewed!', 'Your listing is live for another 60 days.'); }
+    catch (e) { Alert.alert('Error', e?.message || 'Could not renew.'); }
   }
 
-  const statusOf = (l) => l.status || (l.is_active === false ? 'archived' : 'active');
+  function onSold(updated) { setListings(p => p.map(l => l.id === updated.id ? updated : l)); }
 
-  function expiryInfo(listing) {
-    if (!listing.expires_at) return null;
-    const now = new Date();
-    const exp = new Date(listing.expires_at);
-    const daysLeft = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
-    return { daysLeft, isExpired: daysLeft <= 0 };
-  }
+  const statusOf = l => l.status || (l.is_active === false ? 'archived' : 'active');
+  const visible  = listings.filter(l => tab === 'active' ? statusOf(l) === 'active' : statusOf(l) !== 'active');
 
-  const visible = listings.filter((l) => {
-    const st = statusOf(l);
-    if (tab === 'active') return st === 'active';
-    return st !== 'active';
-  });
-
-  if (loading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
-  function renderCard({ item }) {
-    const st = statusOf(item);
-    const isSellable = item.category === 'buysell' || item.category === 'food';
-    const expiry = expiryInfo(item);
-    const isExpired = expiry?.isExpired;
-    const expiringSoon = expiry && !isExpired && expiry.daysLeft <= 7;
-
-    return (
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: isExpired ? '#E63946' : expiringSoon ? '#F39C12' : colors.border }]}>
-        <View style={styles.cardHeader}>
-          <View style={[styles.categoryBadge, { backgroundColor: categoryColors[item.category] + '20' }]}>
-            <Text style={styles.categoryEmoji}>{categoryEmojis[item.category]}</Text>
-            <Text style={[styles.categoryText, { color: categoryColors[item.category] }]}>{item.category}</Text>
-          </View>
-          {item.price ? (
-            <Text style={[styles.price, { color: categoryColors[item.category] }]}>${item.price}</Text>
-          ) : null}
-        </View>
-
-        <Text style={[styles.cardTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
-        {item.description ? (
-          <Text style={[styles.cardDescription, { color: colors.textSecondary }]} numberOfLines={2}>{item.description}</Text>
-        ) : null}
-
-        <View style={styles.cardMeta}>
-          <Text style={[styles.cardDate, { color: colors.textLight }]}>
-            Posted {new Date(item.created_at).toLocaleDateString()}
-          </Text>
-          {isExpired && (
-            <View style={[styles.statusBadge, { backgroundColor: '#E6394620' }]}>
-              <Text style={{ color: '#E63946', fontSize: 11, fontWeight: '700' }}>⏰ EXPIRED</Text>
-            </View>
-          )}
-          {expiringSoon && (
-            <View style={[styles.statusBadge, { backgroundColor: '#F39C1220' }]}>
-              <Text style={{ color: '#F39C12', fontSize: 11, fontWeight: '700' }}>⚠️ {expiry.daysLeft}d left</Text>
-            </View>
-          )}
-          {st === 'sold' && !isExpired && (
-            <View style={[styles.statusBadge, { backgroundColor: '#2ECC7120' }]}>
-              <Text style={{ color: '#2ECC71', fontSize: 11, fontWeight: '700' }}>✓ SOLD</Text>
-            </View>
-          )}
-          {st === 'archived' && !isExpired && (
-            <View style={[styles.statusBadge, { backgroundColor: colors.surfaceSecondary }]}>
-              <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '700' }}>📦 ARCHIVED</Text>
-            </View>
-          )}
-        </View>
-
-        <View style={[styles.cardActions, { borderTopColor: colors.borderLight }]}>
-          {isExpired ? (
-            <>
-              <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: '#2ECC7115', borderColor: '#2ECC71', flex: 1 }]}
-                onPress={() => handleRenew(item)}
-              >
-                <Text style={{ color: '#1a7a45', fontSize: 12, fontWeight: '700' }}>🔄 Renew for 60 days</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: colors.errorBackground, borderColor: colors.error }]}
-                onPress={() => handleDelete(item.id)}
-              >
-                <Text style={[styles.actionText, { color: colors.error }]}>🗑️</Text>
-              </TouchableOpacity>
-            </>
-          ) : st === 'active' ? (
-            <>
-              {expiringSoon && (
-                <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: '#F39C1215', borderColor: '#F39C12' }]}
-                  onPress={() => handleRenew(item)}
-                >
-                  <Text style={{ color: '#F39C12', fontSize: 12, fontWeight: '600' }}>🔄 Renew</Text>
-                </TouchableOpacity>
-              )}
-              {isSellable && (
-                <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: '#2ECC7115', borderColor: '#2ECC71' }]}
-                  onPress={() => setSoldModal({ visible: true, listing: item })}
-                >
-                  <Text style={{ color: '#2ECC71', fontSize: 12, fontWeight: '600' }}>✓ Sold</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: colors.infoBackground, borderColor: colors.info }]}
-                onPress={() => navigation.navigate('Classifieds', { screen: 'EditListing', params: { listing: item } })}
-              >
-                <Text style={[styles.actionText, { color: colors.info }]}>✏️ Edit</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}
-                onPress={() => handleArchive(item)}
-              >
-                <Text style={[styles.actionText, { color: colors.textSecondary }]}>📦</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: '#2ECC7115', borderColor: '#2ECC71' }]}
-                onPress={() => handleRelist(item)}
-              >
-                <Text style={{ color: '#1a7a45', fontSize: 12, fontWeight: '600' }}>♻️ Relist</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: colors.errorBackground, borderColor: colors.error }]}
-                onPress={() => handleDelete(item.id)}
-              >
-                <Text style={[styles.actionText, { color: colors.error }]}>🗑️ Delete</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      </View>
-    );
-  }
+  if (loading) return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background }}><ActivityIndicator size="large" color="#FF6B6B" /></View>;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Tabs */}
-      <View style={[styles.tabBar, { borderBottomColor: colors.borderLight }]}>
-        {TABS.map((t) => {
-          const active = tab === t.id;
-          const count = listings.filter((l) =>
-            t.id === 'active' ? statusOf(l) === 'active' : statusOf(l) !== 'active'
-          ).length;
-          return (
-            <TouchableOpacity
-              key={t.id}
-              style={[styles.tab, active && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
-              onPress={() => setTab(t.id)}
-            >
-              <Text style={[styles.tabText, { color: active ? colors.primary : colors.textSecondary, fontWeight: active ? '700' : '500' }]}>
-                {t.label} ({count})
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+    <View style={[styles.root, { backgroundColor: theme.background }]}>
+      {/* Header */}
+      <LinearGradient colors={['#2D1B69','#1A0F3D']} style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Ionicons name="chevron-back" size={22} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>My Listings</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        {/* Tabs */}
+        <View style={styles.tabRow}>
+          {TABS.map(t => {
+            const active = tab === t.id;
+            const count  = listings.filter(l => t.id === 'active' ? statusOf(l) === 'active' : statusOf(l) !== 'active').length;
+            return (
+              <TouchableOpacity key={t.id} style={[styles.tab, active && styles.tabActive]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setTab(t.id); }}>
+                <Ionicons name={t.icon} size={14} color={active ? '#2D1B69' : 'rgba(255,255,255,0.65)'} />
+                <Text style={[styles.tabTxt, { color: active ? '#2D1B69' : 'rgba(255,255,255,0.65)' }]}>{t.label}</Text>
+                {count > 0 && <View style={[styles.tabBadge, { backgroundColor: active ? '#2D1B6930' : 'rgba(255,255,255,0.2)' }]}><Text style={[styles.tabBadgeTxt, { color: active ? '#2D1B69' : '#fff' }]}>{count}</Text></View>}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </LinearGradient>
 
       {visible.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>{tab === 'active' ? '📭' : '📦'}</Text>
-          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-            {tab === 'active' ? 'No active listings' : 'Nothing archived'}
-          </Text>
-          <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-            {tab === 'active' ? 'Your live listings will appear here' : 'Sold and archived items live here'}
-          </Text>
-          {tab === 'active' && (
-            <TouchableOpacity
-              style={[styles.postButton, { backgroundColor: colors.primary }]}
-              onPress={() => navigation.navigate('Classifieds')}
-            >
-              <Text style={styles.postButtonText}>+ Post a Listing</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        <EmptyState
+          type="listings"
+          title={tab === 'active' ? 'No active listings' : 'Nothing archived'}
+          body={tab === 'active' ? 'Your live listings will appear here.' : 'Sold and archived items live here.'}
+        />
       ) : (
         <FlatList
           data={visible}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
-          renderItem={renderCard}
+          keyExtractor={item => item.id}
+          renderItem={({ item }) => (
+            <ListingCard
+              item={item} theme={theme}
+              onEdit={l => navigation.navigate('Classifieds', { screen: 'EditListing', params: { listing: l } })}
+              onArchive={handleArchive}
+              onDelete={handleDelete}
+              onRelist={handleRelist}
+              onRenew={handleRenew}
+              onMarkSold={l => setSoldModal({ visible: true, listing: l })}
+            />
+          )}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#FF6B6B" />}
+          contentContainerStyle={{ paddingTop: 16, paddingBottom: insets.bottom + 40 }}
+          showsVerticalScrollIndicator={false}
         />
       )}
 
@@ -306,30 +277,15 @@ export default function MyListingsScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  tabBar: { flexDirection: 'row', borderBottomWidth: 0.5 },
-  tab: { flex: 1, paddingVertical: 14, alignItems: 'center' },
-  tabText: { fontSize: 14 },
-  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
-  emptyEmoji: { fontSize: 48, marginBottom: 12 },
-  emptyTitle: { fontSize: 18, fontWeight: '600' },
-  emptySubtitle: { fontSize: 14, marginTop: 6, textAlign: 'center' },
-  postButton: { borderRadius: 12, padding: 14, paddingHorizontal: 24, marginTop: 20 },
-  postButtonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  listContent: { padding: 16, paddingBottom: 40 },
-  card: { borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 0.5 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  categoryBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
-  categoryEmoji: { fontSize: 14 },
-  categoryText: { fontSize: 11, fontWeight: '600', textTransform: 'capitalize' },
-  price: { fontSize: 16, fontWeight: '700' },
-  cardTitle: { fontSize: 15, fontWeight: '600', marginBottom: 4 },
-  cardDescription: { fontSize: 13, lineHeight: 18, marginBottom: 6 },
-  cardMeta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  cardDate: { fontSize: 11 },
-  statusBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  cardActions: { flexDirection: 'row', gap: 8, paddingTop: 10, borderTopWidth: 0.5 },
-  actionBtn: { flex: 1, borderRadius: 8, padding: 10, alignItems: 'center', borderWidth: 0.5 },
-  actionText: { fontSize: 13, fontWeight: '600' },
+  root: { flex: 1 },
+  header: { paddingHorizontal: spacing.md, paddingBottom: 14 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  headerTitle: { color: '#fff', fontSize: fonts.sizes.lg, fontWeight: '800' },
+  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
+  tabRow: { flexDirection: 'row', gap: 8 },
+  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: borderRadius.full, paddingVertical: 9, backgroundColor: 'rgba(255,255,255,0.12)' },
+  tabActive: { backgroundColor: '#fff' },
+  tabTxt: { fontSize: fonts.sizes.sm, fontWeight: '700' },
+  tabBadge: { borderRadius: borderRadius.full, paddingHorizontal: 7, paddingVertical: 2 },
+  tabBadgeTxt: { fontSize: 11, fontWeight: '700' },
 });

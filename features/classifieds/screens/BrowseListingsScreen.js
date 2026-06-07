@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
+  View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput,
   ActivityIndicator, RefreshControl, ScrollView, Dimensions, Image, Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -11,7 +11,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { getListings, searchListings } from '../services/listingsService';
 import { useTheme } from '../../../core/theme/ThemeContext';
-import SearchBar from '../../../core/components/SearchBar';
 import EmptyState from '../../../core/components/EmptyState';
 import { CardSkeleton, ListItemSkeleton } from '../../../core/components/SkeletonLoader';
 import { fonts, spacing, borderRadius, shadows } from '../../../core/theme/index';
@@ -322,11 +321,7 @@ export default function BrowseListingsScreen({ navigation, route }) {
         <View style={styles.headerRow}>
           <View>
             <Text style={styles.headerTitle}>Marketplace</Text>
-            <View style={styles.cityRow}>
-              <Ionicons name="location" size={11} color="#F4A833" />
-              <Text style={styles.cityText}>St. Louis, MO</Text>
             </View>
-          </View>
           <TouchableOpacity
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); navigation.navigate('PostListing', { preselectedCategory: selectedCategory }); }}
             activeOpacity={0.85}
@@ -337,16 +332,24 @@ export default function BrowseListingsScreen({ navigation, route }) {
             </LinearGradient>
           </TouchableOpacity>
         </View>
-        <SearchBar
-          value={searchQuery}
-          onChangeText={handleSearch}
-          placeholder="Search listings..."
-          style={styles.searchBar}
-        />
-      </LinearGradient>
+        {/* Search */}
+        <View style={[styles.searchWrap, { borderColor: 'rgba(255,255,255,0.15)', backgroundColor: 'rgba(255,255,255,0.1)' }]}>
+          <Ionicons name="search" size={16} color="rgba(255,255,255,0.5)" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search listings..."
+            placeholderTextColor="rgba(255,255,255,0.35)"
+            value={searchQuery}
+            onChangeText={handleSearch}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => { setSearchQuery(''); fetchListings(); }}>
+              <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.5)" />
+            </TouchableOpacity>
+          )}
+        </View>
 
-      {/* Category chips */}
-      <View style={[styles.chipsWrapper, { backgroundColor: theme.surface, borderBottomColor: theme.borderLight }]}>
+        {/* Category chips */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
           {CATEGORIES.map((cat) => {
             const isActive = selectedCategory === cat.id;
@@ -357,16 +360,16 @@ export default function BrowseListingsScreen({ navigation, route }) {
                       <Ionicons name={cat.icon} size={13} color="#fff" />
                       <Text style={[styles.chipTxt, styles.chipTxtActive]}>{cat.label}</Text>
                     </LinearGradient>
-                  : <View style={[styles.chip, styles.chipInactive, { borderColor: theme.border, backgroundColor: theme.card }]}>
-                      <Ionicons name={`${cat.icon}-outline`} size={13} color={theme.textSecondary} />
-                      <Text style={[styles.chipTxt, { color: theme.textSecondary }]}>{cat.label}</Text>
+                  : <View style={[styles.chip, styles.chipInactive, { borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.08)' }]}>
+                      <Ionicons name={`${cat.icon}-outline`} size={13} color="rgba(255,255,255,0.6)" />
+                      <Text style={[styles.chipTxt, { color: 'rgba(255,255,255,0.6)' }]}>{cat.label}</Text>
                     </View>
                 }
               </TouchableOpacity>
             );
           })}
         </ScrollView>
-      </View>
+      </LinearGradient>
 
       {/* Food banner */}
       {selectedCategory === 'food' && (
@@ -408,17 +411,15 @@ export default function BrowseListingsScreen({ navigation, route }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: { paddingHorizontal: spacing.md, paddingBottom: 14 },
-  headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 },
+  header: { paddingHorizontal: spacing.md, paddingBottom: 16 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   headerTitle: { color: '#fff', fontSize: fonts.sizes.xxl, fontWeight: '800' },
-  cityRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
-  cityText: { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '500' },
   postBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 16, paddingVertical: 9, borderRadius: borderRadius.full, ...shadows.glow },
-  postBtnTxt: { color: '#fff', fontSize: fonts.sizes.sm, fontWeight: '700' },
-  searchBar: { marginTop: 2 },
+  postBtnTxt: { color: '#fff', fontSize: fonts.sizes.sm, fontWeight: '800' },
+  searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: borderRadius.full, borderWidth: 1.5, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12 },
+  searchInput: { flex: 1, color: '#fff', fontSize: fonts.sizes.sm },
 
-  chipsWrapper: { borderBottomWidth: 1 },
-  chipsRow: { paddingHorizontal: spacing.md, paddingVertical: 10, gap: 8 },
+  chipsRow: { paddingBottom: 4, gap: 8 },
   chipWrap: {},
   chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 13, paddingVertical: 7, borderRadius: borderRadius.full },
   chipInactive: { borderWidth: 1.5 },

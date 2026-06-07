@@ -7,40 +7,34 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '../theme/ThemeContext';
 
 const TABS = [
   {
     key: 'Home',
-    label: 'Home',
     icon: 'home',
     iconOutline: 'home-outline',
     gradient: ['#F4A833', '#FFCA6A'],
   },
   {
     key: 'Classifieds',
-    label: 'Market',
     icon: 'bag',
     iconOutline: 'bag-outline',
     gradient: ['#FF6B6B', '#FF9A9A'],
   },
   {
     key: 'Carpool',
-    label: 'Carpool',
     icon: 'car',
     iconOutline: 'car-outline',
     gradient: ['#00C48C', '#00E5A8'],
   },
   {
     key: 'News',
-    label: 'Stories',
     icon: 'flash',
     iconOutline: 'flash-outline',
     gradient: ['#0099FF', '#33AAFF'],
   },
   {
     key: 'Messages',
-    label: 'Inbox',
     icon: 'chatbubble-ellipses',
     iconOutline: 'chatbubble-ellipses-outline',
     gradient: ['#9B59B6', '#B87FCC'],
@@ -49,29 +43,14 @@ const TABS = [
 
 function TabItem({ tab, isActive, onPress, unreadCount }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const labelOpacity = useRef(new Animated.Value(isActive ? 1 : 0)).current;
-  const labelWidth = useRef(new Animated.Value(isActive ? 1 : 0)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: isActive ? 1.1 : 1,
-        useNativeDriver: true,
-        tension: 120,
-        friction: 8,
-      }),
-      Animated.timing(labelOpacity, {
-        toValue: isActive ? 1 : 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.spring(labelWidth, {
-        toValue: isActive ? 1 : 0,
-        useNativeDriver: false,
-        tension: 100,
-        friction: 10,
-      }),
-    ]).start();
+    Animated.spring(scaleAnim, {
+      toValue: isActive ? 1.12 : 1,
+      useNativeDriver: true,
+      tension: 140,
+      friction: 8,
+    }).start();
   }, [isActive]);
 
   function handlePress() {
@@ -79,14 +58,9 @@ function TabItem({ tab, isActive, onPress, unreadCount }) {
     onPress();
   }
 
-  const animLabelMaxWidth = labelWidth.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 60],
-  });
-
   return (
-    <TouchableOpacity onPress={handlePress} style={styles.tabItem} activeOpacity={0.85}>
-      <Animated.View style={[styles.tabInner, { transform: [{ scale: scaleAnim }] }]}>
+    <TouchableOpacity onPress={handlePress} style={styles.tabItem} activeOpacity={0.8}>
+      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
         {isActive ? (
           <LinearGradient
             colors={tab.gradient}
@@ -94,16 +68,11 @@ function TabItem({ tab, isActive, onPress, unreadCount }) {
             end={{ x: 1, y: 1 }}
             style={styles.activeWrap}
           >
-            <Ionicons name={tab.icon} size={20} color="#fff" />
-            <Animated.View style={{ maxWidth: animLabelMaxWidth, overflow: 'hidden' }}>
-              <Animated.Text style={[styles.activeLabel, { opacity: labelOpacity }]}>
-                {'  '}{tab.label}
-              </Animated.Text>
-            </Animated.View>
+            <Ionicons name={tab.icon} size={22} color="#fff" />
           </LinearGradient>
         ) : (
           <View style={styles.inactiveWrap}>
-            <Ionicons name={tab.iconOutline} size={22} color="rgba(255,255,255,0.5)" />
+            <Ionicons name={tab.iconOutline} size={22} color="rgba(255,255,255,0.55)" />
             {unreadCount > 0 && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
@@ -118,17 +87,22 @@ function TabItem({ tab, isActive, onPress, unreadCount }) {
 
 export default function FloatingTabBar({ state, descriptors, navigation, unreadMessages = 0 }) {
   const insets = useSafeAreaInsets();
-  const theme = useTheme();
+
+  // Hide tab bar when any active tab's stack has navigated deeper than the root screen
+  const activeRoute = state.routes[state.index];
+  const nestedState = activeRoute?.state;
+  const isSubScreen = nestedState != null && nestedState.index > 0;
+  if (isSubScreen) return null;
 
   return (
-    <View style={[styles.outerContainer, { paddingBottom: insets.bottom + 8 }]}>
+    <View style={[styles.outerContainer, { paddingBottom: insets.bottom + 6 }]}>
       <View style={styles.pillContainer}>
         <BlurView
-          intensity={theme.isDark ? 60 : 40}
-          tint={theme.isDark ? 'dark' : 'light'}
+          intensity={Platform.OS === 'ios' ? 80 : 60}
+          tint={Platform.OS === 'ios' ? 'systemUltraThinMaterialDark' : 'dark'}
           style={StyleSheet.absoluteFill}
         />
-        <View style={[styles.pillBorder, { borderColor: theme.glassBorder }]} />
+        <View style={styles.pillBorder} />
 
         {state.routes.map((route, index) => {
           const tab = TABS.find((t) => t.key === route.name);
@@ -167,7 +141,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     paddingTop: 8,
   },
   pillContainer: {
@@ -177,14 +151,14 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     overflow: 'hidden',
     paddingVertical: 10,
-    paddingHorizontal: 8,
-    backgroundColor: 'rgba(26,16,53,0.7)',
+    paddingHorizontal: 6,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     ...Platform.select({
       ios: {
-        shadowColor: '#2D1B69',
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.35,
-        shadowRadius: 24,
+        shadowOpacity: 0.25,
+        shadowRadius: 20,
       },
       android: { elevation: 16 },
     }),
@@ -192,26 +166,30 @@ const styles = StyleSheet.create({
   pillBorder: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: 40,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.18)',
   },
-  tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  tabInner: { alignItems: 'center', justifyContent: 'center' },
-  activeWrap: {
-    flexDirection: 'row',
+  tabItem: {
+    flex: 1,
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
+    justifyContent: 'center',
   },
-  activeLabel: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '700',
+  activeWrap: {
+    width: 48,
+    height: 44,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  inactiveWrap: { width: 44, height: 40, alignItems: 'center', justifyContent: 'center' },
+  inactiveWrap: {
+    width: 48,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   badge: {
     position: 'absolute',
-    top: 4,
+    top: 6,
     right: 4,
     backgroundColor: '#FF6B6B',
     borderRadius: 999,

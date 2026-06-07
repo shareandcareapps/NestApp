@@ -1,69 +1,183 @@
 // features/news/screens/NewsFeedScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, FlatList,
-  TouchableOpacity, ActivityIndicator, RefreshControl, SafeAreaView,
+  View, Text, StyleSheet, FlatList, TouchableOpacity,
+  RefreshControl, ScrollView, Animated,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 import { getNews } from '../services/newsService';
 import { useTheme } from '../../../core/theme/ThemeContext';
-import { Ionicons } from '@expo/vector-icons';
+import EmptyState from '../../../core/components/EmptyState';
+import SkeletonLoader from '../../../core/components/SkeletonLoader';
+import { fonts, spacing, borderRadius, shadows } from '../../../core/theme/index';
 
 const CATEGORIES = [
-  { id: null, label: 'All' },
-  { id: 'visa', label: 'Visa' },
-  { id: 'jobs', label: 'Jobs' },
-  { id: 'events', label: 'Events' },
-  { id: 'local', label: 'Local' },
+  { id: null,       label: 'All',      icon: 'apps-outline',         gradient: ['#2D1B69','#4A2D9C'],  flag: '🌐' },
+  { id: 'india',    label: 'India',    icon: 'flag-outline',         gradient: ['#FF9933','#138808'],  flag: '🇮🇳' },
+  { id: 'pakistan', label: 'Pakistan', icon: 'flag-outline',         gradient: ['#01411C','#005C2E'],  flag: '🇵🇰' },
+  { id: 'nepal',    label: 'Nepal',    icon: 'flag-outline',         gradient: ['#003580','#DC143C'],  flag: '🇳🇵' },
+  { id: 'arab',     label: 'Arab',     icon: 'moon-outline',         gradient: ['#006C35','#C8A84B'],  flag: '🌙' },
+  { id: 'local',    label: 'Local',    icon: 'location-outline',     gradient: ['#FF6B6B','#E84393'],  flag: '📍' },
 ];
 
-const categoryColors = { visa: '#3498DB', jobs: '#2ECC71', events: '#F39C12', local: '#E63946' };
-const categoryEmojis = { visa: '📋', jobs: '💼', events: '🎉', local: '📍' };
+const CAT_META = {
+  india:    { icon: 'globe-outline',      gradient: ['#FF9933','#138808'] },
+  pakistan: { icon: 'globe-outline',      gradient: ['#01411C','#005C2E'] },
+  nepal:    { icon: 'globe-outline',      gradient: ['#003580','#DC143C'] },
+  arab:     { icon: 'moon-outline',       gradient: ['#006C35','#C8A84B'] },
+  local:    { icon: 'home-outline',       gradient: ['#FF6B6B','#E84393'] },
+  visa:     { icon: 'document-text-outline', gradient: ['#0099FF','#0055CC'] },
+  jobs:     { icon: 'briefcase-outline',  gradient: ['#00C48C','#007A5E'] },
+  events:   { icon: 'calendar-outline',   gradient: ['#F4A833','#E68A00'] },
+};
 
-function NewsCard({ item, onPress, colors }) {
-  const color = categoryColors[item.category] || '#E63946';
-  const emoji = categoryEmojis[item.category] || '📰';
+const STORIES = [
+  { id: '1', name: 'India',    icon: 'globe-outline',         gradient: ['#FF9933','#138808'] },
+  { id: '2', name: 'Pakistan', icon: 'globe-outline',         gradient: ['#01411C','#5B8F6E'] },
+  { id: '3', name: 'Nepal',    icon: 'globe-outline',         gradient: ['#003580','#DC143C'] },
+  { id: '4', name: 'Arab',     icon: 'moon-outline',          gradient: ['#006C35','#C8A84B'] },
+  { id: '5', name: 'Local',    icon: 'home-outline',          gradient: ['#FF6B6B','#E84393'] },
+  { id: '6', name: 'Events',   icon: 'calendar-outline',      gradient: ['#F4A833','#E68A00'] },
+];
+
+const TRENDING = ['#StLouis', '#H1BVisa', '#OPTExtension', '#DesiFood', '#Diwali', '#Eid2025'];
+
+function StoriesRow({ theme }) {
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={stS.row}>
+      {/* Add story button */}
+      <View style={stS.storyWrap}>
+        <View style={[stS.addCircle, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Ionicons name="add" size={24} color="#F4A833" />
+        </View>
+        <Text style={[stS.storyLabel, { color: theme.textSecondary }]}>Your Story</Text>
+      </View>
+      {STORIES.map(s => (
+        <TouchableOpacity key={s.id} style={stS.storyWrap} onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)} activeOpacity={0.8}>
+          <LinearGradient colors={s.gradient} style={stS.storyRing} start={{x:0,y:0}} end={{x:1,y:1}}>
+            <View style={[stS.storyInner, { backgroundColor: theme.card }]}>
+              <Ionicons name={s.icon} size={22} color={s.gradient[0]} />
+            </View>
+          </LinearGradient>
+          <Text style={[stS.storyLabel, { color: theme.textSecondary }]} numberOfLines={1}>{s.name}</Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  );
+}
+
+const stS = StyleSheet.create({
+  row: { paddingHorizontal: spacing.md, paddingVertical: 14, gap: 16 },
+  storyWrap: { alignItems: 'center', gap: 6, width: 62 },
+  addCircle: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderStyle: 'dashed' },
+  storyRing: { width: 62, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center', padding: 2.5 },
+  storyInner: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center' },
+  storyEmoji: { fontSize: 26 },
+  storyLabel: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
+});
+
+function TrendingRow({ theme }) {
+  return (
+    <View style={trS.wrap}>
+      <View style={trS.header}>
+        <Ionicons name="trending-up" size={14} color="#F4A833" />
+        <Text style={[trS.title, { color: theme.textSecondary }]}>Trending</Text>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={trS.chips}>
+        {TRENDING.map(tag => (
+          <TouchableOpacity key={tag} style={[trS.chip, { backgroundColor: theme.card, borderColor: theme.border }]}
+            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}>
+            <Text style={[trS.chipTxt, { color: '#F4A833' }]}>{tag}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+const trS = StyleSheet.create({
+  wrap: { paddingBottom: 12 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: spacing.md, marginBottom: 8 },
+  title: { fontSize: fonts.sizes.xs, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6 },
+  chips: { paddingHorizontal: spacing.md, gap: 8 },
+  chip: { borderRadius: borderRadius.full, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1 },
+  chipTxt: { fontSize: fonts.sizes.sm, fontWeight: '700' },
+});
+
+function NewsCard({ item, onPress, theme }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const meta  = CAT_META[item.category] || { emoji: '📰', gradient: ['#2D1B69','#4A2D9C'] };
+  const timeStr = new Date(item.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+
   return (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
-      onPress={() => onPress(item)}
+      onPressIn={() => Animated.spring(scale, { toValue: 0.97, useNativeDriver: true }).start()}
+      onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start()}
+      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress(item); }}
+      activeOpacity={1}
     >
-      <View style={[styles.cardBanner, { backgroundColor: color + '20' }]}>
-        <Text style={styles.bannerEmoji}>{emoji}</Text>
-      </View>
-      <View style={styles.cardContent}>
-        <View style={[styles.categoryTag, { backgroundColor: color + '20' }]}>
-          <Text style={[styles.categoryTagText, { color }]}>{item.category?.toUpperCase()}</Text>
+      <Animated.View style={[nStyles.card, { backgroundColor: theme.card, transform: [{ scale }] }, shadows.small]}>
+        <LinearGradient colors={meta.gradient} style={nStyles.banner} start={{x:0,y:0}} end={{x:1,y:1}}>
+          <Ionicons name={meta.icon || 'newspaper-outline'} size={28} color="rgba(255,255,255,0.85)" />
+          <View style={nStyles.categoryBadge}>
+            <Text style={nStyles.categoryBadgeTxt}>{item.category?.toUpperCase() || 'NEWS'}</Text>
+          </View>
+        </LinearGradient>
+
+        <View style={nStyles.content}>
+          <Text style={[nStyles.title, { color: theme.textPrimary }]} numberOfLines={2}>{item.title}</Text>
+          <Text style={[nStyles.body, { color: theme.textSecondary }]} numberOfLines={2}>{item.body}</Text>
+          <View style={nStyles.footer}>
+            <View style={nStyles.metaRow}>
+              <Ionicons name="location-outline" size={12} color={theme.textLight} />
+            </View>
+            <View style={nStyles.metaRow}>
+              <Ionicons name="time-outline" size={12} color={theme.textLight} />
+              <Text style={[nStyles.metaTxt, { color: theme.textLight }]}>{timeStr}</Text>
+            </View>
+            <Text style={[nStyles.readMore, { color: meta.gradient[0] }]}>Read →</Text>
+          </View>
         </View>
-        <Text style={[styles.cardTitle, { color: colors.textPrimary }]} numberOfLines={2}>{item.title}</Text>
-        <Text style={[styles.cardBody, { color: colors.textSecondary }]} numberOfLines={2}>{item.body}</Text>
-        <View style={[styles.cardFooter, { borderTopColor: colors.borderLight }]}>
-          <Text style={[styles.cardTime, { color: colors.textLight }]}>🕐 {new Date(item.created_at).toLocaleDateString()}</Text>
-          <Text style={[styles.readMore, { color }]}>Read more →</Text>
-        </View>
-      </View>
+      </Animated.View>
     </TouchableOpacity>
   );
 }
 
-export default function NewsFeedScreen({ navigation }) {
-  const [news, setNews] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const colors = useTheme();
+const nStyles = StyleSheet.create({
+  card: { borderRadius: borderRadius.xl, marginHorizontal: spacing.md, marginBottom: 14, overflow: 'hidden' },
+  banner: { height: 90, alignItems: 'center', justifyContent: 'space-between', padding: 14, flexDirection: 'row' },
+  bannerEmoji: { fontSize: 40, flex: 1 },
+  categoryBadge: { backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: borderRadius.full, paddingHorizontal: 10, paddingVertical: 4 },
+  categoryBadgeTxt: { color: '#fff', fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
+  content: { padding: 14 },
+  title: { fontSize: fonts.sizes.md, fontWeight: '800', lineHeight: 22, marginBottom: 6 },
+  body: { fontSize: fonts.sizes.sm, lineHeight: 20, marginBottom: 10 },
+  footer: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  metaTxt: { fontSize: 11 },
+  readMore: { fontSize: fonts.sizes.sm, fontWeight: '700', marginLeft: 'auto' },
+});
 
-  useEffect(() => { fetchNews(); }, [selectedCategory]);
+export default function NewsFeedScreen({ navigation }) {
+  const [news,       setNews]       = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selected,   setSelected]   = useState(null);
+  const theme  = useTheme();
+  const insets = useSafeAreaInsets();
+
+  useEffect(() => { fetchNews(); }, [selected]);
 
   async function fetchNews() {
     try {
       setLoading(true);
-      const data = await getNews(selectedCategory);
+      const data = await getNews(selected);
       setNews(data);
-    } catch (error) {
-      console.error('Error fetching news:', error);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
   }
 
   async function handleRefresh() {
@@ -72,55 +186,59 @@ export default function NewsFeedScreen({ navigation }) {
     setRefreshing(false);
   }
 
+  const ListHeader = () => (
+    <>
+      <StoriesRow theme={theme} />
+      <TrendingRow theme={theme} />
+    </>
+  );
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SafeAreaView style={{ backgroundColor: colors.secondary }}>
-        <View style={[styles.headerBar, { backgroundColor: colors.secondary }]}>
-          <Text style={[styles.headerTitle, { color: '#fff' }]}>News</Text>
-          <View style={styles.cityPill}>
-            <Ionicons name="location-sharp" size={10} color="rgba(255,255,255,0.7)" />
-            <Text style={styles.cityPillText}>St. Louis, MO</Text>
+    <View style={[styles.root, { backgroundColor: theme.background }]}>
+      {/* Header */}
+      <LinearGradient colors={['#2D1B69','#1A0F3D']} style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.headerTitle}>Community Stories</Text>
           </View>
         </View>
-      </SafeAreaView>
-      <View style={[styles.filterContainer, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        {CATEGORIES.map((cat) => (
-  <TouchableOpacity
-    key={cat.label}
-    style={[styles.filterButton, {
-      backgroundColor: selectedCategory === cat.id ? '#3498DB' : colors.surfaceSecondary,
-      borderColor: selectedCategory === cat.id ? '#3498DB' : colors.border,
-    }]}
-    onPress={() => setSelectedCategory(cat.id)}
-  >
-    <Text style={[styles.filterLabel, { color: selectedCategory === cat.id ? '#fff' : colors.textSecondary }]}>
-      {cat.label}
-    </Text>
-  </TouchableOpacity>
-))}
-      </View>
+
+        {/* Category chips */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 14 }} contentContainerStyle={{ paddingHorizontal: spacing.md, gap: 8 }}>
+          {CATEGORIES.map(cat => {
+            const isActive = selected === cat.id;
+            return (
+              <TouchableOpacity
+                key={String(cat.id)}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSelected(cat.id); }}
+                style={[styles.chip, isActive ? styles.chipActive : styles.chipInactive]}
+              >
+                <Text style={styles.chipFlag}>{cat.flag}</Text>
+                <Text style={[styles.chipTxt, { color: isActive ? '#fff' : 'rgba(255,255,255,0.6)' }]}>{cat.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </LinearGradient>
+
       {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3498DB" />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading news...</Text>
-        </View>
-      ) : news.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>📭</Text>
-          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No St. Louis news yet</Text>
-          <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-            Check back soon — local news for the St. Louis Indian community will appear here
-          </Text>
+        <View style={{ padding: spacing.md }}>
+          {[0,1,2].map(i => <SkeletonLoader key={i} type="news" style={{ marginBottom: 14 }} />)}
         </View>
       ) : (
         <FlatList
           data={news}
-          keyExtractor={(item) => item.id}
+          keyExtractor={item => item.id}
+          ListHeaderComponent={<ListHeader />}
           renderItem={({ item }) => (
-            <NewsCard item={item} colors={colors} onPress={(article) => navigation.navigate('NewsDetail', { article })} />
+            <NewsCard item={item} theme={theme} onPress={article => navigation.navigate('NewsDetail', { article })} />
           )}
-          contentContainerStyle={styles.listContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#3498DB" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#F4A833" />}
+          ListEmptyComponent={
+            <EmptyState type="news" title="No stories yet" body="Community news and updates for St. Louis will appear here." />
+          }
+          contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+          showsVerticalScrollIndicator={false}
         />
       )}
     </View>
@@ -128,30 +246,14 @@ export default function NewsFeedScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  headerBar: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12 },
-  headerTitle: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5, color: '#fff' },
-  cityPill: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
-  cityPillText: { fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: '500' },
-  filterContainer: { flexDirection: 'row', padding: 12, borderBottomWidth: 0.5, gap: 8 },
-  filterButton: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 0.5 },
-  filterLabel: { fontSize: 13, fontWeight: '500' },
-  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  loadingText: { marginTop: 10, fontSize: 14 },
-  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
-  emptyEmoji: { fontSize: 48, marginBottom: 12 },
-  emptyTitle: { fontSize: 18, fontWeight: '600' },
-  emptySubtitle: { fontSize: 14, marginTop: 6, textAlign: 'center', lineHeight: 20 },
-  listContent: { padding: 12, paddingBottom: 80 },
-  card: { borderRadius: 12, marginBottom: 12, borderWidth: 0.5, overflow: 'hidden' },
-  cardBanner: { height: 80, alignItems: 'center', justifyContent: 'center' },
-  bannerEmoji: { fontSize: 36 },
-  cardContent: { padding: 14 },
-  categoryTag: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, marginBottom: 8 },
-  categoryTagText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
-  cardTitle: { fontSize: 16, fontWeight: '700', lineHeight: 22, marginBottom: 6 },
-  cardBody: { fontSize: 14, lineHeight: 20, marginBottom: 10 },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10, borderTopWidth: 0.5 },
-  cardTime: { fontSize: 12 },
-  readMore: { fontSize: 13, fontWeight: '600' },
+  root: { flex: 1 },
+  header: { paddingHorizontal: spacing.md, paddingBottom: 16 },
+  headerRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
+  headerSub: { color: 'rgba(255,255,255,0.55)', fontSize: fonts.sizes.xs, fontWeight: '600', letterSpacing: 0.5 },
+  headerTitle: { color: '#fff', fontSize: fonts.sizes.xxl, fontWeight: '800' },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: borderRadius.full, paddingHorizontal: 14, paddingVertical: 7 },
+  chipActive: { backgroundColor: 'rgba(255,255,255,0.25)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
+  chipInactive: { backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+  chipFlag: { fontSize: 14 },
+  chipTxt: { fontSize: fonts.sizes.sm, fontWeight: '700' },
 });

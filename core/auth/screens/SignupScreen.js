@@ -184,12 +184,7 @@ export default function SignupScreen({ navigation }) {
 
           <View style={styles.headerSection}>
             <Text style={styles.headline}>Join the community</Text>
-            <Text style={styles.subheadline}>Connect with Indians, Pakistanis,{'\n'}Nepalese & Arabs across the USA</Text>
-            <View style={styles.flagRow}>
-              {['🇮🇳', '🇵🇰', '🇳🇵', '🇸🇦'].map((flag, i) => (
-                <Text key={i} style={styles.flag}>{flag}</Text>
-              ))}
-            </View>
+            <Text style={styles.subheadline}>A space for minority communities{'\n'}across the USA to connect & thrive</Text>
           </View>
 
           {/* Form card */}

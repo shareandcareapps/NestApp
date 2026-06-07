@@ -37,6 +37,12 @@
         "projectId": "658a8649-e738-4aff-abf0-d40031371d19"
       }
     },
-    "owner": "shareandcare"
+    "owner": "shareandcare",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/658a8649-e738-4aff-abf0-d40031371d19"
+    }
   }
 }

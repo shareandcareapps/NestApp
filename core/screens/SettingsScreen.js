@@ -1,381 +1,327 @@
 // core/screens/SettingsScreen.js
-// CORE SCREEN — Settings, Profile and Logout
-// Accessible from every tab via the avatar button
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-  useColorScheme,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView,
+  Alert, Switch, Animated, Modal, Pressable, useColorScheme,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 import { supabase } from '../database/index';
 import useAppStore from '../store/index';
 import { useTheme } from '../theme/ThemeContext';
+import { fonts, spacing, borderRadius, shadows } from '../theme/index';
+
+const LANGUAGES = [
+  { id: 'en',  label: 'English',  code: 'EN' },
+  { id: 'hi',  label: 'हिंदी',    code: 'HI' },
+  { id: 'ur',  label: 'اردو',     code: 'UR' },
+  { id: 'ne',  label: 'नेपाली',   code: 'NE' },
+  { id: 'ar',  label: 'العربية',  code: 'AR' },
+];
+
+const AVATAR_COLORS = ['#FF6B6B','#2D1B69','#00C48C','#0099FF','#9B59B6','#F4A833'];
+
+function SectionHeader({ title, theme }) {
+  return (
+    <Text style={[secS.title, { color: theme.textLight }]}>{title}</Text>
+  );
+}
+
+const secS = StyleSheet.create({
+  title: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', paddingHorizontal: spacing.md, paddingTop: 24, paddingBottom: 8 },
+});
+
+function SettingsRow({ icon, iconColor = '#F4A833', label, sublabel, right, onPress, last, theme }) {
+  return (
+    <TouchableOpacity
+      style={[rowS.row, !last && { borderBottomColor: theme.border, borderBottomWidth: 0.5 }, { backgroundColor: theme.card }]}
+      onPress={onPress}
+      activeOpacity={onPress ? 0.7 : 1}
+    >
+      <View style={[rowS.iconWrap, { backgroundColor: iconColor + '18' }]}>
+        <Ionicons name={icon} size={18} color={iconColor} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[rowS.label, { color: theme.textPrimary }]}>{label}</Text>
+        {sublabel && <Text style={[rowS.sublabel, { color: theme.textLight }]}>{sublabel}</Text>}
+      </View>
+      {right}
+      {onPress && !right && <Ionicons name="chevron-forward" size={16} color={theme.textLight} />}
+    </TouchableOpacity>
+  );
+}
+
+const rowS = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: 14, gap: 14 },
+  iconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  label: { fontSize: fonts.sizes.md, fontWeight: '500' },
+  sublabel: { fontSize: 12, marginTop: 2 },
+});
 
 export default function SettingsScreen({ navigation }) {
-  const user = useAppStore((state) => state.user);
-  const themeMode = useAppStore((state) => state.themeMode);
-  const setThemeMode = useAppStore((state) => state.setThemeMode);
-  const storedProfileName = useAppStore((state) => state.profileName);
-  const colors = useTheme();
-  const [profile, setProfile] = useState(null);
-  const systemTheme = useColorScheme();
+  const user             = useAppStore(s => s.user);
+  const themeMode        = useAppStore(s => s.themeMode);
+  const setThemeMode     = useAppStore(s => s.setThemeMode);
+  const storedProfileName = useAppStore(s => s.profileName);
+  const theme            = useTheme();
+  const insets           = useSafeAreaInsets();
+  const systemTheme      = useColorScheme();
+
+  const [profile,      setProfile]      = useState(null);
+  const [language,     setLanguage]     = useState('en');
+  const [showLangPicker, setShowLangPicker] = useState(false);
+  const [showLogoutSheet, setShowLogoutSheet] = useState(false);
+  const [notifs, setNotifs] = useState({ listings: true, rides: true, messages: true, news: false });
+  const themeAnim = useRef(new Animated.Value(themeMode === 'dark' ? 1 : 0)).current;
 
   useEffect(() => {
+    navigation.setOptions({ headerShown: false });
     loadProfile();
   }, []);
 
+  useEffect(() => {
+    Animated.spring(themeAnim, { toValue: themeMode === 'dark' ? 1 : 0, useNativeDriver: true, speed: 20 }).start();
+  }, [themeMode]);
+
   async function loadProfile() {
+    if (!user?.id) { setLoading(false); return; }
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle();
-      if (!error && data) setProfile(data);
-    } catch (error) {
-      console.error('Error loading profile:', error);
-    }
+      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+      if (data) setProfile(data);
+    } catch (e) { console.error('loadProfile:', e); }
+  }
+
+  function toggleTheme() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setThemeMode(themeMode === 'dark' ? 'light' : 'dark');
   }
 
   async function handleLogout() {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            await supabase.auth.signOut();
-          },
-        },
-      ]
-    );
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setShowLogoutSheet(false);
+    await supabase.auth.signOut();
   }
 
-  const name = profile?.full_name || storedProfileName || user?.email || 'User';
-  const initials = name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
+  const name = profile?.full_name || storedProfileName || user?.email?.split('@')[0] || 'User';
+  const username = profile?.username;
+  const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  const avatarColor = AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
+  const currentLang = LANGUAGES.find(l => l.id === language);
 
-  const avatarColors = [
-    '#E63946', '#1D3557', '#2ECC71',
-    '#3498DB', '#9B59B6', '#F39C12',
-  ];
-  const colorIndex = name.charCodeAt(0) % avatarColors.length;
+  const moonX = themeAnim.interpolate({ inputRange: [0, 1], outputRange: [2, 26] });
 
   return (
-    <ScrollView
-      key={themeMode}
-      style={{ flex: 1, backgroundColor: colors.background }}
-    >
-      {/* Profile Card */}
-      <View style={[styles.profileCard, { backgroundColor: colors.navBackground }]}>
-        <View style={[styles.avatar, { backgroundColor: avatarColors[colorIndex] }]}>
-          <Text style={styles.avatarText}>{initials}</Text>
-        </View>
-        <View style={styles.profileInfo}>
-          <Text style={styles.profileName}>{name}</Text>
-          <Text style={styles.profileEmail}>{user?.email}</Text>
-          {profile?.is_verified && (
-            <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedText}>✓ Verified</Text>
-            </View>
-          )}
-        </View>
-      </View>
+    <View style={[styles.root, { backgroundColor: theme.background }]}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
 
-      {/* Appearance Section */}
-      <View style={[styles.section, {
-        backgroundColor: colors.surface,
-        borderColor: colors.border,
-      }]}>
-        <Text style={[styles.sectionTitle, { color: colors.textLight }]}>APPEARANCE</Text>
-        <View style={styles.themeContainer}>
-          {['light', 'dark', 'auto'].map((t) => (
-            <TouchableOpacity
-              key={t}
-              style={[
-                styles.themeButton,
-                {
-                  backgroundColor: colors.surfaceSecondary,
-                  borderColor: colors.border,
-                },
-                themeMode === t && {
-                  borderColor: colors.navBackground,
-                  borderWidth: 2,
-                  backgroundColor: colors.infoBackground,
-                },
-              ]}
-              onPress={() => setThemeMode(t)}
-            >
-              <Text style={styles.themeEmoji}>
-                {t === 'light' ? '☀️' : t === 'dark' ? '🌙' : '⚙️'}
-              </Text>
-              <Text style={[
-                styles.themeLabel,
-                { color: colors.textSecondary },
-                themeMode === t && { color: colors.textPrimary, fontWeight: '700' },
-              ]}>
-                {t === 'light' ? 'Light' : t === 'dark' ? 'Dark' : 'Auto'}
-              </Text>
+        {/* Profile hero card */}
+        <LinearGradient colors={['#2D1B69','#1A0F3D']} style={[styles.profileHero, { paddingTop: insets.top + 10 }]}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Ionicons name="chevron-back" size={20} color="#fff" />
+          </TouchableOpacity>
+          <LinearGradient colors={[avatarColor, avatarColor + 'BB']} style={styles.avatar}>
+            <Text style={styles.avatarTxt}>{initials}</Text>
+          </LinearGradient>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.heroName}>{name}</Text>
+            {username && <Text style={styles.heroUsername}>@{username}</Text>}
+            <Text style={styles.heroEmail}>{user?.email}</Text>
+          </View>
+          <TouchableOpacity style={styles.editBtn} onPress={() => navigation.navigate('EditProfile')}>
+            <Ionicons name="pencil" size={16} color="#F4A833" />
+          </TouchableOpacity>
+        </LinearGradient>
+
+        {/* My content shortcuts */}
+        <View style={styles.quickRow}>
+          {[
+            { icon: 'pricetag', label: 'My Listings', color: '#FF6B6B', route: 'MyListings' },
+            { icon: 'car',      label: 'My Rides',    color: '#00C48C', route: 'MyRides' },
+          ].map(item => (
+            <TouchableOpacity key={item.label} style={[styles.quickBtn, { backgroundColor: theme.card }, shadows.small]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); navigation.navigate(item.route); }}>
+              <View style={[styles.quickIcon, { backgroundColor: item.color + '18' }]}>
+                <Ionicons name={item.icon} size={22} color={item.color} />
+              </View>
+              <Text style={[styles.quickLabel, { color: theme.textPrimary }]}>{item.label}</Text>
+              <Ionicons name="chevron-forward" size={14} color={theme.textLight} />
             </TouchableOpacity>
           ))}
         </View>
-        {themeMode === 'auto' && (
-          <Text style={[styles.themeNote, { color: colors.textLight }]}>
-            Currently following {systemTheme} mode
-          </Text>
-        )}
-      </View>
 
-      {/* App Info Section */}
-      <View style={[styles.section, {
-        backgroundColor: colors.surface,
-        borderColor: colors.border,
-      }]}>
-        <Text style={[styles.sectionTitle, { color: colors.textLight }]}>APP</Text>
-        <TouchableOpacity
-          style={[styles.menuItem, { borderBottomColor: colors.borderLight }]}
-          onPress={() => navigation.navigate('PrivacyPolicy')}
-        >
-          <Text style={styles.menuItemEmoji}>📋</Text>
-          <View style={styles.menuItemContent}>
-            <Text style={[styles.menuItemTitle, { color: colors.textPrimary }]}>Privacy Policy</Text>
+        {/* Appearance */}
+        <SectionHeader title="Appearance" theme={theme} />
+        <View style={[styles.section, { borderColor: theme.border }]}>
+          <SettingsRow
+            icon="contrast-outline" iconColor="#9B59B6" label="Dark Mode"
+            sublabel={themeMode === 'auto' ? `Following system (${systemTheme})` : undefined}
+            theme={theme} last
+            right={
+              <TouchableOpacity onPress={toggleTheme} style={[styles.toggleTrack, { backgroundColor: themeMode === 'dark' ? '#9B59B6' : theme.border }]}>
+                <Animated.View style={[styles.toggleThumb, { transform: [{ translateX: moonX }] }]}>
+                  <Ionicons name={themeMode === 'dark' ? 'moon' : 'sunny'} size={12} color={themeMode === 'dark' ? '#9B59B6' : '#F4A833'} />
+                </Animated.View>
+              </TouchableOpacity>
+            }
+          />
+        </View>
+
+        {/* Notifications */}
+        <SectionHeader title="Notifications" theme={theme} />
+        <View style={[styles.section, { borderColor: theme.border }]}>
+          {[
+            { key: 'messages', label: 'Messages', icon: 'chatbubble-outline', color: '#9B59B6' },
+            { key: 'listings', label: 'New Listings', icon: 'pricetag-outline', color: '#FF6B6B' },
+            { key: 'rides',    label: 'Carpool Updates', icon: 'car-outline',  color: '#00C48C' },
+            { key: 'news',     label: 'Community News', icon: 'newspaper-outline', color: '#F4A833' },
+          ].map((n, i, arr) => (
+            <SettingsRow
+              key={n.key}
+              icon={n.icon} iconColor={n.color} label={n.label}
+              theme={theme}
+              last={i === arr.length - 1}
+              right={
+                <Switch
+                  value={notifs[n.key]}
+                  onValueChange={v => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setNotifs(p => ({ ...p, [n.key]: v })); }}
+                  trackColor={{ false: theme.border, true: n.color + '88' }}
+                  thumbColor={notifs[n.key] ? n.color : theme.textLight}
+                />
+              }
+            />
+          ))}
+        </View>
+
+        {/* App info */}
+        <SectionHeader title="App" theme={theme} />
+        <View style={[styles.section, { borderColor: theme.border }]}>
+          <SettingsRow icon="document-text-outline" iconColor="#0099FF" label="Privacy Policy"     onPress={() => navigation.navigate('PrivacyPolicy')} theme={theme} />
+          <SettingsRow icon="newspaper-outline"    iconColor="#00C48C" label="Terms & Conditions" onPress={() => navigation.navigate('Terms')}         theme={theme} />
+          <SettingsRow icon="warning-outline"      iconColor="#F4A833" label="Disclaimer"         onPress={() => navigation.navigate('Disclaimer')}    theme={theme} last />
+        </View>
+
+        {/* Version card */}
+        <View style={[styles.versionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <LinearGradient colors={['#F4A833','#FF6B6B']} style={styles.versionBubble} start={{x:0,y:0}} end={{x:1,y:1}}>
+            <Ionicons name="leaf" size={18} color="#fff" />
+          </LinearGradient>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.versionName, { color: theme.textPrimary }]}>NestApp</Text>
+            <Text style={[styles.versionMeta, { color: theme.textLight }]}>v1.0.0 Beta · Taru Labs</Text>
           </View>
-          <Text style={[styles.menuItemArrow, { color: colors.border }]}>›</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.menuItem, { borderBottomColor: colors.borderLight }]}
-          onPress={() => navigation.navigate('Terms')}
-        >
-          <Text style={styles.menuItemEmoji}>📄</Text>
-          <View style={styles.menuItemContent}>
-            <Text style={[styles.menuItemTitle, { color: colors.textPrimary }]}>Terms & Conditions</Text>
-          </View>
-          <Text style={[styles.menuItemArrow, { color: colors.border }]}>›</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.menuItem, { borderBottomColor: colors.borderLight }]}
-          onPress={() => navigation.navigate('Disclaimer')}
-        >
-          <Text style={styles.menuItemEmoji}>⚠️</Text>
-          <View style={styles.menuItemContent}>
-            <Text style={[styles.menuItemTitle, { color: colors.textPrimary }]}>Disclaimer</Text>
-          </View>
-          <Text style={[styles.menuItemArrow, { color: colors.border }]}>›</Text>
-        </TouchableOpacity>
-        <View style={[styles.menuItem, { borderBottomColor: colors.borderLight }]}>
-          <Text style={styles.menuItemEmoji}>ℹ️</Text>
-          <View style={styles.menuItemContent}>
-            <Text style={[styles.menuItemTitle, { color: colors.textPrimary }]}>Version</Text>
-            <Text style={[styles.menuItemSubtitle, { color: colors.textLight }]}>1.0.0 (Beta)</Text>
+          <View style={[styles.betaBadge, { backgroundColor: '#F4A83320', borderColor: '#F4A83340' }]}>
+            <Text style={styles.betaTxt}>BETA</Text>
           </View>
         </View>
-      </View>
 
-      {/* Location Section */}
-      <View style={[styles.section, {
-        backgroundColor: colors.surface,
-        borderColor: colors.border,
-      }]}>
-        <Text style={[styles.sectionTitle, { color: colors.textLight }]}>LOCATION</Text>
-        <View style={[styles.menuItem, { borderBottomColor: colors.borderLight }]}>
-          <Text style={styles.menuItemEmoji}>📍</Text>
-          <View style={styles.menuItemContent}>
-            <Text style={[styles.menuItemTitle, { color: colors.textPrimary }]}>Current City</Text>
-            <Text style={[styles.menuItemSubtitle, { color: colors.textLight }]}>St. Louis, Missouri</Text>
-          </View>
-          <View style={[styles.lockedBadge, { backgroundColor: colors.surfaceSecondary }]}>
-            <Text style={[styles.lockedText, { color: colors.textLight }]}>v1</Text>
+        {/* Logout */}
+        <SectionHeader title="Account" theme={theme} />
+        <View style={[styles.section, { borderColor: theme.border }]}>
+          <SettingsRow icon="log-out-outline" iconColor="#FF6B6B" label="Logout" onPress={() => setShowLogoutSheet(true)} theme={theme} last />
+        </View>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Text style={[styles.footerTxt, { color: theme.textLight }]}>Made for South Asian & Arab communities in St. Louis</Text>
+          <Text style={[styles.footerSub, { color: theme.textLight }]}>NestApp · v1.0.0 (Beta) · Taru Labs</Text>
+        </View>
+      </ScrollView>
+
+      {/* Language picker modal */}
+      <Modal visible={showLangPicker} transparent animationType="slide" onRequestClose={() => setShowLangPicker(false)}>
+        <View style={styles.modalContainer}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowLangPicker(false)} />
+        <View style={[styles.sheet, { backgroundColor: theme.card }]}>
+          <View style={[styles.sheetHandle, { backgroundColor: theme.border }]} />
+          <Text style={[styles.sheetTitle, { color: theme.textPrimary }]}>Select Language</Text>
+          {LANGUAGES.map(lang => (
+            <TouchableOpacity
+              key={lang.id}
+              style={[styles.langRow, { borderBottomColor: theme.border }, lang.id === language && { backgroundColor: '#F4A83310' }]}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setLanguage(lang.id); setShowLangPicker(false); }}
+            >
+              <Text style={styles.langFlag}>{lang.code}</Text>
+              <Text style={[styles.langLabel, { color: theme.textPrimary }]}>{lang.label}</Text>
+              {lang.id === language && <Ionicons name="checkmark-circle" size={20} color="#F4A833" />}
+            </TouchableOpacity>
+          ))}
+        </View>
+        </View>
+      </Modal>
+
+      {/* Logout confirmation sheet */}
+      <Modal visible={showLogoutSheet} transparent animationType="slide" onRequestClose={() => setShowLogoutSheet(false)}>
+        <View style={styles.modalContainer}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowLogoutSheet(false)} />
+          <View style={[styles.sheet, { backgroundColor: theme.card }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: theme.border }]} />
+            <View style={styles.logoutIcon}>
+              <Ionicons name="log-out" size={32} color="#FF6B6B" />
+            </View>
+            <Text style={[styles.logoutTitle, { color: theme.textPrimary }]}>Logout?</Text>
+            <Text style={[styles.logoutBody, { color: theme.textSecondary }]}>You'll need to sign in again to access your account.</Text>
+            <TouchableOpacity style={styles.logoutConfirmBtn} onPress={handleLogout}>
+              <Text style={styles.logoutConfirmTxt}>Yes, Logout</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.logoutCancelBtn, { borderColor: theme.border }]} onPress={() => setShowLogoutSheet(false)}>
+              <Text style={[styles.logoutCancelTxt, { color: theme.textSecondary }]}>Cancel</Text>
+            </TouchableOpacity>
           </View>
         </View>
-      </View>
-
-      {/* Logout */}
-      <View style={[styles.section, {
-        backgroundColor: colors.surface,
-        borderColor: colors.border,
-      }]}>
-        <TouchableOpacity
-          style={[styles.logoutButton, {
-            backgroundColor: colors.errorBackground,
-            borderColor: colors.error + '44',
-          }]}
-          onPress={handleLogout}
-        >
-          <Text style={[styles.logoutText, { color: colors.error }]}>🚪 Logout</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Footer */}
-      <View style={styles.footer}>
-        <Text style={[styles.footerText, { color: colors.textLight }]}>
-          Made with ❤️ for the Indian community in St. Louis
-        </Text>
-        <Text style={[styles.footerSubText, { color: colors.textLight }]}>
-          Taru Labs
-        </Text>
-      </View>
-
-    </ScrollView>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  profileCard: {
-    padding: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  avatarText: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: '700',
-  },
-  profileInfo: {
-    flex: 1,
-  },
-  profileName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  profileEmail: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: 2,
-  },
-  verifiedBadge: {
-    backgroundColor: '#2ECC71',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    alignSelf: 'flex-start',
-    marginTop: 6,
-  },
-  verifiedText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  section: {
-    marginTop: 20,
-    borderTopWidth: 0.5,
-    borderBottomWidth: 0.5,
-  },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.8,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 4,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    paddingHorizontal: 16,
-    borderBottomWidth: 0.5,
-    gap: 12,
-  },
-  menuItemEmoji: {
-    fontSize: 20,
-    width: 28,
-    textAlign: 'center',
-  },
-  menuItemContent: {
-    flex: 1,
-  },
-  menuItemTitle: {
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  menuItemSubtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  menuItemArrow: {
-    fontSize: 20,
-    fontWeight: '300',
-  },
-  themeContainer: {
-    flexDirection: 'row',
-    padding: 12,
-    gap: 8,
-  },
-  themeButton: {
-    flex: 1,
-    borderRadius: 10,
-    padding: 12,
-    alignItems: 'center',
-    borderWidth: 0.5,
-    gap: 4,
-  },
-  themeEmoji: {
-    fontSize: 22,
-  },
-  themeLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  themeNote: {
-    fontSize: 12,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    fontStyle: 'italic',
-  },
-  lockedBadge: {
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  lockedText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  logoutButton: {
-    margin: 16,
-    borderRadius: 12,
-    padding: 15,
-    alignItems: 'center',
-    borderWidth: 0.5,
-  },
-  logoutText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  footer: {
-    padding: 24,
-    alignItems: 'center',
-    gap: 4,
-  },
-  footerText: {
-    fontSize: 13,
-    textAlign: 'center',
-  },
-  footerSubText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
+  root: { flex: 1 },
+  profileHero: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: spacing.md, paddingBottom: 14 },
+  backBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.25)' },
+  avatarTxt: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  heroName: { color: '#fff', fontSize: fonts.sizes.md, fontWeight: '800' },
+  heroUsername: { color: 'rgba(255,255,255,0.65)', fontSize: fonts.sizes.sm, fontWeight: '600', marginTop: 2 },
+  heroEmail: { color: 'rgba(255,255,255,0.45)', fontSize: fonts.sizes.xs, marginTop: 2 },
+  editBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
+
+  quickRow: { flexDirection: 'row', gap: 12, paddingHorizontal: spacing.md, paddingTop: 16 },
+  quickBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: borderRadius.lg, padding: 14 },
+  quickIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  quickLabel: { flex: 1, fontSize: fonts.sizes.sm, fontWeight: '700' },
+
+  section: { borderTopWidth: 0.5, borderBottomWidth: 0.5, marginHorizontal: 0 },
+
+  toggleTrack: { width: 52, height: 28, borderRadius: 14, justifyContent: 'center', padding: 2 },
+  toggleThumb: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  lockedBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  lockedTxt: { fontSize: 11, fontWeight: '600' },
+
+  versionCard: { flexDirection: 'row', alignItems: 'center', gap: 14, marginHorizontal: spacing.md, marginTop: 16, borderRadius: borderRadius.lg, padding: 14, borderWidth: 1 },
+  versionBubble: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  versionName: { fontSize: fonts.sizes.md, fontWeight: '800' },
+  versionMeta: { fontSize: fonts.sizes.xs, marginTop: 2 },
+  betaBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1 },
+  betaTxt: { fontSize: 10, fontWeight: '800', color: '#F4A833', letterSpacing: 0.5 },
+
+  footer: { padding: 28, alignItems: 'center', gap: 6 },
+  footerTxt: { fontSize: 12, textAlign: 'center', lineHeight: 18 },
+  footerSub: { fontSize: 11, fontWeight: '600' },
+
+  modalContainer: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36 },
+  sheetHandle: { width: 38, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+  sheetTitle: { fontSize: fonts.sizes.lg, fontWeight: '800', textAlign: 'center', marginBottom: 16 },
+
+  langRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, borderBottomWidth: 0.5, borderRadius: 8, paddingHorizontal: 4 },
+  langFlag: { fontSize: 24 },
+  langLabel: { flex: 1, fontSize: fonts.sizes.md, fontWeight: '500' },
+
+  logoutIcon: { alignItems: 'center', marginBottom: 12 },
+  logoutTitle: { fontSize: fonts.sizes.xl, fontWeight: '800', textAlign: 'center', marginBottom: 8 },
+  logoutBody: { fontSize: fonts.sizes.sm, textAlign: 'center', lineHeight: 20, marginBottom: 20 },
+  logoutConfirmBtn: { backgroundColor: '#FF6B6B', borderRadius: borderRadius.full, height: 52, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  logoutConfirmTxt: { color: '#fff', fontSize: fonts.sizes.md, fontWeight: '800' },
+  logoutCancelBtn: { borderRadius: borderRadius.full, height: 52, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
+  logoutCancelTxt: { fontSize: fonts.sizes.md, fontWeight: '600' },
 });
