@@ -1,11 +1,10 @@
 // core/screens/HomeScreen.js
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  RefreshControl, Image, Animated, Dimensions, FlatList,
+  RefreshControl, Image, Animated, Dimensions, FlatList, Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -16,24 +15,25 @@ import { fonts, spacing, borderRadius, shadows } from '../theme/index';
 import { CardSkeleton } from '../components/SkeletonLoader';
 import EmptyState from '../components/EmptyState';
 import AvatarStack from '../components/AvatarStack';
+import { chromeAnim, hideChrome, showChrome } from '../utils/chromeAnim';
 
 const { width } = Dimensions.get('window');
 const CARD_W = width * 0.62;
 
 // ─── Category config ─────────────────────────────────────────────────────────
 const CATEGORIES = [
-  { key: 'accommodation', label: 'Housing',  icon: 'business',   gradient: ['#FF6B6B', '#E84393'] },
-  { key: 'jobs',          label: 'Jobs',      icon: 'briefcase',  gradient: ['#00C48C', '#007A5E'] },
-  { key: 'buysell',       label: 'Buy/Sell',  icon: 'pricetag',   gradient: ['#0099FF', '#0055CC'] },
-  { key: 'food',          label: 'Food',      icon: 'restaurant', gradient: ['#F4A833', '#E68A00'] },
+  { key: 'accommodation', label: 'Housing',  icon: 'business-outline',    color: '#FF6B6B', gradient: ['#FF6B6B', '#E84393'] },
+  { key: 'jobs',          label: 'Jobs',      icon: 'briefcase-outline',   color: '#00C48C', gradient: ['#00C48C', '#007A5E'] },
+  { key: 'buysell',       label: 'Buy/Sell',  icon: 'pricetag-outline',    color: '#4DA6FF', gradient: ['#0099FF', '#0055CC'] },
+  { key: 'food',          label: 'Food',      icon: 'restaurant-outline',  color: '#F4A833', gradient: ['#F4A833', '#E68A00'] },
 ];
 
 // ─── Quick actions ────────────────────────────────────────────────────────────
 const QUICK_ACTIONS = [
-  { label: 'Post Listing', icon: 'bag-add',         gradient: ['#FF6B6B', '#E84393'], screen: 'PostListing' },
-  { label: 'Share Ride',   icon: 'car',              gradient: ['#00C48C', '#007A5E'], screen: 'PostRide' },
-  { label: 'Write Story',  icon: 'create',           gradient: ['#0099FF', '#0055CC'], screen: 'News' },
-  { label: 'Message',      icon: 'chatbubble',       gradient: ['#9B59B6', '#6C3483'], screen: 'Messages' },
+  { label: 'Post Listing', icon: 'storefront-outline',  color: '#FF6B6B', screen: 'PostListing' },
+  { label: 'Share Ride',   icon: 'car-outline',          color: '#00C48C', screen: 'PostRide' },
+  { label: 'My Rides',     icon: 'calendar-outline',     color: '#4DA6FF', screen: '__MyRides' },
+  { label: 'Message',      icon: 'chatbubble-outline',   color: '#C084FC', screen: 'Messages' },
 ];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -109,34 +109,57 @@ const sectionStyles = StyleSheet.create({
   seeAll: { color: '#F4A833', fontSize: fonts.sizes.sm, fontWeight: '700' },
 });
 
+const qStyles = StyleSheet.create({
+  wrap: { flex: 1 },
+  card: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 6,
+    borderRadius: 20,
+    gap: 10,
+  },
+  iconBubble: {
+    width: 62,
+    height: 62,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.2,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.10,
+        shadowRadius: 10,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  label: { fontSize: 11, fontWeight: '700', textAlign: 'center', letterSpacing: 0.1 },
+});
+
 function QuickActionBtn({ item, onPress }) {
   const scale = useRef(new Animated.Value(1)).current;
+  const fillColor   = item.color + '18'; // ~9% opacity fill
+  const borderColor = item.color + '40'; // ~25% opacity border
   return (
     <TouchableOpacity
-      onPressIn={() => Animated.spring(scale, { toValue: 0.93, useNativeDriver: true }).start()}
+      onPressIn={() => Animated.spring(scale, { toValue: 0.92, useNativeDriver: true }).start()}
       onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start()}
       onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress(); }}
       activeOpacity={1}
       style={qStyles.wrap}
     >
-      <Animated.View style={{ transform: [{ scale }] }}>
-        {/* Gradient border ring */}
-        <LinearGradient colors={item.gradient} style={qStyles.ring} start={{x:0,y:0}} end={{x:1,y:1}}>
-          <LinearGradient colors={item.gradient} style={qStyles.btn} start={{x:0,y:0}} end={{x:1,y:1}}>
-            <Ionicons name={item.icon} size={22} color="#fff" />
-          </LinearGradient>
-        </LinearGradient>
-        <Text style={qStyles.label}>{item.label}</Text>
+      <Animated.View style={[qStyles.card, { transform: [{ scale }] }]}>
+        {/* Coloured icon bubble */}
+        <View style={[qStyles.iconBubble, { backgroundColor: fillColor, borderColor }]}>
+          <Ionicons name={item.icon} size={26} color={item.color} />
+        </View>
+        <Text style={[qStyles.label, { color: item.color }]}>{item.label}</Text>
       </Animated.View>
     </TouchableOpacity>
   );
 }
-const qStyles = StyleSheet.create({
-  wrap: { alignItems: 'center', flex: 1 },
-  ring: { width: 62, height: 62, borderRadius: 21, alignItems: 'center', justifyContent: 'center', padding: 2.5, ...shadows.medium },
-  btn: { width: '100%', height: '100%', borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  label: { color: '#9B8FAD', fontSize: 10, fontWeight: '600', marginTop: 6, textAlign: 'center' },
-});
 
 function ListingCard({ item, onPress, theme }) {
   const cat = CATEGORIES.find(c => c.key === item.category) || CATEGORIES[0];
@@ -339,15 +362,51 @@ export default function HomeScreen({ navigation }) {
 
   const [listings, setListings] = useState([]);
   const [rides, setRides] = useState([]);
-  const [news, setNews] = useState([]);
+  const [myRides, setMyRides] = useState([]);
+  const [news, setNews] = useState([]); // News fetch removed; kept to avoid reference errors
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const myRidesRef = useRef(null);
+  const scrollRef  = useRef(null);
+
+  // ── Scroll-driven chrome (header + tab bar) hide/show ──────────────────────
+  const lastScrollY   = useRef(0);
+  const chromeVisible = useRef(true);
+  const headerAnim    = useRef(new Animated.Value(1)).current;
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const HEADER_SPRING = { tension: 300, friction: 32, useNativeDriver: true };
+
+  const onScroll = useCallback((e) => {
+    const y    = e.nativeEvent.contentOffset.y;
+    const diff = y - lastScrollY.current;
+    lastScrollY.current = y;
+
+    // Hide: scrolling down more than 8px and past 80px from top
+    if (diff > 8 && y > 80 && chromeVisible.current) {
+      chromeVisible.current = false;
+      Animated.spring(headerAnim, { toValue: 0, ...HEADER_SPRING }).start();
+      hideChrome();
+    // Show: scrolling up more than 8px, or back near top
+    } else if ((diff < -8 || y < 40) && !chromeVisible.current) {
+      chromeVisible.current = true;
+      Animated.spring(headerAnim, { toValue: 1, ...HEADER_SPRING }).start();
+      showChrome();
+    }
+  }, []);
 
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
     fetchData();
-    const unsubscribe = navigation.addListener('focus', fetchData);
+    const restoreChrome = () => {
+      chromeVisible.current = true;
+      lastScrollY.current   = 0;
+      Animated.spring(headerAnim, { toValue: 1, tension: 300, friction: 32, useNativeDriver: true }).start();
+      showChrome();
+    };
+
+    const unsubscribe  = navigation.addListener('focus', () => { fetchData(); restoreChrome(); });
+    const unsubscribe2 = navigation.addListener('blur',  restoreChrome);
     const channel = supabase
       .channel(`points-${user?.id}`)
       .on('postgres_changes',
@@ -357,27 +416,46 @@ export default function HomeScreen({ navigation }) {
           setProfilePoints((useAppStore.getState().profilePoints ?? 0) + earned);
         }
       ).subscribe();
-    return () => { unsubscribe(); supabase.removeChannel(channel); };
+    return () => { unsubscribe(); unsubscribe2(); supabase.removeChannel(channel); };
   }, []);
 
   async function fetchData() {
     if (!user?.id) return;
     try {
       setLoading(true);
-      const [listingsRes, ridesRes, newsRes, profileRes, membersRes] = await Promise.all([
+      const [listingsRes, ridesRes, profileRes, membersRes, myRidesRes, myBookingsRes] = await Promise.all([
         supabase.from('listings').select('*').eq('status', 'active').neq('category', 'jobs')
           .order('is_boosted', { ascending: false }).order('created_at', { ascending: false }).limit(6),
         supabase.from('rides').select('*').eq('status', 'active')
           .order('created_at', { ascending: false }).limit(5),
-        supabase.from('news').select('*')
-          .order('created_at', { ascending: false }).limit(3),
+        // supabase.from('news').select('*').order('created_at', { ascending: false }).limit(3), // News removed
         supabase.from('profiles').select('username, points').eq('id', user.id).maybeSingle(),
         supabase.from('profiles').select('full_name').order('created_at', { ascending: false }).limit(8),
+        // Rides posted by the user
+        supabase.from('rides').select('*')
+          .or(`driver_id.eq.${user.id},requester_id.eq.${user.id}`)
+          .order('ride_date', { ascending: true }).limit(10),
+        // Rides the user booked (as a rider)
+        supabase.from('ride_bookings').select('ride_id, status')
+          .eq('rider_id', user.id).neq('status', 'cancelled').limit(10),
       ]);
 
       if (listingsRes.data) setListings(listingsRes.data);
       if (ridesRes.data) setRides(ridesRes.data);
-      if (newsRes.data) setNews(newsRes.data);
+
+      // Merge posted rides + booked rides (deduped)
+      const postedRides = myRidesRes.data || [];
+      const bookedRideIds = (myBookingsRes.data || []).map(b => b.ride_id);
+      let bookedRides = [];
+      if (bookedRideIds.length > 0) {
+        const { data: br } = await supabase.from('rides').select('*').in('id', bookedRideIds);
+        bookedRides = br || [];
+      }
+      const postedIds = new Set(postedRides.map(r => r.id));
+      const allMyRides = [...postedRides, ...bookedRides.filter(r => !postedIds.has(r.id))];
+      allMyRides.sort((a, b) => new Date(a.ride_date) - new Date(b.ride_date));
+      setMyRides(allMyRides);
+      // if (newsRes.data) setNews(newsRes.data); // News removed
       if (membersRes.data) {
         const names = membersRes.data.map(m => m.full_name).filter(Boolean);
         setMembers(names);
@@ -402,64 +480,78 @@ export default function HomeScreen({ navigation }) {
     setRefreshing(false);
   }, []);
 
+  // Header translateY: slides fully off-screen upward by its own measured height
+  const headerTranslateY = headerAnim.interpolate({
+    inputRange:  [0, 1],
+    outputRange: [-headerHeight || -120, 0],
+  });
+
   return (
     <View style={[styles.root, { backgroundColor: theme.background }]}>
 
-      {/* ── Sticky Header ───────────────────────────────────────────── */}
-      <LinearGradient
-        colors={['#2D1B69', '#1A0F3D']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.header, { paddingTop: insets.top + 10 }]}
-      >
-        {/* Decorative orb */}
-        <View pointerEvents="none" style={styles.headerOrb} />
-
-        {/* Top bar: greeting left, logo center, avatar right */}
-        <View style={styles.headerRow}>
-          <View style={{ flex: 1 }}>
-            <Greeting name={profileName} />
-            <PointsPill points={profilePoints} />
-          </View>
-
-          {/* Center logo */}
-          <View style={styles.logoWrap} pointerEvents="none">
-            <LinearGradient colors={['#F4A833','#FF6B6B']} style={styles.logoBubble} start={{x:0,y:0}} end={{x:1,y:1}}>
-              <Ionicons name="leaf" size={22} color="#fff" />
-            </LinearGradient>
-            <Text style={styles.logoText}>nest</Text>
-          </View>
-
-          <View style={{ flex: 1, alignItems: 'flex-end' }}>
-            <AvatarButton name={profileName} onPress={() => navigation.navigate('Settings')} />
-          </View>
-        </View>
-
-      </LinearGradient>
-
-      {/* ── Content ─────────────────────────────────────────────────── */}
+      {/* ── Content — fills full screen, padded under header ────────── */}
       <ScrollView
-        style={{ flex: 1 }}
+        ref={scrollRef}
+        style={StyleSheet.absoluteFill}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 110 }}
+        contentContainerStyle={{ paddingTop: headerHeight, paddingBottom: 120 }}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#F4A833" colors={['#F4A833']} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="#F4A833"
+            colors={['#F4A833']}
+            progressViewOffset={headerHeight}
+          />
         }
       >
 
         {/* Quick Actions */}
         <View style={[styles.section, { paddingTop: 20 }]}>
           <SectionHeader title="Quick Actions" theme={theme} />
-          <View style={styles.quickRow}>
+          <View style={[styles.quickRow, { backgroundColor: theme.card, borderRadius: 26, padding: 8, ...shadows.small, borderWidth: 1, borderColor: theme.borderLight }]}>
             {QUICK_ACTIONS.map((qa) => (
               <QuickActionBtn
                 key={qa.screen}
                 item={qa}
-                onPress={() => navigation.navigate(qa.screen)}
+                onPress={() => {
+                  if (qa.screen === '__MyRides') {
+                    myRidesRef.current?.measure((x, y, w, h, px, py) => {
+                      scrollRef.current?.scrollTo({ y: py - headerHeight, animated: true });
+                    });
+                  } else {
+                    navigation.navigate(qa.screen);
+                  }
+                }}
               />
             ))}
           </View>
         </View>
+
+        {/* My Rides */}
+        {myRides.length > 0 && (
+          <View ref={myRidesRef} style={[styles.section, { paddingHorizontal: 0 }]}>
+            <View style={{ paddingHorizontal: spacing.md }}>
+              <SectionHeader title="My Rides" theme={theme} onSeeAll={() => navigation.navigate('Carpool')} />
+            </View>
+            <FlatList
+              horizontal
+              data={myRides}
+              keyExtractor={i => i.id}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: spacing.md }}
+              renderItem={({ item }) => (
+                <RideCard
+                  item={item}
+                  theme={theme}
+                  onPress={() => navigation.navigate('Carpool', { screen: 'RideDetail', params: { ride: item } })}
+                />
+              )}
+            />
+          </View>
+        )}
 
         {/* Browse by Category */}
         <View style={styles.section}>
@@ -472,9 +564,9 @@ export default function HomeScreen({ navigation }) {
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); navigation.navigate('BrowseListingsByCategory', { category: cat.key }); }}
                 activeOpacity={0.82}
               >
-                <LinearGradient colors={cat.gradient} style={styles.catIcon}>
-                  <Ionicons name={cat.icon} size={22} color="#fff" />
-                </LinearGradient>
+                <View style={[styles.catIcon, { backgroundColor: cat.color + '18', borderColor: cat.color + '40' }]}>
+                  <Ionicons name={cat.icon} size={24} color={cat.color} />
+                </View>
                 <Text style={[styles.catLabel, { color: theme.textPrimary }]}>{cat.label}</Text>
               </TouchableOpacity>
             ))}
@@ -553,20 +645,16 @@ export default function HomeScreen({ navigation }) {
           </View>
         )}
 
-        {/* Community Pulse / News */}
-        {news.length > 0 && (
+        {/* Community Pulse / News — temporarily removed */}
+        {/* {news.length > 0 && (
           <View style={styles.section}>
             <SectionHeader title="Community Pulse" theme={theme} onSeeAll={() => navigation.navigate('News')} />
             {news.map(item => (
-              <NewsCard
-                key={item.id}
-                item={item}
-                theme={theme}
-                onPress={() => navigation.navigate('News', { screen: 'NewsDetail', params: { article: item } })}
-              />
+              <NewsCard key={item.id} item={item} theme={theme}
+                onPress={() => navigation.navigate('News', { screen: 'NewsDetail', params: { article: item } })} />
             ))}
           </View>
-        )}
+        )} */}
 
         {/* Community banner */}
         <View style={{ paddingHorizontal: spacing.md, marginTop: 4 }}>
@@ -581,6 +669,44 @@ export default function HomeScreen({ navigation }) {
         </View>
 
       </ScrollView>
+
+      {/* ── Header — absolutely overlaid so hiding it leaves no gap ─── */}
+      <Animated.View
+        style={[styles.headerAbsolute, { opacity: headerAnim, transform: [{ translateY: headerTranslateY }] }]}
+        onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}
+        pointerEvents={chromeVisible.current ? 'box-none' : 'none'}
+      >
+        <LinearGradient
+          colors={['#2D1B69', '#1A0F3D']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.header, { paddingTop: insets.top + 10 }]}
+        >
+          <View pointerEvents="none" style={styles.headerOrb} />
+          <LinearGradient
+            colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.07)', 'rgba(255,255,255,0)']}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+            style={styles.headerSpecular}
+            pointerEvents="none"
+          />
+          <View style={styles.headerRow}>
+            <View style={{ flex: 1 }}>
+              <Greeting name={profileName} />
+              <PointsPill points={profilePoints} />
+            </View>
+            <View style={styles.logoWrap} pointerEvents="none">
+              <LinearGradient colors={['#F4A833','#FF6B6B']} style={styles.logoBubble} start={{x:0,y:0}} end={{x:1,y:1}}>
+                <Ionicons name="leaf" size={22} color="#fff" />
+              </LinearGradient>
+              <Text style={styles.logoText}>nest</Text>
+            </View>
+            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+              <AvatarButton name={profileName} onPress={() => navigation.navigate('Settings')} />
+            </View>
+          </View>
+        </LinearGradient>
+      </Animated.View>
+
     </View>
   );
 }
@@ -588,9 +714,11 @@ export default function HomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   root: { flex: 1 },
 
-  // Header
-  header: { paddingHorizontal: spacing.md, paddingBottom: 16 },
+  // Header — absolute so hiding it never leaves a layout gap
+  headerAbsolute: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
+  header: { paddingHorizontal: spacing.md, paddingBottom: 18 },
   headerOrb: { position: 'absolute', top: -40, right: -40, width: 160, height: 160, borderRadius: 80, backgroundColor: '#F4A833', opacity: 0.06 },
+  headerSpecular: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 1 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   logoWrap: { alignItems: 'center', gap: 3 },
   logoBubble: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
@@ -599,12 +727,37 @@ const styles = StyleSheet.create({
   section: { paddingHorizontal: spacing.md, marginBottom: 8, paddingTop: 16 },
 
   // Quick actions
-  quickRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  quickRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
 
   // Categories
   catGrid: { flexDirection: 'row', gap: 10 },
-  catCard: { flex: 1, borderRadius: borderRadius.lg, padding: 14, alignItems: 'center', gap: 10 },
-  catIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  catCard: {
+    flex: 1,
+    borderRadius: 24,
+    paddingVertical: 18,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.04)',
+  },
+  catIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.2,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.09,
+        shadowRadius: 10,
+      },
+      android: { elevation: 4 },
+    }),
+  },
   catLabel: { fontSize: 11, fontWeight: '700', textAlign: 'center' },
 
   // Members

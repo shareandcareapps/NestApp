@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   getConversations, getUnreadCountPerConversation,
   getPersistedReadIds, removePersistedReadConversation,
+  getPersistedDeletedIds, persistDeletedConversation,
 } from '../services/messagesService';
 import useAppStore from '../../../core/store/index';
 import { useTheme } from '../../../core/theme/ThemeContext';
@@ -159,10 +160,21 @@ export default function ConversationsScreen({ navigation }) {
   const [unreadMap,         setUnreadMap]         = useState({});
   const unreadMapRef        = useRef({});
   const allConversationsRef = useRef([]);
+  const deletedIdsRef       = useRef(new Set()); // client-side deleted IDs, never come back
   const [loading,           setLoading]           = useState(true);
   const [refreshing,        setRefreshing]        = useState(false);
   const [searchQuery,       setSearchQuery]       = useState('');
-  const [searchFocused,     setSearchFocused]     = useState(false);
+  const [showSearch,        setShowSearch]        = useState(false);
+  const searchRef = useRef(null);
+  const searchHeightAnim = useRef(new Animated.Value(0)).current;
+
+  function toggleSearch() {
+    const opening = !showSearch;
+    setShowSearch(opening);
+    Animated.spring(searchHeightAnim, { toValue: opening ? 1 : 0, useNativeDriver: false, tension: 70, friction: 12 }).start();
+    if (opening) { setTimeout(() => searchRef.current?.focus(), 150); }
+    else { setSearchQuery(''); searchRef.current?.blur(); }
+  }
   const [activeFilter,      setActiveFilter]      = useState('All');
   const [pendingVerification, setPendingVerification] = useState(null);
   const [ratingModal, setRatingModal] = useState({ visible: false, toUserId: null, toUsername: null, referenceId: null });
@@ -195,15 +207,19 @@ export default function ConversationsScreen({ navigation }) {
       .channel('conversations-watch')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (payload) => {
         const newMsg = payload.new;
+        // Never resurface a deleted conversation
+        if (deletedIdsRef.current.has(newMsg.conversation_id)) return;
         const data = await getConversations(user.id).catch(() => null);
         if (!data) return;
+        // Strip deleted conversations from realtime updates too
+        const visible = data.filter(c => !deletedIdsRef.current.has(c.id));
         const fromOther = newMsg.sender_id && newMsg.sender_id !== user.id;
         if (fromOther && !unreadMapRef.current[newMsg.conversation_id]) {
           addUnreadConversation(newMsg.conversation_id);
           removePersistedReadConversation(user.id, newMsg.conversation_id);
         }
-        allConversationsRef.current = data;
-        setAllConversations(data);
+        allConversationsRef.current = visible;
+        setAllConversations(visible);
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sale_verifications', filter: `buyer_id=eq.${user.id}` }, () => refreshPendingVerification())
       .subscribe();
@@ -216,14 +232,22 @@ export default function ConversationsScreen({ navigation }) {
     if (!user?.id) { setLoading(false); return; }
     try {
       setLoading(true);
-      const [data, unreadPerConv, persistedRead] = await Promise.all([
+      const [data, unreadPerConv, persistedRead, deletedIds] = await Promise.all([
         getConversations(user.id),
         getUnreadCountPerConversation(user.id),
         getPersistedReadIds(user.id),
+        getPersistedDeletedIds(user.id),
       ]);
-      setAllConversations(data);
-      allConversationsRef.current = data;
-      const trueUnread = Object.keys(unreadPerConv).filter(id => !persistedRead.has(id));
+      // Keep deleted set in memory so realtime handler can check synchronously
+      deletedIdsRef.current = deletedIds;
+      // Filter out client-side deleted conversations — ground truth
+      const visible = data.filter(c => !deletedIds.has(c.id));
+      setAllConversations(visible);
+      allConversationsRef.current = visible;
+      // Only mark as unread if: DB says unread AND user hasn't read it AND it's not deleted
+      const trueUnread = Object.keys(unreadPerConv).filter(
+        id => !persistedRead.has(id) && !deletedIds.has(id)
+      );
       setInitialUnread(trueUnread);
       await refreshPendingVerification();
     } catch (e) { console.error('fetchConversations:', e); }
@@ -252,13 +276,30 @@ export default function ConversationsScreen({ navigation }) {
   async function handleDeleteConversation(item, swipeRef) {
     Alert.alert('Delete Conversation', 'This will permanently delete this conversation and all its messages.', [
       { text: 'Cancel', style: 'cancel', onPress: () => swipeRef.current?.close() },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          // 1. Remove from UI immediately — never wait for network
+          setAllConversations(prev => prev.filter(c => c.id !== item.id));
+          allConversationsRef.current = allConversationsRef.current.filter(c => c.id !== item.id);
+
+          // 2. Mark as deleted in memory ref so realtime handler ignores it
+          deletedIdsRef.current = new Set([...deletedIdsRef.current, item.id]);
+
+          // 3. Persist to AsyncStorage — this is the ground truth that survives re-login
+          await persistDeletedConversation(user.id, item.id);
+
+          // 4. Clear unread state for this conversation
+          clearUnreadConversation(item.id);
+          removePersistedReadConversation(user.id, item.id);
+
+          // 5. Best-effort DB delete (may fail due to RLS — doesn't matter, steps 2-4 cover it)
           try {
             await supabase.from('messages').delete().eq('conversation_id', item.id);
             await supabase.from('conversations').delete().eq('id', item.id);
-            setAllConversations(prev => prev.filter(c => c.id !== item.id));
-          } catch (e) { console.error('delete conversation:', e); }
-        }
+          } catch (e) {
+            console.warn('DB delete failed (conversation hidden client-side):', e?.message);
+          }
+        },
       },
     ]);
   }
@@ -282,7 +323,8 @@ export default function ConversationsScreen({ navigation }) {
   return (
     <View style={[styles.root, { backgroundColor: theme.background }]}>
       {/* Header */}
-      <LinearGradient colors={['#2D1B69','#1A0F3D']} style={[styles.header, { paddingTop: insets.top + 10 }]}>
+      <LinearGradient colors={['#2D1B69','#1A0F3D']} style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.07)', 'rgba(255,255,255,0)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.headerSpecular} pointerEvents="none" />
         <View style={styles.headerRow}>
           <View>
             <Text style={styles.headerTitle}>Messages</Text>
@@ -293,26 +335,29 @@ export default function ConversationsScreen({ navigation }) {
               </View>
             )}
           </View>
+          <TouchableOpacity onPress={toggleSearch} style={styles.iconBtn} activeOpacity={0.8}>
+            <Ionicons name={showSearch ? 'close' : 'search'} size={20} color="#fff" />
+          </TouchableOpacity>
         </View>
-
-        {/* Search */}
-        <View style={[styles.searchWrap, { borderColor: searchFocused ? '#9B59B6' : 'rgba(255,255,255,0.15)' }]}>
-          <Ionicons name="search" size={16} color={searchFocused ? '#9B59B6' : 'rgba(255,255,255,0.5)'} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search conversations…"
-            placeholderTextColor="rgba(255,255,255,0.35)"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.5)" />
-            </TouchableOpacity>
-          )}
-        </View>
+        {/* Expandable search */}
+        <Animated.View style={{ height: searchHeightAnim.interpolate({ inputRange: [0,1], outputRange: [0, 48] }), overflow: 'hidden', marginBottom: searchHeightAnim.interpolate({ inputRange: [0,1], outputRange: [0, 10] }) }}>
+          <View style={[styles.searchWrap, { borderColor: 'rgba(255,255,255,0.15)' }]}>
+            <Ionicons name="search" size={16} color="rgba(255,255,255,0.5)" />
+            <TextInput
+              ref={searchRef}
+              style={styles.searchInput}
+              placeholder="Search conversations…"
+              placeholderTextColor="rgba(255,255,255,0.35)"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.5)" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </Animated.View>
 
         {/* Filter tabs */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
@@ -441,7 +486,7 @@ export default function ConversationsScreen({ navigation }) {
             );
           }}
           ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.border }]} />}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
+          contentContainerStyle={{ paddingBottom: 120 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={MSG_PURPLE} />}
           showsVerticalScrollIndicator={false}
         />
@@ -462,7 +507,9 @@ export default function ConversationsScreen({ navigation }) {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   header: { paddingHorizontal: spacing.md, paddingBottom: 14 },
-  headerRow: { marginBottom: 14 },
+  headerSpecular: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 1 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  iconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { color: '#fff', fontSize: fonts.sizes.xxl, fontWeight: '800' },
   unreadBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   unreadDotSmall: { width: 7, height: 7, borderRadius: 4, backgroundColor: MSG_PURPLE },

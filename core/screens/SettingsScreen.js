@@ -8,10 +8,20 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import Toast from 'react-native-toast-message';
 import { supabase } from '../database/index';
 import useAppStore from '../store/index';
 import { useTheme } from '../theme/ThemeContext';
 import { fonts, spacing, borderRadius, shadows } from '../theme/index';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+let LocalAuthentication = null;
+let SecureStore = null;
+try { LocalAuthentication = require('expo-local-authentication'); } catch (_) {}
+try { SecureStore = require('expo-secure-store'); } catch (_) {}
+
+const BIOMETRIC_KEY = 'nest_biometric_session';
+const BIOMETRIC_PROMPTED_KEY = '@nest_biometric_prompted';
 
 const LANGUAGES = [
   { id: 'en',  label: 'English',  code: 'EN' },
@@ -54,8 +64,8 @@ function SettingsRow({ icon, iconColor = '#F4A833', label, sublabel, right, onPr
 }
 
 const rowS = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: 14, gap: 14 },
-  iconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: 15, gap: 14 },
+  iconWrap: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   label: { fontSize: fonts.sizes.md, fontWeight: '500' },
   sublabel: { fontSize: 12, marginTop: 2 },
 });
@@ -74,12 +84,58 @@ export default function SettingsScreen({ navigation }) {
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [showLogoutSheet, setShowLogoutSheet] = useState(false);
   const [notifs, setNotifs] = useState({ listings: true, rides: true, messages: true, news: false });
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricType, setBiometricType] = useState('fingerprint');
   const themeAnim = useRef(new Animated.Value(themeMode === 'dark' ? 1 : 0)).current;
 
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
     loadProfile();
+    checkBiometrics();
   }, []);
+
+  async function checkBiometrics() {
+    if (!LocalAuthentication || !SecureStore) return;
+    try {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!hasHardware || !isEnrolled) return;
+      const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
+      const isFaceID = types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION);
+      setBiometricType(isFaceID ? 'faceid' : 'fingerprint');
+      setBiometricAvailable(true);
+      const saved = await SecureStore.getItemAsync(BIOMETRIC_KEY);
+      setBiometricEnabled(!!saved);
+    } catch (_) {}
+  }
+
+  async function toggleBiometric(value) {
+    if (!LocalAuthentication || !SecureStore) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (value) {
+      // Authenticate before enabling
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: `Enable ${biometricType === 'faceid' ? 'Face ID' : 'Fingerprint'} for NestApp`,
+        fallbackLabel: 'Use passcode',
+      });
+      if (!result.success) return;
+      // Get current session refresh token from supabase
+      const { data } = await supabase.auth.getSession();
+      const refreshToken = data?.session?.refresh_token;
+      if (!refreshToken) {
+        return Toast.show({ type: 'error', text1: 'Could not enable', text2: 'Please sign out and sign in again.' });
+      }
+      await SecureStore.setItemAsync(BIOMETRIC_KEY, refreshToken);
+      await AsyncStorage.setItem(BIOMETRIC_PROMPTED_KEY, 'true');
+      setBiometricEnabled(true);
+      Toast.show({ type: 'success', text1: `${biometricType === 'faceid' ? 'Face ID' : 'Fingerprint'} enabled 🔐`, text2: 'You can now sign in with biometrics.' });
+    } else {
+      try { await SecureStore.deleteItemAsync(BIOMETRIC_KEY); } catch (_) {}
+      setBiometricEnabled(false);
+      Toast.show({ type: 'info', text1: 'Biometric sign-in disabled', text2: 'Use your password to sign in.' });
+    }
+  }
 
   useEffect(() => {
     Animated.spring(themeAnim, { toValue: themeMode === 'dark' ? 1 : 0, useNativeDriver: true, speed: 20 }).start();
@@ -114,10 +170,10 @@ export default function SettingsScreen({ navigation }) {
 
   return (
     <View style={[styles.root, { backgroundColor: theme.background }]}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
 
         {/* Profile hero card */}
-        <LinearGradient colors={['#2D1B69','#1A0F3D']} style={[styles.profileHero, { paddingTop: insets.top + 10 }]}>
+        <LinearGradient colors={['#2D1B69','#1A0F3D']} style={[styles.profileHero, { paddingTop: insets.top + 14 }]}>
           <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
             <Ionicons name="chevron-back" size={20} color="#fff" />
           </TouchableOpacity>
@@ -192,6 +248,31 @@ export default function SettingsScreen({ navigation }) {
             />
           ))}
         </View>
+
+        {/* Security */}
+        {biometricAvailable && (
+          <>
+            <SectionHeader title="Security" theme={theme} />
+            <View style={[styles.section, { borderColor: theme.border }]}>
+              <SettingsRow
+                icon={biometricType === 'faceid' ? 'scan-outline' : 'finger-print-outline'}
+                iconColor="#00C48C"
+                label={biometricType === 'faceid' ? 'Face ID' : 'Fingerprint Login'}
+                sublabel={biometricEnabled ? 'Tap to disable quick sign-in' : 'Enable quick sign-in with biometrics'}
+                theme={theme}
+                last
+                right={
+                  <Switch
+                    value={biometricEnabled}
+                    onValueChange={toggleBiometric}
+                    trackColor={{ false: theme.border, true: '#00C48C88' }}
+                    thumbColor={biometricEnabled ? '#00C48C' : theme.textLight}
+                  />
+                }
+              />
+            </View>
+          </>
+        )}
 
         {/* App info */}
         <SectionHeader title="App" theme={theme} />
@@ -276,11 +357,11 @@ export default function SettingsScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  profileHero: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: spacing.md, paddingBottom: 14 },
-  backBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
-  avatar: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.25)' },
+  profileHero: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: spacing.md, paddingBottom: 18 },
+  backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+  avatar: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)' },
   avatarTxt: { color: '#fff', fontSize: 22, fontWeight: '800' },
-  heroName: { color: '#fff', fontSize: fonts.sizes.md, fontWeight: '800' },
+  heroName: { color: '#fff', fontSize: fonts.sizes.lg, fontWeight: '800' },
   heroUsername: { color: 'rgba(255,255,255,0.65)', fontSize: fonts.sizes.sm, fontWeight: '600', marginTop: 2 },
   heroEmail: { color: 'rgba(255,255,255,0.45)', fontSize: fonts.sizes.xs, marginTop: 2 },
   editBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
@@ -308,8 +389,8 @@ const styles = StyleSheet.create({
   footerTxt: { fontSize: 12, textAlign: 'center', lineHeight: 18 },
   footerSub: { fontSize: 11, fontWeight: '600' },
 
-  modalContainer: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36 },
+  modalContainer: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.55)' },
+  sheet: { borderTopLeftRadius: 34, borderTopRightRadius: 34, padding: 22, paddingBottom: 38 },
   sheetHandle: { width: 38, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   sheetTitle: { fontSize: fonts.sizes.lg, fontWeight: '800', textAlign: 'center', marginBottom: 16 },
 

@@ -6,10 +6,10 @@
 import { supabase } from '../../../core/database/index';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// ─── Local read-state persistence ─────────────────────────────────────────────
-// Tracks which conversations the user has read, keyed by userId so it survives
-// logout/login correctly across multiple accounts on the same device.
-const readKey = (userId) => `@nest_read_convs_${userId}`;
+// ─── Local persistence keys ───────────────────────────────────────────────────
+// All keyed by userId so state survives logout/login across multiple accounts.
+const readKey    = (userId) => `@nest_read_convs_${userId}`;
+const deletedKey = (userId) => `@nest_deleted_convs_${userId}`;
 
 export async function getPersistedReadIds(userId) {
   try {
@@ -34,6 +34,36 @@ export async function removePersistedReadConversation(userId, conversationId) {
     if (!raw) return;
     const ids = JSON.parse(raw).filter(id => id !== conversationId);
     await AsyncStorage.setItem(readKey(userId), JSON.stringify(ids));
+  } catch {}
+}
+
+// ─── Deleted conversation persistence ────────────────────────────────────────
+// Client-side soft-delete: even if the DB delete fails (RLS), the conversation
+// stays hidden permanently for this user. This is the ground truth for deletion.
+
+export async function getPersistedDeletedIds(userId) {
+  try {
+    const raw = await AsyncStorage.getItem(deletedKey(userId));
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch { return new Set(); }
+}
+
+export async function persistDeletedConversation(userId, conversationId) {
+  try {
+    const raw = await AsyncStorage.getItem(deletedKey(userId));
+    const ids = raw ? JSON.parse(raw) : [];
+    if (!ids.includes(conversationId)) {
+      await AsyncStorage.setItem(deletedKey(userId), JSON.stringify([...ids, conversationId]));
+    }
+  } catch {}
+}
+
+export async function unpersistedDeletedConversation(userId, conversationId) {
+  try {
+    const raw = await AsyncStorage.getItem(deletedKey(userId));
+    if (!raw) return;
+    const ids = JSON.parse(raw).filter(id => id !== conversationId);
+    await AsyncStorage.setItem(deletedKey(userId), JSON.stringify(ids));
   } catch {}
 }
 

@@ -5,7 +5,7 @@ import {
   KeyboardAvoidingView, Platform, ActivityIndicator, Modal, Image,
   Linking, Alert, Pressable, Animated,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +22,7 @@ import { useTheme } from '../../../core/theme/ThemeContext';
 import { supabase } from '../../../core/database/index';
 import UserProfileModal from '../../../core/components/UserProfileModal';
 import { getRideById } from '../../rides/services/ridesService';
+import { createBooking, confirmBooking, cancelBooking, getBookingById } from '../../rides/services/bookingsService';
 import { fonts, spacing, borderRadius } from '../../../core/theme/index';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -91,26 +92,102 @@ const typS = StyleSheet.create({
 });
 
 // ─── Context Banner ───────────────────────────────────────────────────────────
-function ContextBanner({ title, contextType, rideContext, onRidePress, colors }) {
+function ContextBanner({
+  title, contextType, rideContext, onRidePress,
+  onRequestSeat, bookingStatus,
+  onConfirm, onDecline, driverBookingStatus,
+  colors, userId,
+}) {
   if (!title && !rideContext) return null;
   if (contextType === 'ride' && rideContext) {
-    const TINT = '#00C48C';
+    const TINT       = '#00C48C';
+    const isDriver   = !!rideContext.driverId && rideContext.driverId === userId;
+    const isRider    = !!rideContext.driverId && rideContext.driverId !== userId;
+
+    const showRequestBtn = isRider && bookingStatus == null;
+    const isRequesting   = bookingStatus === 'requesting';
+    const isRequested    = bookingStatus === 'pending';
+    const isConfirmed    = bookingStatus === 'confirmed';
+
     return (
-      <TouchableOpacity activeOpacity={rideContext.rideId ? 0.7 : 1} onPress={rideContext.rideId ? onRidePress : undefined}
-        style={[s.rideCard, { backgroundColor: TINT + '10', borderColor: TINT + '30' }]}>
-        <View style={s.rideRouteRow}>
-          <View style={[s.rideDot, { backgroundColor: TINT }]} />
-          <Text style={[s.rideFrom, { color: colors.textPrimary }]} numberOfLines={1}>{rideContext.from}</Text>
-          <Ionicons name="arrow-forward" size={12} color={TINT} style={{ marginHorizontal: 4 }} />
-          <Text style={[s.rideTo, { color: colors.textPrimary }]} numberOfLines={1}>{rideContext.to}</Text>
-        </View>
-        <View style={s.rideMetaRow}>
-          {rideContext.date && <View style={s.rideChip}><Ionicons name="calendar-outline" size={11} color={TINT} /><Text style={[s.rideChipTxt, { color: colors.textSecondary }]}>{rideContext.date}{rideContext.time ? ` · ${rideContext.time}` : ''}</Text></View>}
-          {rideContext.seats != null && <View style={s.rideChip}><Ionicons name="person-outline" size={11} color={TINT} /><Text style={[s.rideChipTxt, { color: colors.textSecondary }]}>{rideContext.seats} seat{rideContext.seats !== 1 ? 's' : ''}</Text></View>}
-          {rideContext.poster && <View style={s.rideChip}><Ionicons name="car-outline" size={11} color={TINT} /><Text style={[s.rideChipTxt, { color: colors.textSecondary }]} numberOfLines={1}>{rideContext.poster}</Text></View>}
-          {rideContext.rideId && <View style={[s.rideChip, { marginLeft: 'auto' }]}><Text style={[s.rideChipTxt, { color: TINT }]}>View details</Text><Ionicons name="chevron-forward" size={11} color={TINT} /></View>}
-        </View>
-      </TouchableOpacity>
+      <View style={[s.rideCard, { backgroundColor: TINT + '10', borderColor: TINT + '30' }]}>
+        <TouchableOpacity activeOpacity={!!rideContext.rideId ? 0.7 : 1} onPress={!!rideContext.rideId ? onRidePress : undefined}>
+          <View style={s.rideRouteRow}>
+            <View style={[s.rideDot, { backgroundColor: TINT }]} />
+            <Text style={[s.rideFrom, { color: colors.textPrimary }]} numberOfLines={1}>{rideContext.from}</Text>
+            <Ionicons name="arrow-forward" size={12} color={TINT} style={{ marginHorizontal: 4 }} />
+            <Text style={[s.rideTo, { color: colors.textPrimary }]} numberOfLines={1}>{rideContext.to}</Text>
+          </View>
+          <View style={s.rideMetaRow}>
+            {!!rideContext.date && <View style={s.rideChip}><Ionicons name="calendar-outline" size={11} color={TINT} /><Text style={[s.rideChipTxt, { color: colors.textSecondary }]}>{rideContext.date}{rideContext.time ? ` · ${rideContext.time}` : ''}</Text></View>}
+            {rideContext.seats != null && <View style={s.rideChip}><Ionicons name="person-outline" size={11} color={TINT} /><Text style={[s.rideChipTxt, { color: colors.textSecondary }]}>{rideContext.seats} seat{rideContext.seats !== 1 ? 's' : ''}</Text></View>}
+            {!!rideContext.poster && <View style={s.rideChip}><Ionicons name="car-outline" size={11} color={TINT} /><Text style={[s.rideChipTxt, { color: colors.textSecondary }]} numberOfLines={1}>{rideContext.poster}</Text></View>}
+            {!!rideContext.rideId && <TouchableOpacity onPress={onRidePress} style={[s.rideChip, { marginLeft: 'auto' }]}><Text style={[s.rideChipTxt, { color: TINT }]}>View ride</Text><Ionicons name="chevron-forward" size={11} color={TINT} /></TouchableOpacity>}
+          </View>
+        </TouchableOpacity>
+
+        {/* ── Driver manage panel ── */}
+        {isDriver && !!rideContext.bookingId && (
+          <View style={s.requestRow}>
+            {driverBookingStatus === 'confirmed' ? (
+              <View style={[s.requestedBadge, { backgroundColor: TINT + '20', borderColor: TINT + '40' }]}>
+                <Ionicons name="checkmark-circle" size={14} color={TINT} />
+                <Text style={[s.requestedTxt, { color: TINT }]}>Seat confirmed ✓</Text>
+              </View>
+            ) : driverBookingStatus === 'cancelled' ? (
+              <View style={[s.requestedBadge, { backgroundColor: '#FF6B6B20', borderColor: '#FF6B6B40' }]}>
+                <Ionicons name="close-circle" size={14} color="#FF6B6B" />
+                <Text style={[s.requestedTxt, { color: '#FF6B6B' }]}>Request declined</Text>
+              </View>
+            ) : (
+              <View style={s.driverActionRow}>
+                <View style={[s.pendingTag, { backgroundColor: '#F4A83315', borderColor: '#F4A83340' }]}>
+                  <View style={s.pendingDotSm} />
+                  <Text style={[s.requestedTxt, { color: '#F4A833' }]}>Seat requested</Text>
+                </View>
+                <TouchableOpacity onPress={onDecline} style={[s.declineBtn, { borderColor: '#FF6B6B40' }]}>
+                  <Ionicons name="close" size={14} color="#FF6B6B" />
+                  <Text style={[s.declineTxt]}>Decline</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={onConfirm}>
+                  <LinearGradient colors={['#00C48C', '#007A5E']} style={s.requestBtnInner} start={{x:0,y:0}} end={{x:1,y:0}}>
+                    <Ionicons name="checkmark" size={14} color="#fff" />
+                    <Text style={s.requestBtnTxt}>Confirm</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* ── Rider request / status panel ── */}
+        {isRider && (showRequestBtn || isRequesting || isRequested || isConfirmed) && (
+          <View style={s.requestRow}>
+            {isConfirmed ? (
+              <View style={[s.requestedBadge, { backgroundColor: TINT + '20', borderColor: TINT + '40' }]}>
+                <Ionicons name="checkmark-circle" size={14} color={TINT} />
+                <Text style={[s.requestedTxt, { color: TINT }]}>Your seat is confirmed!</Text>
+              </View>
+            ) : isRequested ? (
+              <View style={[s.requestedBadge, { backgroundColor: '#F4A83315', borderColor: '#F4A83340' }]}>
+                <Ionicons name="time-outline" size={14} color="#F4A833" />
+                <Text style={[s.requestedTxt, { color: '#F4A833' }]}>Seat requested · Awaiting driver</Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                onPress={onRequestSeat}
+                disabled={isRequesting}
+                style={[s.requestBtn, { opacity: isRequesting ? 0.6 : 1 }]}
+              >
+                <LinearGradient colors={['#00C48C', '#007A5E']} style={s.requestBtnInner} start={{x:0,y:0}} end={{x:1,y:0}}>
+                  <Ionicons name={isRequesting ? 'hourglass-outline' : 'hand-left'} size={14} color="#fff" />
+                  <Text style={s.requestBtnTxt}>{isRequesting ? 'Requesting…' : 'Request a Seat'}</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+      </View>
     );
   }
   const tint = '#FF6B6B';
@@ -295,7 +372,9 @@ export default function ChatScreen({ route, navigation }) {
   const [showPhoneWarn,   setShowPhoneWarn]   = useState(false);
   const [otherTyping,     setOtherTyping]     = useState(false);
   const [voiceHeld,       setVoiceHeld]       = useState(false);
-  const [resolvedRideContext, setResolvedRideContext] = useState(rideContext);
+  const [resolvedRideContext,  setResolvedRideContext]  = useState(rideContext);
+  const [bookingStatus,        setBookingStatus]        = useState(null); // null | 'requesting' | 'pending' | 'confirmed'
+  const [driverBookingStatus,  setDriverBookingStatus]  = useState(null); // driver's view: null | 'pending' | 'confirmed' | 'cancelled'
   const pendingRef  = useRef('');
   const msgIdsRef   = useRef(new Set());
   const voiceTimer  = useRef(null);
@@ -303,6 +382,7 @@ export default function ChatScreen({ route, navigation }) {
   const user       = useAppStore(s => s.user);
   const clearUnread = useAppStore(s => s.clearUnreadConversation);
   const colors     = useTheme();
+  const insets     = useSafeAreaInsets();
   const listRef    = useRef(null);
 
   const otherName  = displayName(otherProfile?.username);
@@ -319,6 +399,15 @@ export default function ChatScreen({ route, navigation }) {
       .then(({ data }) => { if (data) setResolvedRideContext(prev => prev ? { ...prev, rideId: data.id, seats: data.seats_available ?? prev.seats } : prev); });
   }, []);
 
+  // Load booking status for driver view
+  useEffect(() => {
+    const bookingId = rideContext?.bookingId;
+    if (!bookingId) return;
+    getBookingById(bookingId).then(b => {
+      if (b) setDriverBookingStatus(b.status);
+    }).catch(() => {});
+  }, []);
+
   useEffect(() => {
     fetchMsgs();
     markRead();
@@ -329,6 +418,10 @@ export default function ChatScreen({ route, navigation }) {
         if (msg.sender_id !== user.id) { clearUnread(conversation.id); markRead(); }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversation.id}` }, ({ new: upd }) => setMessages(prev => prev.map(m => m.id === upd.id ? { ...m, ...upd } : m)))
+      // Remove deleted messages in real time (handles another device or RLS cascade)
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversation.id}` }, ({ old }) => {
+        setMessages(prev => prev.filter(m => m.id !== old.id));
+      })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'message_reactions' }, ({ new: row }) => {
         if (row.user_id === user.id) return;
         if (!msgIdsRef.current.has(row.message_id)) return;
@@ -439,10 +532,9 @@ export default function ChatScreen({ route, navigation }) {
   }
 
   async function deleteMsg(msg) {
-    try {
-      await supabase.from('messages').delete().eq('id', msg.id).eq('sender_id', user.id);
-      setMessages(prev => prev.filter(m => m.id !== msg.id));
-    } catch { Alert.alert('Error', 'Could not delete message.'); }
+    const { error } = await supabase.from('messages').delete().eq('id', msg.id).eq('sender_id', user.id);
+    if (error) { Alert.alert('Error', error.message || 'Could not delete message.'); return; }
+    setMessages(prev => prev.filter(m => m.id !== msg.id));
   }
 
   function copyText(body) { Alert.alert('Message', body, [{ text: 'Close' }]); }
@@ -511,7 +603,14 @@ export default function ChatScreen({ route, navigation }) {
       </SafeAreaView>
 
       {/* ── Context banner ── */}
-      <ContextBanner title={productCtx} contextType={contextType} rideContext={resolvedRideContext} colors={colors}
+      <ContextBanner
+        title={productCtx}
+        contextType={contextType}
+        rideContext={resolvedRideContext}
+        colors={colors}
+        userId={user?.id}
+        bookingStatus={bookingStatus}
+        driverBookingStatus={driverBookingStatus}
         onRidePress={async () => {
           const rideId = resolvedRideContext?.rideId;
           if (!rideId) return;
@@ -519,6 +618,42 @@ export default function ChatScreen({ route, navigation }) {
             const ride = await getRideById(rideId);
             navigation.navigate('Tabs', { screen: 'Carpool', params: { screen: 'RideDetail', params: { ride, fromChat: true } } });
           } catch (e) { console.error('open ride:', e); }
+        }}
+        onRequestSeat={async () => {
+          const { rideId, driverId } = resolvedRideContext || {};
+          if (!rideId || !driverId || !user?.id) return;
+          setBookingStatus('requesting');
+          try {
+            await createBooking(rideId, user.id, driverId);
+            await sendMessage(conversation.id, user.id, "Hi! I'd like to request a seat for this ride 🙋");
+            setBookingStatus('pending');
+            fetchMsgs();
+          } catch (err) {
+            setBookingStatus(null);
+            console.error('Request seat error:', err);
+          }
+        }}
+        onConfirm={async () => {
+          const { bookingId, rideId } = resolvedRideContext || {};
+          if (!bookingId || !rideId) return;
+          try {
+            await confirmBooking(bookingId, rideId);
+            setDriverBookingStatus('confirmed');
+            await sendMessage(conversation.id, user.id,
+              `✅ Your seat is confirmed! See you soon. Feel free to coordinate pickup details here.`);
+            fetchMsgs();
+          } catch (err) { Alert.alert('Error', err?.message || 'Could not confirm'); }
+        }}
+        onDecline={async () => {
+          const { bookingId, rideId } = resolvedRideContext || {};
+          if (!bookingId || !rideId) return;
+          try {
+            await cancelBooking(bookingId, rideId);
+            setDriverBookingStatus('cancelled');
+            await sendMessage(conversation.id, user.id,
+              `Sorry, the seat is no longer available. Feel free to check other rides!`);
+            fetchMsgs();
+          } catch (err) { Alert.alert('Error', err?.message || 'Could not decline'); }
         }}
       />
 
@@ -551,7 +686,7 @@ export default function ChatScreen({ route, navigation }) {
         )}
 
         {/* ── Input bar ── */}
-        <View style={[s.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.borderLight }]}>
+        <View style={[s.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.borderLight, paddingBottom: Math.max(insets.bottom, 8) }]}>
           <TouchableOpacity style={[s.plusBtn, { backgroundColor: colors.inputBackground }]} onPress={() => setShowAttach(true)}>
             <Ionicons name="add" size={22} color={colors.textSecondary} />
           </TouchableOpacity>
@@ -679,6 +814,17 @@ const s = StyleSheet.create({
   rideMetaRow:{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   rideChip:   { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,196,140,0.1)', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
   rideChipTxt:{ fontSize: 11, fontWeight: '500' },
+  requestRow:        { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(0,196,140,0.2)' },
+  requestBtn:        { borderRadius: 20, overflow: 'hidden' },
+  requestBtnInner:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, paddingHorizontal: 16 },
+  requestBtnTxt:     { color: '#fff', fontSize: 13, fontWeight: '800' },
+  requestedBadge:    { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1 },
+  requestedTxt:      { fontSize: 12, fontWeight: '700' },
+  driverActionRow:   { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  pendingTag:        { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, flex: 1 },
+  pendingDotSm:      { width: 6, height: 6, borderRadius: 3, backgroundColor: '#F4A833' },
+  declineBtn:        { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1 },
+  declineTxt:        { color: '#FF6B6B', fontSize: 13, fontWeight: '700' },
 
   empty:      { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
   emptyAv:    { width: 74, height: 74, borderRadius: 37, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },

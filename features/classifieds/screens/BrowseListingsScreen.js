@@ -103,7 +103,7 @@ function JobCard({ item, onPress, theme }) {
       <View style={jcStyles.body}>
         <View style={jcStyles.top}>
           <LinearGradient colors={['#00C48C','#007A5E']} style={jcStyles.iconBox}>
-            <Text style={{ fontSize: 18 }}>💼</Text>
+            <Ionicons name="briefcase" size={22} color="#fff" />
           </LinearGradient>
           <View style={{ flex: 1 }}>
             <Text style={[jcStyles.title, { color: theme.textPrimary }]} numberOfLines={1}>{item.title}</Text>
@@ -165,7 +165,7 @@ function HousingCard({ item, onPress, theme }) {
       <View style={hcStyles.imgWrap}>
         {hasImg
           ? <Image source={{ uri: item.images[0] }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-          : <LinearGradient colors={['#FF6B6B','#E84393']} style={StyleSheet.absoluteFill}><View style={hcStyles.placeholder}><Text style={{ fontSize: 40 }}>🏠</Text></View></LinearGradient>
+          : <LinearGradient colors={['#FF6B6B','#E84393']} style={StyleSheet.absoluteFill}><View style={hcStyles.placeholder}><Ionicons name="home" size={44} color="rgba(255,255,255,0.75)" /></View></LinearGradient>
         }
         <LinearGradient colors={['transparent','rgba(15,10,30,0.7)']} style={hcStyles.imgGradient} />
         {item.is_boosted && (
@@ -223,6 +223,9 @@ export default function BrowseListingsScreen({ navigation, route }) {
   const [fetchError, setFetchError] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(route.params?.category ?? null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const searchRef = useRef(null);
+  const searchHeightAnim = useRef(new Animated.Value(0)).current;
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const appliedParamCategory = useRef(route.params?.category ?? null);
@@ -252,6 +255,14 @@ export default function BrowseListingsScreen({ navigation, route }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  function toggleSearch() {
+    const opening = !showSearch;
+    setShowSearch(opening);
+    Animated.spring(searchHeightAnim, { toValue: opening ? 1 : 0, useNativeDriver: false, tension: 70, friction: 12 }).start();
+    if (opening) { setTimeout(() => searchRef.current?.focus(), 150); }
+    else { setSearchQuery(''); fetchListings(); searchRef.current?.blur(); }
   }
 
   async function handleSearch(text) {
@@ -317,37 +328,41 @@ export default function BrowseListingsScreen({ navigation, route }) {
   return (
     <View style={[styles.root, { backgroundColor: theme.background }]}>
       {/* Header */}
-      <LinearGradient colors={['#2D1B69','#1A0F3D']} style={[styles.header, { paddingTop: insets.top + 10 }]}>
+      <LinearGradient colors={['#2D1B69','#1A0F3D']} style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.07)', 'rgba(255,255,255,0)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.headerSpecular} pointerEvents="none" />
         <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.headerTitle}>Marketplace</Text>
-            </View>
-          <TouchableOpacity
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); navigation.navigate('PostListing', { preselectedCategory: selectedCategory }); }}
-            activeOpacity={0.85}
-          >
-            <LinearGradient colors={['#F4A833','#FF6B6B']} style={styles.postBtn} start={{x:0,y:0}} end={{x:1,y:0}}>
-              <Ionicons name="add" size={16} color="#fff" />
-              <Text style={styles.postBtnTxt}>Post</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-        {/* Search */}
-        <View style={[styles.searchWrap, { borderColor: 'rgba(255,255,255,0.15)', backgroundColor: 'rgba(255,255,255,0.1)' }]}>
-          <Ionicons name="search" size={16} color="rgba(255,255,255,0.5)" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search listings..."
-            placeholderTextColor="rgba(255,255,255,0.35)"
-            value={searchQuery}
-            onChangeText={handleSearch}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => { setSearchQuery(''); fetchListings(); }}>
-              <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.5)" />
+          <Text style={styles.headerTitle}>Marketplace</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <TouchableOpacity onPress={toggleSearch} style={styles.iconBtn} activeOpacity={0.8}>
+              <Ionicons name={showSearch ? 'close' : 'search'} size={20} color="#fff" />
             </TouchableOpacity>
-          )}
+            <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); navigation.navigate('PostListing', { preselectedCategory: selectedCategory }); }} activeOpacity={0.85}>
+              <LinearGradient colors={['#F4A833','#FF6B6B']} style={styles.postBtn} start={{x:0,y:0}} end={{x:1,y:0}}>
+                <Ionicons name="add" size={16} color="#fff" />
+                <Text style={styles.postBtnTxt}>Post</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
         </View>
+        {/* Expandable search */}
+        <Animated.View style={{ height: searchHeightAnim.interpolate({ inputRange: [0,1], outputRange: [0, 48] }), overflow: 'hidden', marginBottom: searchHeightAnim.interpolate({ inputRange: [0,1], outputRange: [0, 10] }) }}>
+          <View style={[styles.searchWrap, { borderColor: 'rgba(255,255,255,0.15)', backgroundColor: 'rgba(255,255,255,0.1)' }]}>
+            <Ionicons name="search" size={16} color="rgba(255,255,255,0.5)" />
+            <TextInput
+              ref={searchRef}
+              style={styles.searchInput}
+              placeholder="Search listings..."
+              placeholderTextColor="rgba(255,255,255,0.35)"
+              value={searchQuery}
+              onChangeText={handleSearch}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => { setSearchQuery(''); fetchListings(); }}>
+                <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.5)" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </Animated.View>
 
         {/* Category chips */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
@@ -378,7 +393,7 @@ export default function BrowseListingsScreen({ navigation, route }) {
           onPress={() => navigation.navigate('PostListing', { preselectedCategory: 'food' })}
           activeOpacity={0.85}
         >
-          <Text style={styles.foodEmoji}>🍱</Text>
+          <View style={styles.foodIconWrap}><Ionicons name="restaurant" size={26} color="#F4A833" /></View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.foodTitle, { color: theme.textPrimary }]}>Got a tiffin or food business?</Text>
             <Text style={[styles.foodSub, { color: theme.textSecondary }]}>List your home kitchen or catering — reach your community in minutes.</Text>
@@ -412,7 +427,9 @@ export default function BrowseListingsScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   header: { paddingHorizontal: spacing.md, paddingBottom: 16 },
+  headerSpecular: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 1 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  iconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { color: '#fff', fontSize: fonts.sizes.xxl, fontWeight: '800' },
   postBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 16, paddingVertical: 9, borderRadius: borderRadius.full, ...shadows.glow },
   postBtnTxt: { color: '#fff', fontSize: fonts.sizes.sm, fontWeight: '800' },
@@ -427,7 +444,7 @@ const styles = StyleSheet.create({
   chipTxtActive: { color: '#fff' },
 
   foodBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, margin: 12, marginBottom: 0, padding: 14, borderRadius: borderRadius.lg, ...shadows.small },
-  foodEmoji: { fontSize: 28 },
+  foodIconWrap: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#F4A83320', alignItems: 'center', justifyContent: 'center' },
   foodTitle: { fontSize: fonts.sizes.sm, fontWeight: '700', marginBottom: 2 },
   foodSub: { fontSize: 11, lineHeight: 16 },
 

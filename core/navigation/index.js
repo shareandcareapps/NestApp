@@ -4,6 +4,11 @@ import {
   View, Text, ActivityIndicator, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+// Native modules not available in Expo Go — lazy-loaded with fallbacks
+let LocalAuthentication = null;
+let SecureStore = null;
+try { LocalAuthentication = require('expo-local-authentication'); } catch (_) {}
+try { SecureStore = require('expo-secure-store'); } catch (_) {}
 import { LinearGradient } from 'expo-linear-gradient';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -16,6 +21,7 @@ import { useTheme } from '../theme/ThemeContext';
 import FloatingTabBar from '../components/FloatingTabBar';
 import LoginScreen from '../auth/screens/LoginScreen';
 import SignupScreen from '../auth/screens/SignupScreen';
+import ForgotPasswordScreen from '../auth/screens/ForgotPasswordScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
@@ -31,14 +37,14 @@ import PostListingScreen from '../../features/classifieds/screens/PostListingScr
 import PostRideScreen from '../../features/rides/screens/PostRideScreen';
 import ClassifiedsNavigator from '../../features/classifieds/index';
 import RidesNavigator from '../../features/rides/index';
-import NewsNavigator from '../../features/news/index';
+// import NewsNavigator from '../../features/news/index'; // News temporarily removed
 import MessagesNavigator from '../../features/messages/index';
 import OnboardingScreen from '../screens/OnboardingScreen';
 
 const FadedHomeScreen = withFadeOnFocus(HomeScreen);
 const FadedClassifiedsNavigator = withFadeOnFocus(ClassifiedsNavigator);
 const FadedRidesNavigator = withFadeOnFocus(RidesNavigator);
-const FadedNewsNavigator = withFadeOnFocus(NewsNavigator);
+// const FadedNewsNavigator = withFadeOnFocus(NewsNavigator); // News temporarily removed
 const FadedMessagesNavigator = withFadeOnFocus(MessagesNavigator);
 
 const Tab = createBottomTabNavigator();
@@ -137,17 +143,9 @@ function MainTabs({ navigation }) {
           },
         })}
       />
-      <Tab.Screen
-        name="News"
-        component={FadedNewsNavigator}
-        options={{ headerShown: false }}
-        listeners={({ navigation }) => ({
-          tabPress: (e) => {
-            e.preventDefault();
-            navigation.navigate('News', { screen: 'NewsFeed' });
-          },
-        })}
-      />
+      {/* News tab temporarily removed */}
+      {/* <Tab.Screen name="News" component={FadedNewsNavigator} options={{ headerShown: false }}
+        listeners={({ navigation }) => ({ tabPress: (e) => { e.preventDefault(); navigation.navigate('News', { screen: 'NewsFeed' }); }, })} /> */}
       <Tab.Screen
         name="Messages"
         component={FadedMessagesNavigator}
@@ -199,6 +197,7 @@ function AuthStack() {
     <Stack.Navigator screenOptions={{ ...premiumTransition, headerShown: false }}>
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Signup" component={SignupScreen} />
+      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
     </Stack.Navigator>
   );
 }
@@ -225,10 +224,40 @@ export default function RootNavigator() {
   const [loading,      setLoading]      = useState(true);
   const [hasOnboarded, setHasOnboarded] = useState(true);
 
+  async function tryBiometricAutoLogin() {
+    if (!LocalAuthentication || !SecureStore) return;
+    try {
+      const savedToken = await SecureStore.getItemAsync('nest_biometric_session');
+      if (!savedToken) return;
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!hasHardware || !isEnrolled) return;
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Sign in to NestApp',
+        fallbackLabel: 'Use passcode',
+        disableDeviceFallback: false,
+      });
+      if (!result.success) return;
+      const { data, error } = await supabase.auth.refreshSession({ refresh_token: savedToken });
+      if (error || !data?.session) {
+        await SecureStore.deleteItemAsync('nest_biometric_session');
+        return;
+      }
+      setUser(data.user);
+      setSession(data.session);
+    } catch (_) {}
+  }
+
   useEffect(() => {
     Promise.all([
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) { setUser(session.user); setSession(session); }
+      supabase.auth.getSession().then(async ({ data: { session } }) => {
+        if (session) {
+          setUser(session.user);
+          setSession(session);
+        } else {
+          // No active session — try biometric auto-login if possible
+          await tryBiometricAutoLogin();
+        }
       }).catch(err => console.error('getSession error:', err)),
       AsyncStorage.getItem('@nest_onboarded').then(v => setHasOnboarded(!!v)).catch(() => setHasOnboarded(false)),
     ]).finally(() => setLoading(false));

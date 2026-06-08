@@ -55,6 +55,13 @@ function RideCard({ item, onPress, theme }) {
     : rideDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
   const timeLabel = item.any_time ? 'Anytime' : rideDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+  const seatsTotal     = item.seats_available || 1;
+  const seatsBooked    = item.seats_booked || 0;
+  const seatsRemaining = Math.max(0, seatsTotal - seatsBooked);
+  const seatColor      = !isRequest && seatsRemaining === 0 ? '#FF6B6B'
+    : !isRequest && seatsRemaining === 1 ? '#F4A833'
+    : accent;
+
   const catIcons = { airport: 'airplane-outline', temple: 'leaf-outline', general: 'car-outline', longride: 'map-outline' };
   const uniData  = item.category === 'university' ? UNIVERSITIES.find(u => u.id === item.university) : null;
   const posterName  = formatDisplayName(item.poster?.username);
@@ -69,7 +76,7 @@ function RideCard({ item, onPress, theme }) {
       onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress(item); }}
       activeOpacity={1}
     >
-      <Animated.View style={[cStyles.card, { backgroundColor: theme.card, transform: [{ scale }] }, shadows.small]}>
+      <Animated.View style={[cStyles.card, { backgroundColor: theme.card, transform: [{ scale }], borderWidth: 1, borderColor: accent + '35' }, shadows.small]}>
         {/* Top accent bar */}
         <LinearGradient colors={isRequest ? [REQUEST_COLOR, '#E68A00'] : isLongRide ? [LONGRIDE_COLOR,'#007A5E'] : [OFFER_COLOR,'#0055CC']} style={cStyles.accentBar} start={{x:0,y:0}} end={{x:1,y:0}} />
         {/* Left accent bar for extra visual weight in light mode */}
@@ -143,10 +150,20 @@ function RideCard({ item, onPress, theme }) {
               <Text style={[cStyles.metaTxt, { color: accent }]}>Flexible Time</Text>
             </View>
           )}
-          <View style={[cStyles.metaPill, { backgroundColor: theme.inputBackground }]}>
-            <Ionicons name={isRequest ? 'people-outline' : 'car-sport-outline'} size={12} color={accent} />
-            <Text style={[cStyles.metaTxt, { color: theme.textSecondary }]}>
-              {item.seats_available} {isRequest ? 'need' : 'seat'}{item.seats_available !== 1 ? 's' : ''}
+          {isToday && (
+            <View style={[cStyles.metaPill, { backgroundColor:'#00C48C15', borderWidth:1, borderColor:'#00C48C35' }]}>
+              <View style={{ width:5, height:5, borderRadius:2.5, backgroundColor:'#00C48C' }} />
+              <Text style={[cStyles.metaTxt, { color:'#00C48C' }]}>Today</Text>
+            </View>
+          )}
+          <View style={[cStyles.metaPill, { backgroundColor: seatColor + '15' }]}>
+            <Ionicons name="people-outline" size={12} color={seatColor} />
+            <Text style={[cStyles.metaTxt, { color: seatColor }]}>
+              {isRequest
+                ? `${seatsTotal} needed`
+                : seatsBooked > 0
+                  ? `${seatsRemaining}/${seatsTotal} left`
+                  : `${seatsTotal} seat${seatsTotal !== 1 ? 's' : ''}`}
             </Text>
           </View>
           {longInfo?.returnDate && (
@@ -199,8 +216,19 @@ export default function BrowseRidesScreen({ navigation }) {
   const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter]         = useState(null);
+  const [typeFilter, setTypeFilter] = useState(null); // null | 'offer' | 'request'
   const [search, setSearch]         = useState('');
-  const [searchFocused, setSearchFocused] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const searchRef = useRef(null);
+  const searchHeightAnim = useRef(new Animated.Value(0)).current;
+
+  function toggleSearch() {
+    const opening = !showSearch;
+    setShowSearch(opening);
+    Animated.spring(searchHeightAnim, { toValue: opening ? 1 : 0, useNativeDriver: false, tension: 70, friction: 12 }).start();
+    if (opening) { setTimeout(() => searchRef.current?.focus(), 150); }
+    else { setSearch(''); searchRef.current?.blur(); }
+  }
 
   async function loadRides() {
     try {
@@ -224,44 +252,46 @@ export default function BrowseRidesScreen({ navigation }) {
 
   const offers   = displayed.filter(r => r.ride_type === 'offer');
   const requests = displayed.filter(r => r.ride_type === 'request');
+  const filtered = typeFilter === 'offer' ? offers : typeFilter === 'request' ? requests : [...offers, ...requests];
 
   return (
     <View style={[styles.root, { backgroundColor: theme.background }]}>
       {/* Header */}
-      <LinearGradient colors={['#2D1B69','#1A0F3D']} style={[styles.header, { paddingTop: insets.top + 10 }]}>
+      <LinearGradient colors={['#2D1B69','#1A0F3D']} style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.07)', 'rgba(255,255,255,0)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.headerSpecular} pointerEvents="none" />
         <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.headerTitle}>Carpool</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.postBtn}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); navigation.navigate('PostRide'); }}
-          >
-            <LinearGradient colors={['#00C48C','#007A5E']} style={styles.postBtnInner} start={{x:0,y:0}} end={{x:1,y:0}}>
-              <Ionicons name="add" size={18} color="#fff" />
-              <Text style={styles.postBtnTxt}>Share Ride</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-
-        {/* Search */}
-        <View style={[styles.searchWrap, { borderColor: searchFocused ? '#00C48C' : 'rgba(255,255,255,0.15)', backgroundColor: 'rgba(255,255,255,0.1)' }]}>
-          <Ionicons name="search" size={16} color={searchFocused ? '#00C48C' : 'rgba(255,255,255,0.5)'} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by city or location..."
-            placeholderTextColor="rgba(255,255,255,0.35)"
-            value={search}
-            onChangeText={setSearch}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')}>
-              <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.5)" />
+          <Text style={styles.headerTitle}>Carpool</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <TouchableOpacity onPress={toggleSearch} style={styles.iconBtn} activeOpacity={0.8}>
+              <Ionicons name={showSearch ? 'close' : 'search'} size={20} color="#fff" />
             </TouchableOpacity>
-          )}
+            <TouchableOpacity style={styles.postBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); navigation.navigate('PostRide'); }}>
+              <LinearGradient colors={['#00C48C','#007A5E']} style={styles.postBtnInner} start={{x:0,y:0}} end={{x:1,y:0}}>
+                <Ionicons name="add" size={18} color="#fff" />
+                <Text style={styles.postBtnTxt}>Share Ride</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
         </View>
+        {/* Expandable search */}
+        <Animated.View style={{ height: searchHeightAnim.interpolate({ inputRange: [0,1], outputRange: [0, 48] }), overflow: 'hidden', marginBottom: searchHeightAnim.interpolate({ inputRange: [0,1], outputRange: [0, 10] }) }}>
+          <View style={[styles.searchWrap, { borderColor: 'rgba(255,255,255,0.15)', backgroundColor: 'rgba(255,255,255,0.1)' }]}>
+            <Ionicons name="search" size={16} color="rgba(255,255,255,0.5)" />
+            <TextInput
+              ref={searchRef}
+              style={styles.searchInput}
+              placeholder="Search by city or location..."
+              placeholderTextColor="rgba(255,255,255,0.35)"
+              value={search}
+              onChangeText={setSearch}
+            />
+            {search.length > 0 && (
+              <TouchableOpacity onPress={() => setSearch('')}>
+                <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.5)" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </Animated.View>
 
         {/* Category chips */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12 }} contentContainerStyle={{ paddingHorizontal: spacing.md, gap: 8 }}>
@@ -288,7 +318,7 @@ export default function BrowseRidesScreen({ navigation }) {
         </View>
       ) : (
         <FlatList
-          data={[...offers, ...requests]}
+          data={filtered}
           keyExtractor={item => item.id}
           renderItem={({ item }) => (
             <RideCard item={item} theme={theme} onPress={r => navigation.navigate('RideDetail', { ride: r })} />
@@ -298,16 +328,24 @@ export default function BrowseRidesScreen({ navigation }) {
             displayed.length > 0 ? (
               <View style={styles.statsRow}>
                 {offers.length > 0 && (
-                  <View style={[styles.statPill, { backgroundColor: OFFER_COLOR + '18' }]}>
+                  <TouchableOpacity
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setTypeFilter(prev => prev === 'offer' ? null : 'offer'); }}
+                    style={[styles.statPill, { backgroundColor: typeFilter === 'offer' ? OFFER_COLOR + '30' : OFFER_COLOR + '18', borderWidth: 1, borderColor: typeFilter === 'offer' ? OFFER_COLOR + '80' : 'transparent' }]}
+                  >
                     <Ionicons name="car-sport-outline" size={12} color={OFFER_COLOR} />
                     <Text style={[styles.statTxt, { color: OFFER_COLOR }]}>{offers.length} offering</Text>
-                  </View>
+                    {typeFilter === 'offer' && <Ionicons name="close-circle" size={12} color={OFFER_COLOR} />}
+                  </TouchableOpacity>
                 )}
                 {requests.length > 0 && (
-                  <View style={[styles.statPill, { backgroundColor: REQUEST_COLOR + '18' }]}>
+                  <TouchableOpacity
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setTypeFilter(prev => prev === 'request' ? null : 'request'); }}
+                    style={[styles.statPill, { backgroundColor: typeFilter === 'request' ? REQUEST_COLOR + '30' : REQUEST_COLOR + '18', borderWidth: 1, borderColor: typeFilter === 'request' ? REQUEST_COLOR + '80' : 'transparent' }]}
+                  >
                     <Ionicons name="hand-left-outline" size={12} color={REQUEST_COLOR} />
                     <Text style={[styles.statTxt, { color: REQUEST_COLOR }]}>{requests.length} requesting</Text>
-                  </View>
+                    {typeFilter === 'request' && <Ionicons name="close-circle" size={12} color={REQUEST_COLOR} />}
+                  </TouchableOpacity>
                 )}
               </View>
             ) : null
@@ -321,7 +359,7 @@ export default function BrowseRidesScreen({ navigation }) {
               onCta={() => navigation.navigate('PostRide')}
             />
           }
-          contentContainerStyle={{ paddingTop: 12, paddingBottom: insets.bottom + 40 }}
+          contentContainerStyle={{ paddingTop: 12, paddingBottom: 120 }}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -332,7 +370,9 @@ export default function BrowseRidesScreen({ navigation }) {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   header: { paddingHorizontal: spacing.md, paddingBottom: 16 },
+  headerSpecular: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 1 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  iconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
   headerSub: { color: 'rgba(255,255,255,0.55)', fontSize: fonts.sizes.xs, fontWeight: '600', letterSpacing: 0.5 },
   headerTitle: { color: '#fff', fontSize: fonts.sizes.xxl, fontWeight: '800' },
   postBtn: { borderRadius: borderRadius.full, overflow: 'hidden', ...shadows.small },

@@ -2,7 +2,7 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Dimensions,
-  ScrollView, Animated,
+  ScrollView, Animated, Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fonts, spacing, borderRadius } from '../theme/index';
+import useAppStore from '../store/index';
 
 const { width } = Dimensions.get('window');
 
@@ -17,81 +18,134 @@ const SLIDES = [
   {
     key: 'welcome',
     gradient: ['#0F0A1E','#2D1B69','#4A2D9C'],
-    icon: '🏡',
+    iconName: 'leaf',
     iconBg: ['#F4A833','#E68A00'],
     title: 'Welcome to NestApp',
     subtitle: 'WHERE CULTURE MEETS COMMUNITY',
     body: 'The home for Indian, Pakistani, Nepalese, and Arab communities in St. Louis.',
-    features: ['🛍️ Buy & sell within your community', '🚗 Share rides with neighbors', '📰 Stay updated on community news'],
+    features: [
+      { icon: 'bag-outline',       text: 'Buy & sell within your community' },
+      { icon: 'car-outline',       text: 'Share rides with neighbors' },
+      { icon: 'newspaper-outline', text: 'Stay updated on community news' },
+    ],
   },
   {
     key: 'market',
-    gradient: ['#1A0530','#3D0F69','#FF6B6B30'],
-    icon: '🛍️',
+    gradient: ['#1A0530','#3D0F69','#1A0F3D'],
+    iconName: 'storefront',
     iconBg: ['#FF6B6B','#E84393'],
     title: 'Community Marketplace',
     subtitle: 'BUY · SELL · SHARE',
     body: 'Post and browse listings for apartments, jobs, food, and buy/sell items — all within your trusted community.',
-    features: ['🏠 Find accommodation nearby', '💼 Discover job opportunities', '🍛 Buy homemade food & more'],
+    features: [
+      { icon: 'business-outline',  text: 'Find accommodation nearby' },
+      { icon: 'briefcase-outline', text: 'Discover job opportunities' },
+      { icon: 'restaurant-outline',text: 'Buy homemade food & more' },
+    ],
   },
   {
     key: 'carpool',
-    gradient: ['#051A0F','#0F3D25','#00C48C30'],
-    icon: '🚗',
+    gradient: ['#051A0F','#0F3D25','#092A1E'],
+    iconName: 'car-sport',
     iconBg: ['#00C48C','#007A5E'],
     title: 'Carpool Together',
     subtitle: 'RIDE · SHARE · SAVE',
     body: 'Find or offer rides to the airport, university, temples, and more. Save money, reduce emissions, make friends.',
-    features: ['✈️ Airport pickups & drops', '🎓 University carpools', '🛕 Temple & community events'],
+    features: [
+      { icon: 'airplane-outline',  text: 'Airport pickups & drops' },
+      { icon: 'school-outline',    text: 'University carpools' },
+      { icon: 'leaf-outline',      text: 'Temple & community events' },
+    ],
   },
 ];
 
 function AnimatedIllustration({ slide, isActive }) {
-  const float = useRef(new Animated.Value(0)).current;
-  const spin  = useRef(new Animated.Value(0)).current;
+  const float   = useRef(new Animated.Value(0)).current;
+  const glow    = useRef(new Animated.Value(0.6)).current;
 
   React.useEffect(() => {
     if (!isActive) return;
     const floatAnim = Animated.loop(
       Animated.sequence([
-        Animated.timing(float, { toValue: -14, duration: 1800, useNativeDriver: true }),
-        Animated.timing(float, { toValue: 0, duration: 1800, useNativeDriver: true }),
+        Animated.timing(float, { toValue: -14, duration: 2000, useNativeDriver: true }),
+        Animated.timing(float, { toValue: 0,   duration: 2000, useNativeDriver: true }),
+      ])
+    );
+    const glowAnim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glow, { toValue: 1,   duration: 1800, useNativeDriver: true }),
+        Animated.timing(glow, { toValue: 0.6, duration: 1800, useNativeDriver: true }),
       ])
     );
     floatAnim.start();
-    return () => floatAnim.stop();
+    glowAnim.start();
+    return () => { floatAnim.stop(); glowAnim.stop(); };
   }, [isActive]);
 
   return (
     <Animated.View style={[illS.wrap, { transform: [{ translateY: float }] }]}>
-      <LinearGradient colors={slide.iconBg} style={illS.circle} start={{x:0,y:0}} end={{x:1,y:1}}>
-        <Text style={illS.icon}>{slide.icon}</Text>
-      </LinearGradient>
-      {/* Orbiting dots */}
-      {[0,1,2].map(i => (
-        <View key={i} style={[illS.orbitDot, {
-          top: 10 + i * 28,
-          right: -10 + i * 6,
-          backgroundColor: slide.iconBg[0] + '60',
-          width: 10 - i * 2,
-          height: 10 - i * 2,
-          borderRadius: 10,
-        }]} />
+      {/* Outer glow ring */}
+      <Animated.View style={[illS.glowRing, { backgroundColor: slide.iconBg[0] + '18', opacity: glow }]} />
+
+      {/* Glass shell */}
+      <View style={illS.glassShell}>
+        <LinearGradient
+          colors={slide.iconBg}
+          style={illS.circle}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          {/* Specular highlight */}
+          <LinearGradient
+            colors={['rgba(255,255,255,0.35)', 'rgba(255,255,255,0)']}
+            style={illS.specular}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          />
+          <Ionicons name={slide.iconName} size={68} color="rgba(255,255,255,0.92)" />
+        </LinearGradient>
+      </View>
+
+      {/* Orbiting accent dots */}
+      {[0, 1, 2].map(i => (
+        <Animated.View key={i} style={[
+          illS.orbitDot,
+          {
+            backgroundColor: slide.iconBg[0] + (60 - i * 15).toString(16),
+            width: 10 - i * 2,
+            height: 10 - i * 2,
+            borderRadius: 10,
+            top: 8  + i * 30,
+            right: -8 + i * 8,
+            opacity: glow,
+          },
+        ]} />
       ))}
     </Animated.View>
   );
 }
 
 const illS = StyleSheet.create({
-  wrap: { alignItems: 'center', position: 'relative' },
-  circle: { width: 140, height: 140, borderRadius: 70, alignItems: 'center', justifyContent: 'center' },
-  icon: { fontSize: 64 },
-  orbitDot: { position: 'absolute' },
+  wrap:       { alignItems: 'center', position: 'relative' },
+  glowRing:   { position: 'absolute', width: 200, height: 200, borderRadius: 100 },
+  glassShell: {
+    borderRadius: 80,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    ...Platform.select({
+      ios:     { shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.35, shadowRadius: 24 },
+      android: { elevation: 14 },
+    }),
+  },
+  circle:    { width: 150, height: 150, borderRadius: 75, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  specular:  { position: 'absolute', top: 0, left: 0, right: 0, height: 70, borderRadius: 75 },
+  orbitDot:  { position: 'absolute' },
 });
 
 export default function OnboardingScreen({ navigation }) {
   const insets   = useSafeAreaInsets();
   const scrollRef = useRef(null);
+  const isAuthenticated = useAppStore((state) => state.isAuthenticated);
   const [currentIdx, setCurrentIdx] = useState(0);
   const progressAnim = useRef(new Animated.Value(0)).current;
 
@@ -113,7 +167,7 @@ export default function OnboardingScreen({ navigation }) {
   async function handleFinish() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     try { await AsyncStorage.setItem('@nest_onboarded', 'true'); } catch (_) {}
-    navigation.replace('Main');
+    navigation.replace(isAuthenticated ? 'Main' : 'Auth');
   }
 
   const slide = SLIDES[currentIdx];
@@ -153,8 +207,11 @@ export default function OnboardingScreen({ navigation }) {
 
               <View style={styles.featuresList}>
                 {s.features.map(f => (
-                  <View key={f} style={styles.featureRow}>
-                    <Text style={styles.featureTxt}>{f}</Text>
+                  <View key={f.text} style={styles.featureRow}>
+                    <View style={[styles.featureIconWrap, { backgroundColor: s.iconBg[0] + '28' }]}>
+                      <Ionicons name={f.icon} size={16} color={s.iconBg[0]} />
+                    </View>
+                    <Text style={styles.featureTxt}>{f.text}</Text>
                   </View>
                 ))}
               </View>
@@ -181,10 +238,14 @@ export default function OnboardingScreen({ navigation }) {
         <TouchableOpacity onPress={handleNext} activeOpacity={0.85}>
           <Animated.View style={{ width: btnWidth, overflow: 'hidden', borderRadius: borderRadius.full }}>
             <LinearGradient colors={['#F4A833','#E68A00']} style={styles.nextBtn} start={{x:0,y:0}} end={{x:1,y:0}}>
-              {currentIdx < SLIDES.length - 1
-                ? <Ionicons name="arrow-forward" size={22} color="#fff" />
-                : <Text style={styles.nextBtnTxt}>Let's Go 🚀</Text>
-              }
+              {currentIdx < SLIDES.length - 1 ? (
+                <Ionicons name="arrow-forward" size={22} color="#fff" />
+              ) : (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={styles.nextBtnTxt}>Let's Go</Text>
+                  <Ionicons name="rocket-outline" size={18} color="#fff" />
+                </View>
+              )}
             </LinearGradient>
           </Animated.View>
         </TouchableOpacity>
@@ -204,8 +265,19 @@ const styles = StyleSheet.create({
   title: { color: '#fff', fontSize: 28, fontWeight: '900', textAlign: 'center', lineHeight: 34, marginBottom: 14 },
   body: { color: 'rgba(255,255,255,0.65)', fontSize: fonts.sizes.md, textAlign: 'center', lineHeight: 24, marginBottom: 20 },
   featuresList: { gap: 10, width: '100%' },
-  featureRow: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: borderRadius.lg, paddingVertical: 12, paddingHorizontal: 16 },
-  featureTxt: { color: 'rgba(255,255,255,0.8)', fontSize: fonts.sizes.sm, fontWeight: '600' },
+  featureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: borderRadius.lg,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  featureIconWrap: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  featureTxt: { flex: 1, color: 'rgba(255,255,255,0.85)', fontSize: fonts.sizes.sm, fontWeight: '600' },
   bottomBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingTop: 16, backgroundColor: '#0F0A1E' },
   dots: { flexDirection: 'row', gap: 6, alignItems: 'center' },
   dot: { height: 8, borderRadius: 4 },
