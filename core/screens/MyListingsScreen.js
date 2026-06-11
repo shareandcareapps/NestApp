@@ -11,7 +11,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import useAppStore from '../store/index';
 import { useTheme } from '../theme/ThemeContext';
-import { getMyListings, setListingStatus, deleteListing, renewListing } from '../../features/classifieds/services/listingsService';
+import { getMyListings, setListingStatus, deleteListing, renewListing, setListingStock } from '../../features/classifieds/services/listingsService';
 import MarkSoldModal from '../components/MarkSoldModal';
 import EmptyState from '../components/EmptyState';
 import { fonts, spacing, borderRadius, shadows } from '../theme/index';
@@ -40,11 +40,12 @@ const chipS = StyleSheet.create({
   txt: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
 });
 
-function ListingCard({ item, onEdit, onArchive, onDelete, onRelist, onRenew, onMarkSold, theme }) {
+function ListingCard({ item, onEdit, onArchive, onDelete, onRelist, onRenew, onToggleStock, onMarkSold, theme }) {
   const scale = useRef(new Animated.Value(1)).current;
   const meta    = CAT_META[item.category] || { emoji: '📦', gradient: ['#2D1B69','#4A2D9C'], color: '#2D1B69' };
   const status  = item.status || (item.is_active === false ? 'archived' : 'active');
-  const isSellable = item.category === 'buysell' || item.category === 'food';
+  const isFood = item.category === 'food';
+  const isSellable = item.category === 'buysell';
 
   const expiry = (() => {
     if (!item.expires_at) return null;
@@ -53,6 +54,7 @@ function ListingCard({ item, onEdit, onArchive, onDelete, onRelist, onRenew, onM
   })();
   const isExpired    = expiry?.isExpired;
   const expiringSoon = expiry && !isExpired && expiry.daysLeft <= 7;
+  const stockBranchFood = isFood && status === 'out_of_stock';
 
   return (
     <TouchableOpacity
@@ -75,10 +77,11 @@ function ListingCard({ item, onEdit, onArchive, onDelete, onRelist, onRenew, onM
           <View style={cardS.titleRow}>
             <Text style={[cardS.title, { color: theme.textPrimary }]} numberOfLines={1}>{item.title}</Text>
             {/* Status chips */}
-            {status === 'sold'     && <StatusChip label="✓ SOLD"     color="#00C48C" bgColor="#00C48C18" />}
-            {status === 'archived' && !isExpired && <StatusChip label="📦 ARCHIVED" color={theme.textSecondary} bgColor={theme.border} />}
-            {isExpired             && <StatusChip label="⏰ EXPIRED"  color="#FF6B6B" bgColor="#FF6B6B18" />}
-            {expiringSoon          && <StatusChip label={`⚡ ${expiry.daysLeft}d left`} color="#F4A833" bgColor="#F4A83318" />}
+            {status === 'sold'         && <StatusChip label="✓ SOLD"        color="#00C48C" bgColor="#00C48C18" />}
+            {status === 'out_of_stock' && <StatusChip label="OUT OF STOCK" color="#F4A833" bgColor="#F4A83318" />}
+            {status === 'archived'     && !isExpired && <StatusChip label="📦 ARCHIVED" color={theme.textSecondary} bgColor={theme.border} />}
+            {isExpired && !stockBranchFood && <StatusChip label="⏰ EXPIRED"  color="#FF6B6B" bgColor="#FF6B6B18" />}
+            {expiringSoon && !stockBranchFood && <StatusChip label={`⚡ ${expiry.daysLeft}d left`} color="#F4A833" bgColor="#F4A83318" />}
           </View>
           {item.description && <Text style={[cardS.desc, { color: theme.textSecondary }]} numberOfLines={2}>{item.description}</Text>}
           <Text style={[cardS.date, { color: theme.textLight }]}>Posted {new Date(item.created_at).toLocaleDateString()}</Text>
@@ -86,7 +89,7 @@ function ListingCard({ item, onEdit, onArchive, onDelete, onRelist, onRenew, onM
 
         {/* Actions */}
         <View style={[cardS.actions, { borderTopColor: theme.border }]}>
-          {isExpired ? (
+          {(isExpired && !stockBranchFood) ? (
             <>
               <TouchableOpacity style={[cardS.btn, { backgroundColor: '#00C48C18', borderColor: '#00C48C' }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onRenew(item); }}>
                 <Ionicons name="refresh" size={14} color="#00C48C" />
@@ -110,19 +113,31 @@ function ListingCard({ item, onEdit, onArchive, onDelete, onRelist, onRenew, onM
                   <Text style={[cardS.btnTxt, { color: '#00C48C' }]}>Sold</Text>
                 </TouchableOpacity>
               )}
+              {isFood && (
+                <TouchableOpacity style={[cardS.btn, { backgroundColor: '#F4A83318', borderColor: '#F4A833' }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onToggleStock(item); }}>
+                  <Ionicons name="remove-circle-outline" size={14} color="#F4A833" />
+                  <Text style={[cardS.btnTxt, { color: '#F4A833' }]}>Out of Stock</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity style={[cardS.btn, { backgroundColor: '#0099FF18', borderColor: '#0099FF', flex: 1 }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onEdit(item); }}>
                 <Ionicons name="pencil-outline" size={14} color="#0099FF" />
                 <Text style={[cardS.btnTxt, { color: '#0099FF' }]}>Edit</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[cardS.btnIcon, { backgroundColor: theme.inputBackground, borderColor: theme.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onArchive(item); }}>
-                <Ionicons name="archive-outline" size={16} color={theme.textSecondary} />
-              </TouchableOpacity>
+              {isFood ? (
+                <TouchableOpacity style={[cardS.btnIcon, { backgroundColor: '#FF6B6B18', borderColor: '#FF6B6B' }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onDelete(item.id); }}>
+                  <Ionicons name="trash-outline" size={16} color="#FF6B6B" />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={[cardS.btnIcon, { backgroundColor: theme.inputBackground, borderColor: theme.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onArchive(item); }}>
+                  <Ionicons name="archive-outline" size={16} color={theme.textSecondary} />
+                </TouchableOpacity>
+              )}
             </>
           ) : (
             <>
-              <TouchableOpacity style={[cardS.btn, { backgroundColor: '#00C48C18', borderColor: '#00C48C', flex: 1 }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onRelist(item); }}>
-                <Ionicons name="arrow-redo-outline" size={14} color="#00C48C" />
-                <Text style={[cardS.btnTxt, { color: '#00C48C' }]}>Relist</Text>
+              <TouchableOpacity style={[cardS.btn, { backgroundColor: '#00C48C18', borderColor: '#00C48C', flex: 1 }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); stockBranchFood ? onToggleStock(item) : onRelist(item); }}>
+                <Ionicons name={stockBranchFood ? 'refresh' : 'arrow-redo-outline'} size={14} color="#00C48C" />
+                <Text style={[cardS.btnTxt, { color: '#00C48C' }]}>{stockBranchFood ? 'Back in Stock' : 'Relist'}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[cardS.btnIcon, { backgroundColor: '#FF6B6B18', borderColor: '#FF6B6B' }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onDelete(item.id); }}>
                 <Ionicons name="trash-outline" size={16} color="#FF6B6B" />
@@ -204,6 +219,14 @@ export default function MyListingsScreen({ navigation }) {
     catch (e) { Alert.alert('Error', e?.message || 'Could not renew.'); }
   }
 
+  async function handleToggleStock(listing) {
+    const goingOut = (listing.status || (listing.is_active === false ? 'archived' : 'active')) !== 'out_of_stock';
+    try {
+      const u = await setListingStock(listing.id, goingOut);
+      setListings(p => p.map(l => l.id === listing.id ? u : l));
+    } catch (e) { Alert.alert('Error', e?.message || 'Could not update stock status.'); }
+  }
+
   function onSold(updated) { setListings(p => p.map(l => l.id === updated.id ? updated : l)); }
 
   const statusOf = l => l.status || (l.is_active === false ? 'archived' : 'active');
@@ -256,6 +279,7 @@ export default function MyListingsScreen({ navigation }) {
               onDelete={handleDelete}
               onRelist={handleRelist}
               onRenew={handleRenew}
+              onToggleStock={handleToggleStock}
               onMarkSold={l => setSoldModal({ visible: true, listing: l })}
             />
           )}

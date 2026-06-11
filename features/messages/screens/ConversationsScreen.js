@@ -211,8 +211,8 @@ export default function ConversationsScreen({ navigation }) {
         if (deletedIdsRef.current.has(newMsg.conversation_id)) return;
         const data = await getConversations(user.id).catch(() => null);
         if (!data) return;
-        // Strip deleted conversations from realtime updates too
-        const visible = data.filter(c => !deletedIdsRef.current.has(c.id));
+        // Strip deleted + empty conversations from realtime updates too
+        const visible = data.filter(c => !deletedIdsRef.current.has(c.id) && !!c.last_message);
         const fromOther = newMsg.sender_id && newMsg.sender_id !== user.id;
         if (fromOther && !unreadMapRef.current[newMsg.conversation_id]) {
           addUnreadConversation(newMsg.conversation_id);
@@ -240,8 +240,9 @@ export default function ConversationsScreen({ navigation }) {
       ]);
       // Keep deleted set in memory so realtime handler can check synchronously
       deletedIdsRef.current = deletedIds;
-      // Filter out client-side deleted conversations — ground truth
-      const visible = data.filter(c => !deletedIds.has(c.id));
+      // Filter out client-side deleted conversations AND empty conversations
+      // (no message sent yet) so neither party sees a "ghost" thread.
+      const visible = data.filter(c => !deletedIds.has(c.id) && !!c.last_message);
       setAllConversations(visible);
       allConversationsRef.current = visible;
       // Only mark as unread if: DB says unread AND user hasn't read it AND it's not deleted

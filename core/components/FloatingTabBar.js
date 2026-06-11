@@ -1,12 +1,12 @@
 // core/components/FloatingTabBar.js
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, Animated, TouchableOpacity, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { chromeAnim } from '../utils/chromeAnim';
+import { chromeAnim, showChrome } from '../utils/chromeAnim';
 
 const TABS = [
   { key: 'Home',        label: 'Home',    filled: 'home',                outline: 'home-outline' },
@@ -23,6 +23,15 @@ const SCALE_SPRING   = { tension: 380, friction: 28, useNativeDriver: true };
 export default function FloatingTabBar({ state, navigation, unreadMessages = 0 }) {
   const insets  = useSafeAreaInsets();
   const scales  = useRef(TABS.map(() => new Animated.Value(1))).current;
+
+  // The scroll-driven hide/show (chromeAnim) only makes sense on Home. On every
+  // other tab, force the chrome visible so the tab bar can never get stuck hidden
+  // (e.g. after scrolling Home down then switching tabs). Keeps the UI identical
+  // across devices regardless of prior scroll state.
+  const activeTabName = state.routes[state.index]?.name;
+  useEffect(() => {
+    if (activeTabName && activeTabName !== 'Home') showChrome();
+  }, [activeTabName]);
 
   function handlePress(route, idx) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

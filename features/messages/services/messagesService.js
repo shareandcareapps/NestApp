@@ -393,3 +393,18 @@ export async function getUnreadCount(userId) {
   const unique = new Set((data || []).map(m => m.conversation_id));
   return unique.size;
 }
+// ─── Vendor activity signal ────────────────────
+// True if the user has sent any message recently (default 7 days) — used to
+// show an "Active" badge for sellers/vendors who actively reply to inquiries.
+export async function isUserActive(userId, days = 7) {
+  if (!userId) return false;
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+  const { data, error } = await supabase
+    .from('messages')
+    .select('id')
+    .eq('sender_id', userId)
+    .gte('created_at', since)
+    .limit(1);
+  if (error) return false;
+  return (data?.length || 0) > 0;
+}

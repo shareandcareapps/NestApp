@@ -40,6 +40,7 @@ const CAT_META = {
 function GridCard({ item, onPress, theme }) {
   const meta = CAT_META[item.category] || CAT_META.buysell;
   const hasImg = item.images?.length > 0;
+  const isOOS = item.status === 'out_of_stock';
   const scale = useRef(new Animated.Value(1)).current;
 
   return (
@@ -50,11 +51,16 @@ function GridCard({ item, onPress, theme }) {
       activeOpacity={1}
     >
       <Animated.View style={[gcStyles.card, { backgroundColor: theme.card, transform: [{ scale }], ...shadows.medium }]}>
-        <View style={gcStyles.imgWrap}>
+        <View style={[gcStyles.imgWrap, isOOS && { opacity: 0.55 }]}>
           {hasImg
             ? <Image source={{ uri: item.images[0] }} style={gcStyles.img} resizeMode="cover" />
             : <LinearGradient colors={meta.gradient} style={gcStyles.imgPlaceholder}><Ionicons name={meta.icon} size={28} color="rgba(255,255,255,0.7)" /></LinearGradient>
           }
+          {isOOS && (
+            <View style={gcStyles.oosBadge}>
+              <Text style={gcStyles.oosText}>OUT OF STOCK</Text>
+            </View>
+          )}
           {item.is_boosted && (
             <LinearGradient colors={['#F4A833','#FF6B6B']} style={gcStyles.boostBadge}>
               <Ionicons name="star" size={9} color="#fff" />
@@ -86,6 +92,8 @@ const gcStyles = StyleSheet.create({
   imgPlaceholder: { width: '100%', height: CARD_W * 0.88, alignItems: 'center', justifyContent: 'center' },
   boostBadge: { position: 'absolute', top: 8, left: 8, flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: borderRadius.full, paddingHorizontal: 8, paddingVertical: 3 },
   boostText: { color: '#fff', fontSize: 9, fontWeight: '700' },
+  oosBadge: { position: 'absolute', top: 8, left: 8, backgroundColor: 'rgba(0,0,0,0.72)', borderRadius: borderRadius.full, paddingHorizontal: 9, paddingVertical: 4 },
+  oosText: { color: '#fff', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
   heart: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' },
   body: { padding: 10, gap: 3 },
   price: { fontSize: fonts.sizes.md, fontWeight: '800' },
@@ -331,7 +339,14 @@ export default function BrowseListingsScreen({ navigation, route }) {
       <LinearGradient colors={['#2D1B69','#1A0F3D']} style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.07)', 'rgba(255,255,255,0)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.headerSpecular} pointerEvents="none" />
         <View style={styles.headerRow}>
-          <Text style={styles.headerTitle}>Marketplace</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            {route.name === 'BrowseListingsByCategory' && (
+              <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn} activeOpacity={0.8}>
+                <Ionicons name="chevron-back" size={20} color="#fff" />
+              </TouchableOpacity>
+            )}
+            <Text style={styles.headerTitle}>Marketplace</Text>
+          </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <TouchableOpacity onPress={toggleSearch} style={styles.iconBtn} activeOpacity={0.8}>
               <Ionicons name={showSearch ? 'close' : 'search'} size={20} color="#fff" />

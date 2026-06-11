@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Alert, Image, FlatList, Dimensions, Modal, StatusBar,
+  Alert, Image, FlatList, Dimensions, Modal, StatusBar, Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -10,8 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import Toast from 'react-native-toast-message';
-import { getProfile, deleteListing, setListingStatus } from '../services/listingsService';
-import { getOrCreateConversation } from '../../messages/services/messagesService';
+import { getProfile, deleteListing, setListingStatus, setListingStock } from '../services/listingsService';
+import { getOrCreateConversation, isUserActive } from '../../messages/services/messagesService';
 import useAppStore from '../../../core/store/index';
 import { useTheme } from '../../../core/theme/ThemeContext';
 import UserProfileModal, { formatDisplayName } from '../../../core/components/UserProfileModal';
@@ -61,9 +61,16 @@ export default function ListingDetailScreen({ route, navigation }) {
   const [soldModalVisible, setSoldModalVisible] = useState(false);
   const [status, setStatus] = useState(listing.status || (listing.is_active === false ? 'archived' : 'active'));
   const images = listing.images || [];
-  const isSellable = listing.category === 'buysell' || listing.category === 'food';
+  const isFood = listing.category === 'food';
+  const isSellable = listing.category === 'buysell';
+  const [vendorActive, setVendorActive] = useState(false);
 
   useEffect(() => { if (!poster) loadProfile(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    isUserActive(listing.user_id).then(active => { if (!cancelled) setVendorActive(active); });
+    return () => { cancelled = true; };
+  }, [listing.user_id]);
   useEffect(() => {
     if (!navigation.canGoBack()) {
       navigation.setOptions({
@@ -85,9 +92,11 @@ export default function ListingDetailScreen({ route, navigation }) {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       const conversation = await getOrCreateConversation(user.id, listing.user_id, listing.id, listing.title);
-      navigation.navigate('Tabs', {
-        screen: 'Messages',
-        params: { screen: 'Chat', params: { conversation, otherProfile: poster || { username: 'Community Member' }, listingTitle: listing.title, contextType: 'listing' } },
+      navigation.navigate('Chat', {
+        conversation,
+        otherProfile: poster || { id: listing.user_id, username: 'Community Member' },
+        listingTitle: listing.title,
+        contextType: 'listing',
       });
     } catch (error) {
       Alert.alert('Could not open chat', error?.message || 'Please try again.');
@@ -114,6 +123,24 @@ export default function ListingDetailScreen({ route, navigation }) {
     }
   }
 
+  async function handleToggleStock() {
+    const goingOut = status !== 'out_of_stock';
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await setListingStock(listing.id, goingOut);
+      setStatus(goingOut ? 'out_of_stock' : 'active');
+      Toast.show({
+        type: 'success',
+        text1: goingOut ? 'Marked out of stock' : 'Back in stock!',
+        text2: goingOut
+          ? 'Hidden from the top of search. Auto-removed after 30 days if not restocked.'
+          : 'Your listing is live again for another 60 days.',
+      });
+    } catch (e) {
+      Toast.show({ type: 'error', text1: 'Error', text2: e?.message || 'Could not update stock status.' });
+    }
+  }
+
   async function handleDelete() {
     Alert.alert('Delete Listing', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
@@ -129,11 +156,32 @@ export default function ListingDetailScreen({ route, navigation }) {
     ]);
   }
 
+  function handleReport() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Alert.alert(
+      'Report this listing',
+      'Tell us what\'s wrong with this listing. Our team will review it.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Report', style: 'destructive', onPress: async () => {
+          const subject = encodeURIComponent(`Report listing: ${listing.title} (#${listing.id})`);
+          const body = encodeURIComponent(
+            `I want to report this listing.\n\nListing: ${listing.title}\nCategory: ${listing.category}\nListing ID: ${listing.id}\n\nReason:\n`
+          );
+          const url = `mailto:support@shareandcareapps.com?subject=${subject}&body=${body}`;
+          const ok = await Linking.canOpenURL(url);
+          if (ok) Linking.openURL(url);
+          else Toast.show({ type: 'info', text1: 'Email us to report', text2: 'support@shareandcareapps.com' });
+        }},
+      ],
+    );
+  }
+
   const posterInitials = poster?.username ? poster.username.charAt(0).toUpperCase() : '?';
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
 
         {/* Image carousel / hero */}
         {images.length > 0 ? (
@@ -151,12 +199,6 @@ export default function ListingDetailScreen({ route, navigation }) {
             />
             {/* Gradient overlay */}
             <LinearGradient colors={['transparent','rgba(15,10,30,0.5)']} style={styles.heroGradient} />
-            {/* Back button */}
-            <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.heroBack, { marginTop: insets.top + 8 }]}>
-              <BlurView intensity={40} tint="dark" style={styles.heroBackBlur}>
-                <Ionicons name="chevron-back" size={22} color="#fff" />
-              </BlurView>
-            </TouchableOpacity>
             {/* Expand hint */}
             <TouchableOpacity style={styles.expandHint} onPress={() => { setViewerIndex(activeImage); setViewerVisible(true); }}>
               <BlurView intensity={40} tint="dark" style={styles.expandBlur}>
@@ -179,9 +221,6 @@ export default function ListingDetailScreen({ route, navigation }) {
           </View>
         ) : (
           <LinearGradient colors={catMeta.gradient} style={[styles.heroBanner, { paddingTop: insets.top + 16 }]}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.heroBannerBack}>
-              <Ionicons name="chevron-back" size={22} color="#fff" />
-            </TouchableOpacity>
             <Ionicons name={catMeta.icon} size={52} color="rgba(255,255,255,0.5)" />
             <Text style={styles.heroBannerLabel}>{catMeta.label}</Text>
             {listing.is_boosted && <Text style={styles.heroBoosted}>⭐ Featured Listing</Text>}
@@ -201,19 +240,15 @@ export default function ListingDetailScreen({ route, navigation }) {
             )}
           </View>
 
-          {/* Meta row */}
-          <View style={styles.metaRow}>
-            <View style={styles.metaItem}>
-              <Ionicons name="location-outline" size={14} color={theme.textSecondary} />
-              <Text style={[styles.metaText, { color: theme.textSecondary }]}>{displayLocation}</Text>
+          {/* Active vendor badge */}
+          {vendorActive && (
+            <View style={styles.metaRow}>
+              <View style={styles.activeBadge}>
+                <View style={styles.activeDot} />
+                <Text style={styles.activeText}>Active vendor · recently replying to messages</Text>
+              </View>
             </View>
-            <View style={styles.metaItem}>
-              <Ionicons name="time-outline" size={14} color={theme.textSecondary} />
-              <Text style={[styles.metaText, { color: theme.textSecondary }]}>
-                {new Date(listing.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-              </Text>
-            </View>
-          </View>
+          )}
 
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
@@ -261,9 +296,25 @@ export default function ListingDetailScreen({ route, navigation }) {
             <>
               <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Order Details</Text>
               <View style={styles.chipsGrid}>
+                {meta.business_name ? <DetailChip label="Business" value={meta.business_name} icon="storefront-outline" /> : null}
                 {meta.negotiable !== undefined && <DetailChip label="Price" value={meta.negotiable ? 'Negotiable' : 'Fixed'} icon="cash-outline" />}
                 {meta.pickup !== undefined && <DetailChip label="Pickup" value={meta.pickup ? 'Available' : 'Not available'} icon="bag-outline" />}
                 {meta.delivery !== undefined && <DetailChip label="Delivery" value={meta.delivery ? 'Available' : 'Not available'} icon="bicycle-outline" />}
+              </View>
+              {meta.allergens ? (
+                <View style={[styles.allergenBox, { backgroundColor: '#FF6B6B12', borderColor: '#FF6B6B30' }]}>
+                  <Ionicons name="alert-circle-outline" size={15} color="#FF6B6B" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.allergenLabel, { color: '#FF6B6B' }]}>Allergen & Ingredient Info</Text>
+                    <Text style={[styles.allergenText, { color: theme.textSecondary }]}>{meta.allergens}</Text>
+                  </View>
+                </View>
+              ) : null}
+              <View style={[styles.foodDisclaimer, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <Ionicons name="restaurant-outline" size={15} color="#F4A833" />
+                <Text style={[styles.foodDisclaimerText, { color: theme.textSecondary }]}>
+                  Food is prepared and sold by the poster, not NestApp. We do not inspect, license, or guarantee food safety. Ask about ingredients, allergens, and food handling before ordering, and order at your own discretion.
+                </Text>
               </View>
               <View style={[styles.divider, { backgroundColor: theme.border }]} />
             </>
@@ -312,7 +363,7 @@ export default function ListingDetailScreen({ route, navigation }) {
               <TouchableOpacity onPress={handleMessage} activeOpacity={0.88}>
                 <LinearGradient colors={catMeta.gradient} start={{x:0,y:0}} end={{x:1,y:0}} style={styles.contactBtn}>
                   <Ionicons name="chatbubble-ellipses" size={20} color="#fff" />
-                  <Text style={styles.contactBtnText}>Send Message</Text>
+                  <Text style={styles.contactBtnText}>{listing.category === 'food' ? 'Message to Order' : 'Send Message'}</Text>
                 </LinearGradient>
               </TouchableOpacity>
               <View style={[styles.privacyNote, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -329,13 +380,32 @@ export default function ListingDetailScreen({ route, navigation }) {
               <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Manage Listing</Text>
               {status !== 'active' && (
                 <View style={[styles.statusBanner, { backgroundColor: '#00C48C15', borderColor: '#00C48C' }]}>
-                  <Ionicons name={status === 'sold' ? 'checkmark-circle' : 'archive'} size={16} color="#00C48C" />
+                  <Ionicons name={status === 'sold' ? 'checkmark-circle' : status === 'out_of_stock' ? 'close-circle' : 'archive'} size={16} color="#00C48C" />
                   <Text style={[styles.statusText, { color: '#00C48C' }]}>
-                    {status === 'sold' ? 'This item is marked as sold' : 'This listing is archived'}
+                    {status === 'sold' ? 'This item is marked as sold' : status === 'out_of_stock' ? 'This listing is out of stock' : 'This listing is archived'}
                   </Text>
                 </View>
               )}
-              {status === 'active' ? (
+              {isFood ? (
+                <>
+                  <TouchableOpacity onPress={handleToggleStock} activeOpacity={0.88} style={{ marginBottom: 10 }}>
+                    <LinearGradient colors={status === 'out_of_stock' ? ['#00C48C','#007A5E'] : ['#F4A833','#E68A00']} start={{x:0,y:0}} end={{x:1,y:0}} style={styles.ownerBtn}>
+                      <Ionicons name={status === 'out_of_stock' ? 'refresh' : 'remove-circle-outline'} size={18} color="#fff" />
+                      <Text style={styles.ownerBtnText}>{status === 'out_of_stock' ? 'Back in Stock' : 'Currently Out of Stock'}</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                  <View style={styles.ownerRow}>
+                    <TouchableOpacity onPress={() => navigation.navigate('EditListing', { listing })} style={[styles.ownerSecBtn, { backgroundColor: '#0099FF15', borderColor: '#0099FF' }]}>
+                      <Ionicons name="create-outline" size={16} color="#0099FF" />
+                      <Text style={[styles.ownerSecBtnText, { color: '#0099FF' }]}>Edit</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={handleDelete} style={[styles.ownerSecBtn, { backgroundColor: '#FF6B6B15', borderColor: '#FF6B6B' }]}>
+                      <Ionicons name="trash-outline" size={16} color="#FF6B6B" />
+                      <Text style={[styles.ownerSecBtnText, { color: '#FF6B6B' }]}>Delete</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : status === 'active' ? (
                 <>
                   {isSellable && (
                     <TouchableOpacity onPress={() => setSoldModalVisible(true)} activeOpacity={0.88} style={{ marginBottom: 10 }}>
@@ -383,21 +453,16 @@ export default function ListingDetailScreen({ route, navigation }) {
               Safety tip: Always meet in public. Never send money before seeing the item in person.
             </Text>
           </View>
+
+          {/* Report (non-owner) */}
+          {!isOwner && (
+            <TouchableOpacity onPress={handleReport} style={styles.reportBtn} activeOpacity={0.7}>
+              <Ionicons name="flag-outline" size={14} color={theme.textLight} />
+              <Text style={[styles.reportText, { color: theme.textLight }]}>Report this listing</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
-
-      {/* Floating CTA for non-owners */}
-      {!isOwner && (
-        <View style={[styles.floatingCTA, { paddingBottom: insets.bottom + 10 }]}>
-          <BlurView intensity={60} tint="dark" style={StyleSheet.absoluteFill} />
-          <TouchableOpacity onPress={handleMessage} style={styles.floatingInner} activeOpacity={0.88}>
-            <LinearGradient colors={catMeta.gradient} start={{x:0,y:0}} end={{x:1,y:0}} style={styles.floatingBtn}>
-              <Ionicons name="chatbubble-ellipses" size={20} color="#fff" />
-              <Text style={styles.floatingBtnText}>Message Seller</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-      )}
 
       {/* Fullscreen viewer */}
       <Modal visible={viewerVisible} transparent animationType="fade" onRequestClose={() => setViewerVisible(false)}>
@@ -457,6 +522,9 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', gap: 16, marginBottom: 12, flexWrap: 'wrap' },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   metaText: { fontSize: fonts.sizes.sm },
+  activeBadge: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: '#00C48C18', borderRadius: borderRadius.full, paddingHorizontal: 12, paddingVertical: 6 },
+  activeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#00C48C' },
+  activeText: { fontSize: 12, fontWeight: '700', color: '#00C48C' },
   divider: { height: 1, marginVertical: 16, opacity: 0.5 },
   sectionTitle: { fontSize: fonts.sizes.md, fontWeight: '800', marginBottom: 12 },
   chipsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 8 },
@@ -487,6 +555,14 @@ const styles = StyleSheet.create({
 
   safetyBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderRadius: borderRadius.md, padding: 12, marginTop: 8, borderWidth: 1 },
   safetyText: { flex: 1, fontSize: 11, lineHeight: 17 },
+
+  allergenBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderRadius: borderRadius.md, padding: 12, marginTop: 12, borderWidth: 1 },
+  allergenLabel: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 3 },
+  allergenText: { fontSize: fonts.sizes.sm, lineHeight: 20 },
+  foodDisclaimer: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderRadius: borderRadius.md, padding: 12, marginTop: 10, borderWidth: 1 },
+  foodDisclaimerText: { flex: 1, fontSize: 11, lineHeight: 17 },
+  reportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, marginTop: 4 },
+  reportText: { fontSize: 12, fontWeight: '600' },
 
   floatingCTA: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: spacing.md, paddingTop: 12, overflow: 'hidden' },
   floatingInner: {},

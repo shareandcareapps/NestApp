@@ -9,7 +9,8 @@ export async function getListings(category = null) {
   let query = supabase
     .from('listings')
     .select('*')
-    .eq('status', 'active')
+    .in('status', ['active', 'out_of_stock'])
+    .order('status', { ascending: true })   // 'active' sorts before 'out_of_stock' → in-stock first
     .order('is_boosted', { ascending: false })
     .order('created_at', { ascending: false });
 
@@ -134,13 +135,37 @@ export async function renewListing(id) {
   return data;
 }
 
+// ─── Stock toggle (food listings) ──────────────
+// Out of stock: hide from active browse (sinks to bottom), mark inactive, and
+// stamp deleted_at so the existing 30-day hard-delete cron removes it if never
+// restocked. Back in stock: clear deleted_at and renew for another 60 days.
+export async function setListingStock(id, outOfStock) {
+  let patch;
+  if (outOfStock) {
+    patch = { status: 'out_of_stock', is_active: false, deleted_at: new Date().toISOString() };
+  } else {
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 60);
+    patch = { status: 'active', is_active: true, deleted_at: null, expires_at: expiresAt.toISOString() };
+  }
+  const { data, error } = await supabase
+    .from('listings')
+    .update(patch)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 // ─── Search listings ───────────────────────────
 export async function searchListings(query, category = null) {
   let dbQuery = supabase
     .from('listings')
     .select('*')
-    .eq('status', 'active')
+    .in('status', ['active', 'out_of_stock'])
     .or(`title.ilike.%${query}%,description.ilike.%${query}%`)
+    .order('status', { ascending: true })
     .order('is_boosted', { ascending: false })
     .order('created_at', { ascending: false });
 

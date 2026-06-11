@@ -31,12 +31,12 @@ export default function RidesNavigator() {
       <Stack.Screen
         name="RideDetail"
         component={RideDetailScreen}
-        options={{ title: 'Carpool Details' }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="EditRide"
         component={EditRideScreen}
-        options={{ title: 'Edit Carpool' }}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );

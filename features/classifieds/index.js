@@ -6,6 +6,7 @@ import BrowseListingsScreen from './screens/BrowseListingsScreen';
 import PostListingScreen from './screens/PostListingScreen';
 import ListingDetailScreen from './screens/ListingDetailScreen';
 import EditListingScreen from './screens/EditListingScreen';
+import ChatScreen from '../messages/screens/ChatScreen';
 
 const Stack = createStackNavigator();
 
@@ -36,7 +37,12 @@ export default function ClassifiedsNavigator() {
       <Stack.Screen
         name="EditListing"
         component={EditListingScreen}
-        options={{ title: 'Edit Listing' }}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="Chat"
+        component={ChatScreen}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );

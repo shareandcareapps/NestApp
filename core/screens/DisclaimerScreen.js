@@ -12,8 +12,12 @@ const SECTIONS = [
     body: 'We are not responsible for the accuracy, completeness, or legality of any listing posted on NestApp. Any transaction, agreement, or exchange between users is solely between those parties. NestApp is not a party to any such transaction and accepts no liability for disputes, losses, or damages arising from them.',
   },
   {
+    title: 'Food & Catering',
+    body: 'Food, tiffin, and catering listings are advertisements posted by independent users and businesses. NestApp does not cook, prepare, inspect, license, deliver, or sell food, and does not verify that any poster holds the permits or licenses required by law. Each poster is solely responsible for food safety, licensing, and allergen disclosure. Anyone obtaining food does so at their own risk and should confirm ingredients and allergens directly with the poster. We accept no liability for any illness, allergic reaction, or loss arising from food advertised on NestApp.',
+  },
+  {
     title: 'Carpool & Rides',
-    body: 'The carpool feature is provided as a convenience tool only. We do not verify driving licences, vehicle conditions, or insurance. Users participate in carpooling entirely at their own risk. Always exercise caution and good judgement when sharing rides with others.',
+    body: 'The carpool feature is a community cost-sharing tool only — it is not a taxi or rideshare service, and is not intended for for-hire or profit-making driving. We do not verify driving licences, vehicle conditions, or insurance. Drivers are responsible for holding a valid licence and suitable insurance, and a personal policy may not cover for-hire driving. Users participate in carpooling entirely at their own risk. Always exercise caution and good judgement when sharing rides with others.',
   },
   {
     title: 'User-Generated Content',
@@ -37,7 +41,7 @@ export default function DisclaimerScreen() {
   const colors = useTheme();
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={styles.container}>
-      <Text style={[styles.lastUpdated, { color: colors.textLight }]}>Last updated: June 2025</Text>
+      <Text style={[styles.lastUpdated, { color: colors.textLight }]}>Last updated: June 2026</Text>
       <Text style={[styles.intro, { color: colors.textSecondary }]}>
         Please read this disclaimer carefully before using NestApp.
       </Text>

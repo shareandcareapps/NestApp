@@ -128,6 +128,28 @@ const pS = StyleSheet.create({
   addTxt: { fontSize: 10, fontWeight: '600' },
 });
 
+function AttestRow({ checked, onToggle, color = '#F4A833', theme, children }) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onToggle(!checked); }}
+      style={[aS.row, { backgroundColor: checked ? color + '12' : theme.card, borderColor: checked ? color : theme.border }]}
+    >
+      <View style={[aS.box, { backgroundColor: checked ? color : 'transparent', borderColor: checked ? color : theme.border }]}>
+        {checked && <Ionicons name="checkmark" size={14} color="#fff" />}
+      </View>
+      <Text style={[aS.txt, { color: theme.textSecondary }]}>{children}</Text>
+    </TouchableOpacity>
+  );
+}
+const aS = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: borderRadius.md, padding: 12, borderWidth: 1.5, marginTop: 12 },
+  box: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  txt: { flex: 1, fontSize: 12, lineHeight: 18 },
+  notice: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderRadius: borderRadius.md, padding: 12, marginTop: 14, borderWidth: 1 },
+  noticeTxt: { flex: 1, fontSize: 11, lineHeight: 17 },
+});
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function EditListingScreen({ route, navigation }) {
   const { listing } = route.params;
@@ -183,6 +205,9 @@ export default function EditListingScreen({ route, navigation }) {
   const [foodNegotiable, setFoodNegotiable] = useState(meta.negotiable || false);
   const [foodPickup, setFoodPickup] = useState(meta.pickup || false);
   const [foodDelivery, setFoodDelivery] = useState(meta.delivery || false);
+  const [foodBusinessName, setFoodBusinessName] = useState(meta.business_name || '');
+  const [foodAllergens, setFoodAllergens] = useState(meta.allergens || '');
+  const [foodAttested, setFoodAttested] = useState(!!meta.attested);
 
   async function pickImage() {
     if (images.length >= 4) { Toast.show({ type: 'warning', text1: 'Max 4 photos' }); return; }
@@ -230,7 +255,7 @@ export default function EditListingScreen({ route, navigation }) {
     if (category === 'accommodation') return { title: acTitle, description: acDescription, price: acPrice ? parseFloat(acPrice) : null, images, metadata: { location: acLocation } };
     if (category === 'jobs') return { title: jobRole, description: jobDescription, price: jobSalaryOpen ? null : jobSalary ? parseFloat(jobSalary) : null, images, metadata: { company: jobCompany, salary_open: jobSalaryOpen, job_type: jobType, hours_per_week: jobHours, location: jobLocation, joining: jobJoining } };
     if (category === 'buysell') return { title: bsProductName, description: bsDescription, price: bsPrice ? parseFloat(bsPrice) : null, images, metadata: { negotiable: bsNegotiable, product_category: bsProductCategory, condition: bsCondition, pickup_location: bsPickupLocation } };
-    if (category === 'food') return { title: foodTitle, description: foodDescription, price: foodPrice ? parseFloat(foodPrice) : null, images, metadata: { negotiable: foodNegotiable, pickup: foodPickup, delivery: foodDelivery } };
+    if (category === 'food') return { title: foodTitle, description: foodDescription, price: foodPrice ? parseFloat(foodPrice) : null, images, metadata: { negotiable: foodNegotiable, pickup: foodPickup, delivery: foodDelivery, business_name: foodBusinessName.trim() || null, allergens: foodAllergens.trim() || null, attested: true, attested_at: meta.attested_at || new Date().toISOString() } };
   }
 
   function validate() {
@@ -238,6 +263,7 @@ export default function EditListingScreen({ route, navigation }) {
     if (category === 'jobs' && (!jobRole || !jobCompany)) { Toast.show({ type: 'warning', text1: 'Add job role and company' }); return false; }
     if (category === 'buysell' && !bsProductName) { Toast.show({ type: 'warning', text1: 'Add product name' }); return false; }
     if (category === 'food' && !foodTitle) { Toast.show({ type: 'warning', text1: 'Add a title' }); return false; }
+    if (category === 'food' && !foodAttested) { Toast.show({ type: 'warning', text1: 'Confirmation required', text2: 'Please confirm the food responsibility agreement to save.' }); return false; }
     return true;
   }
 
@@ -377,8 +403,22 @@ export default function EditListingScreen({ route, navigation }) {
                 </TouchableOpacity>
               ))}
             </View>
+            <FormLabel theme={theme} optional>Business / Kitchen Name</FormLabel>
+            <FormInput theme={theme} value={foodBusinessName} onChangeText={setFoodBusinessName} placeholder="e.g. Sharma's Home Kitchen (if registered)" />
+            <FormLabel theme={theme}>Allergen & Ingredient Info</FormLabel>
+            <FormInput theme={theme} value={foodAllergens} onChangeText={setFoodAllergens} placeholder="e.g. Contains dairy, nuts, gluten." multiline />
             <FormLabel theme={theme} optional>Photos (up to 4)</FormLabel>
             <PhotosSection images={images} uploading={uploading} uploadProgress={uploadProgress} onAdd={pickImage} onRemove={removeImage} accentColor={accentColor} theme={theme} />
+
+            <View style={[aS.notice, { backgroundColor: '#F4A83312', borderColor: '#F4A83330' }]}>
+              <Ionicons name="restaurant-outline" size={15} color="#F4A833" />
+              <Text style={[aS.noticeTxt, { color: theme.textSecondary }]}>
+                NestApp is an advertising platform only — it does not sell, prepare, inspect, or deliver food. You are responsible for your own licenses, permits, food safety, and allergen disclosure under applicable local, state, and federal law.
+              </Text>
+            </View>
+            <AttestRow checked={foodAttested} onToggle={setFoodAttested} color={accentColor} theme={theme}>
+              I confirm that I am solely responsible for complying with all food-safety laws, licenses, and permits that apply to me, and for accurately disclosing ingredients and allergens. I agree that NestApp and Share & Care Labs are not responsible for my food.
+            </AttestRow>
           </View>
         )}
 

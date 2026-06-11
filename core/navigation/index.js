@@ -35,6 +35,7 @@ import EditListingScreen from '../../features/classifieds/screens/EditListingScr
 import BrowseListingsScreen from '../../features/classifieds/screens/BrowseListingsScreen';
 import PostListingScreen from '../../features/classifieds/screens/PostListingScreen';
 import PostRideScreen from '../../features/rides/screens/PostRideScreen';
+import ChatScreen from '../../features/messages/screens/ChatScreen';
 import ClassifiedsNavigator from '../../features/classifieds/index';
 import RidesNavigator from '../../features/rides/index';
 // import NewsNavigator from '../../features/news/index'; // News temporarily removed
@@ -176,18 +177,19 @@ function MainApp() {
         component={MainTabs}
         options={{ headerShown: false }}
       />
-      <Stack.Screen name="Settings" component={SettingsScreen} options={{ ...sharedScreenOptions, title: 'Profile & Settings' }} />
-      <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ ...sharedScreenOptions, title: 'Edit Profile' }} />
+      <Stack.Screen name="Settings" component={SettingsScreen} options={{ ...sharedScreenOptions, headerShown: false }} />
+      <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ ...sharedScreenOptions, headerShown: false }} />
       <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ ...sharedScreenOptions, title: 'Privacy Policy' }} />
       <Stack.Screen name="Terms" component={TermsScreen} options={{ ...sharedScreenOptions, title: 'Terms & Conditions' }} />
       <Stack.Screen name="Disclaimer" component={DisclaimerScreen} options={{ ...sharedScreenOptions, title: 'Disclaimer' }} />
-      <Stack.Screen name="MyListings" component={MyListingsScreen} options={{ ...sharedScreenOptions, title: 'My Listings' }} />
-      <Stack.Screen name="MyRides" component={MyRidesScreen} options={{ ...sharedScreenOptions, title: 'My Carpools' }} />
+      <Stack.Screen name="MyListings" component={MyListingsScreen} options={{ ...sharedScreenOptions, headerShown: false }} />
+      <Stack.Screen name="MyRides" component={MyRidesScreen} options={{ ...sharedScreenOptions, headerShown: false }} />
       <Stack.Screen name="ListingDetail" component={ListingDetailScreen} options={{ ...sharedScreenOptions, title: 'Listing Details' }} />
-      <Stack.Screen name="EditListing" component={EditListingScreen} options={{ ...sharedScreenOptions, title: 'Edit Listing' }} />
+      <Stack.Screen name="EditListing" component={EditListingScreen} options={{ ...sharedScreenOptions, headerShown: false }} />
       <Stack.Screen name="PostListing" component={PostListingScreen} options={{ ...sharedScreenOptions, headerShown: false }} />
       <Stack.Screen name="PostRide" component={PostRideScreen} options={{ ...sharedScreenOptions, headerShown: false }} />
-      <Stack.Screen name="BrowseListingsByCategory" component={BrowseListingsScreen} options={{ ...sharedScreenOptions, title: 'Browse Listings' }} />
+      <Stack.Screen name="Chat" component={ChatScreen} options={{ ...sharedScreenOptions, headerShown: false }} />
+      <Stack.Screen name="BrowseListingsByCategory" component={BrowseListingsScreen} options={{ ...sharedScreenOptions, headerShown: false }} />
     </Stack.Navigator>
   );
 }

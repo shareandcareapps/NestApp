@@ -294,8 +294,16 @@ export default function PostRideScreen({ navigation }) {
           </View>
           <View style={[styles.communityBanner, { backgroundColor: theme.inputBackground }]}>
             <Ionicons name="shield-checkmark-outline" size={13} color="#0099FF" />
-            <Text style={[styles.communityTxt, { color: theme.textSecondary }]}>Cost is discussed privately in chat — community carpool only</Text>
+            <Text style={[styles.communityTxt, { color: theme.textSecondary }]}>Cost is discussed privately in chat — community carpool only, not a taxi or rideshare service</Text>
           </View>
+          {postType === 'offer' && (
+            <View style={[styles.communityBanner, { backgroundColor: theme.inputBackground, marginTop: 8 }]}>
+              <Ionicons name="car-outline" size={13} color="#F4A833" />
+              <Text style={[styles.communityTxt, { color: theme.textSecondary }]}>
+                As a driver, make sure you hold a valid license and personal auto insurance. Carpooling is shared at your own risk — for-hire driving may not be covered by a personal policy.
+              </Text>
+            </View>
+          )}
         </Section>
 
         {/* ── Ride Category ── */}

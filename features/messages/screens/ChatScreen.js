@@ -190,11 +190,17 @@ function ContextBanner({
       </View>
     );
   }
-  const tint = '#FF6B6B';
   return (
-    <View style={[s.ctxBanner, { backgroundColor: tint + '12', borderBottomColor: tint + '28' }]}>
-      <View style={[s.ctxIconWrap, { backgroundColor: tint + '22' }]}><Ionicons name="pricetag-outline" size={13} color={tint} /></View>
-      <Text style={[s.ctxText, { color: tint }]} numberOfLines={1}>{title}</Text>
+    <View style={s.ctxCardWrap}>
+      <LinearGradient colors={[BRAND + '14', BRAND + '06']} start={{x:0,y:0}} end={{x:1,y:0}} style={[s.ctxCard, { borderColor: BRAND + '2E' }]}>
+        <LinearGradient colors={BRAND_GRAD} start={{x:0,y:0}} end={{x:1,y:1}} style={s.ctxCardIcon}>
+          <Ionicons name="pricetag" size={15} color="#fff" />
+        </LinearGradient>
+        <View style={{ flex: 1 }}>
+          <Text style={[s.ctxCardLabel, { color: BRAND }]}>LISTING</Text>
+          <Text style={[s.ctxCardTitle, { color: colors.textPrimary }]} numberOfLines={1}>{title}</Text>
+        </View>
+      </LinearGradient>
     </View>
   );
 }
@@ -806,6 +812,11 @@ const s = StyleSheet.create({
   ctxBanner:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, gap: 8, borderBottomWidth: 1 },
   ctxIconWrap:{ width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   ctxText:    { fontSize: 12.5, fontWeight: '600', flex: 1 },
+  ctxCardWrap:{ paddingHorizontal: 12, paddingTop: 10, paddingBottom: 2 },
+  ctxCard:    { flexDirection: 'row', alignItems: 'center', gap: 11, borderRadius: 14, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10 },
+  ctxCardIcon:{ width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  ctxCardLabel:{ fontSize: 9.5, fontWeight: '800', letterSpacing: 1.2, marginBottom: 2 },
+  ctxCardTitle:{ fontSize: 14.5, fontWeight: '700', letterSpacing: -0.2 },
   rideCard:   { marginHorizontal: 12, marginTop: 10, marginBottom: 4, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
   rideRouteRow:{ flexDirection: 'row', alignItems: 'center' },
   rideDot:    { width: 7, height: 7, borderRadius: 4, marginRight: 6 },
@@ -830,7 +841,7 @@ const s = StyleSheet.create({
   emptyAv:    { width: 74, height: 74, borderRadius: 37, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
   emptyAvTxt: { color: '#fff', fontSize: 30, fontWeight: '700' },
   emptyName:  { fontSize: 18, fontWeight: '700', marginBottom: 6 },
-  emptyCtxTag:{ flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 8 },
+  emptyCtxTag:{ flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7, marginBottom: 8, borderWidth: 1, borderColor: '#9B59B630' },
   emptyCtxTxt:{ fontSize: 12, fontWeight: '600', maxWidth: 200 },
   emptySub:   { fontSize: 14, textAlign: 'center', lineHeight: 20 },
 
