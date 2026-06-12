@@ -21,11 +21,12 @@ const CARD_W = (width - spacing.md * 2 - 10) / 2;
 
 // ─── Category config ──────────────────────────────────────────────────────────
 const CATEGORIES = [
-  { id: null,            label: 'All',       icon: 'apps',          gradient: ['#F4A833','#FF6B6B'] },
-  { id: 'accommodation', label: 'Housing',   icon: 'business',      gradient: ['#FF6B6B','#E84393'] },
-  { id: 'jobs',          label: 'Jobs',      icon: 'briefcase',     gradient: ['#00C48C','#007A5E'] },
-  { id: 'buysell',       label: 'Buy & Sell',icon: 'bag',           gradient: ['#0099FF','#0055CC'] },
-  { id: 'food',          label: 'Food',      icon: 'restaurant',    gradient: ['#F4A833','#E68A00'] },
+  { id: null,            label: 'All',       icon: 'apps',              gradient: ['#F4A833','#FF6B6B'] },
+  { id: 'accommodation', label: 'Housing',   icon: 'business',          gradient: ['#FF6B6B','#E84393'] },
+  { id: 'jobs',          label: 'Jobs',      icon: 'briefcase',         gradient: ['#00C48C','#007A5E'] },
+  { id: 'buysell',       label: 'Buy & Sell',icon: 'bag',               gradient: ['#0099FF','#0055CC'] },
+  { id: 'food',          label: 'Food',      icon: 'restaurant',        gradient: ['#F4A833','#E68A00'] },
+  { id: 'events',        label: 'Events',    icon: 'calendar',          gradient: ['#9B59B6','#6C3483'] },
 ];
 
 const CAT_META = {
@@ -33,6 +34,7 @@ const CAT_META = {
   jobs:          { gradient: ['#00C48C','#007A5E'], icon: 'briefcase' },
   buysell:       { gradient: ['#0099FF','#0055CC'], icon: 'bag' },
   food:          { gradient: ['#F4A833','#E68A00'], icon: 'restaurant' },
+  events:        { gradient: ['#9B59B6','#6C3483'], icon: 'calendar' },
 };
 
 // ─── Card components ──────────────────────────────────────────────────────────

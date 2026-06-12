@@ -23,6 +23,8 @@ import LoginScreen from '../auth/screens/LoginScreen';
 import SignupScreen from '../auth/screens/SignupScreen';
 import ForgotPasswordScreen from '../auth/screens/ForgotPasswordScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import AdminPanelScreen from '../screens/AdminPanelScreen';
+import FeedbackScreen from '../screens/FeedbackScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
 import TermsScreen from '../screens/TermsScreen';
@@ -38,14 +40,14 @@ import PostRideScreen from '../../features/rides/screens/PostRideScreen';
 import ChatScreen from '../../features/messages/screens/ChatScreen';
 import ClassifiedsNavigator from '../../features/classifieds/index';
 import RidesNavigator from '../../features/rides/index';
-// import NewsNavigator from '../../features/news/index'; // News temporarily removed
+import NewsNavigator from '../../features/news/index';
 import MessagesNavigator from '../../features/messages/index';
 import OnboardingScreen from '../screens/OnboardingScreen';
 
 const FadedHomeScreen = withFadeOnFocus(HomeScreen);
 const FadedClassifiedsNavigator = withFadeOnFocus(ClassifiedsNavigator);
 const FadedRidesNavigator = withFadeOnFocus(RidesNavigator);
-// const FadedNewsNavigator = withFadeOnFocus(NewsNavigator); // News temporarily removed
+const FadedNewsNavigator = withFadeOnFocus(NewsNavigator);
 const FadedMessagesNavigator = withFadeOnFocus(MessagesNavigator);
 
 const Tab = createBottomTabNavigator();
@@ -144,9 +146,14 @@ function MainTabs({ navigation }) {
           },
         })}
       />
-      {/* News tab temporarily removed */}
-      {/* <Tab.Screen name="News" component={FadedNewsNavigator} options={{ headerShown: false }}
-        listeners={({ navigation }) => ({ tabPress: (e) => { e.preventDefault(); navigation.navigate('News', { screen: 'NewsFeed' }); }, })} /> */}
+      <Tab.Screen
+        name="News"
+        component={FadedNewsNavigator}
+        options={{ headerShown: false }}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => { e.preventDefault(); navigation.navigate('News', { screen: 'NewsFeed' }); },
+        })}
+      />
       <Tab.Screen
         name="Messages"
         component={FadedMessagesNavigator}
@@ -178,6 +185,8 @@ function MainApp() {
         options={{ headerShown: false }}
       />
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ ...sharedScreenOptions, headerShown: false }} />
+      <Stack.Screen name="AdminPanel" component={AdminPanelScreen} options={{ ...sharedScreenOptions, headerShown: false }} />
+      <Stack.Screen name="Feedback" component={FeedbackScreen} options={{ ...sharedScreenOptions, headerShown: false }} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ ...sharedScreenOptions, headerShown: false }} />
       <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ ...sharedScreenOptions, title: 'Privacy Policy' }} />
       <Stack.Screen name="Terms" component={TermsScreen} options={{ ...sharedScreenOptions, title: 'Terms & Conditions' }} />
@@ -200,6 +209,8 @@ function AuthStack() {
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Signup" component={SignupScreen} />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+      <Stack.Screen name="Terms" component={TermsScreen} options={{ headerShown: true, title: 'Terms & Conditions' }} />
+      <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ headerShown: true, title: 'Privacy Policy' }} />
     </Stack.Navigator>
   );
 }

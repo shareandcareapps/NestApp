@@ -40,11 +40,15 @@ const SECTIONS = [
     body: 'NestApp is provided "as is" without warranties of any kind. We do not guarantee uninterrupted or error-free service. We are not liable for any damages resulting from your use of the app.',
   },
   {
-    title: '10. Changes to Terms',
+    title: '10. Copyright & DMCA',
+    body: 'NestApp respects intellectual property rights. If you believe content on our platform infringes your copyright, please send a written notice to support@shareandcareapps.com with: (a) identification of the copyrighted work; (b) identification of the infringing material and its location in the app; (c) your contact information; (d) a statement of good-faith belief that the use is not authorised; and (e) a statement, under penalty of perjury, that the information is accurate and you are the copyright owner or authorised to act on their behalf. We will respond to valid notices promptly and remove infringing content in accordance with the Digital Millennium Copyright Act (DMCA). Repeat infringers will have their accounts terminated.',
+  },
+  {
+    title: '11. Changes to Terms',
     body: 'We may update these Terms at any time. Continued use of NestApp after changes constitutes acceptance. We will notify users of significant changes via in-app notice.',
   },
   {
-    title: '11. Contact',
+    title: '12. Contact',
     body: 'For questions about these Terms, contact us at:\n\nShare & Care Labs\nEmail: support@shareandcareapps.com',
   },
 ];

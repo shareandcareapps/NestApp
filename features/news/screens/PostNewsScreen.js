@@ -96,7 +96,7 @@ export default function PostNewsScreen({ navigation }) {
     setLoading(true);
     try {
       const imageUrl = await uploadCoverImage();
-      await createNews({ admin_id: user.id, title: title.trim(), body: body.trim(), category, image_url: imageUrl, tags: selectedTags, draft });
+      await createNews({ admin_id: user.id, title: title.trim(), body: body.trim(), category, image_url: imageUrl, tags: selectedTags, draft }, user.id);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Toast.show({ type: 'success', text1: draft ? 'Saved as draft 📝' : 'Published! 🎉', text2: draft ? 'You can edit and publish it later.' : 'Your news article is now live.' });
       navigation.goBack();

@@ -1,5 +1,5 @@
 // features/news/screens/NewsDetailScreen.js
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Image, TextInput, KeyboardAvoidingView, Platform, Animated,
@@ -11,6 +11,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../../core/theme/ThemeContext';
 import { fonts, spacing, borderRadius, shadows } from '../../../core/theme/index';
+import { supabase } from '../../../core/database/index';
+import useAppStore from '../../../core/store/index';
 
 const CAT_META = {
   india:    { emoji: '🇮🇳', gradient: ['#FF9933','#138808'], label: 'India News' },
@@ -88,13 +90,21 @@ const cmtS = StyleSheet.create({
 
 export default function NewsDetailScreen({ route, navigation }) {
   const { article } = route.params;
-  const theme  = useTheme();
-  const insets = useSafeAreaInsets();
-  const meta   = CAT_META[article.category] || { emoji: '📰', gradient: ['#2D1B69','#4A2D9C'], label: 'News' };
+  const theme   = useTheme();
+  const insets  = useSafeAreaInsets();
+  const user    = useAppStore(s => s.user);
+  const meta    = CAT_META[article.category] || { emoji: '📰', gradient: ['#2D1B69','#4A2D9C'], label: 'News' };
   const timeStr = new Date(article.created_at).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-  const [following, setFollowing] = useState(false);
-  const [commentText, setCommentText] = useState('');
-  const [comments, setComments] = useState(MOCK_COMMENTS);
+  const [following,    setFollowing]    = useState(false);
+  const [commentText,  setCommentText]  = useState('');
+  const [comments,     setComments]     = useState(MOCK_COMMENTS);
+  const [isAdmin,      setIsAdmin]      = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+      .then(({ data }) => setIsAdmin(data?.role === 'admin'));
+  }, [user?.id]);
 
   function handleFollow() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -120,22 +130,40 @@ export default function NewsDetailScreen({ route, navigation }) {
             <View style={[styles.hero, { paddingTop: insets.top + 10 }]}>
               <Image source={{ uri: article.image_url }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
               <LinearGradient colors={['rgba(0,0,0,0.1)','rgba(0,0,0,0.6)']} style={StyleSheet.absoluteFillObject} />
-              <BlurView intensity={20} tint="dark" style={styles.backBtn}>
-                <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('NewsFeed')}>
-                  <Ionicons name="chevron-back" size={22} color="#fff" />
-                </TouchableOpacity>
-              </BlurView>
+              <View style={styles.heroTopRow}>
+                <BlurView intensity={20} tint="dark" style={styles.backBtn}>
+                  <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('NewsFeed')}>
+                    <Ionicons name="chevron-back" size={22} color="#fff" />
+                  </TouchableOpacity>
+                </BlurView>
+                {isAdmin && (
+                  <BlurView intensity={20} tint="dark" style={styles.backBtn}>
+                    <TouchableOpacity onPress={() => navigation.navigate('AdminEditNews', { article })}>
+                      <Ionicons name="create-outline" size={20} color="#F4A833" />
+                    </TouchableOpacity>
+                  </BlurView>
+                )}
+              </View>
               <View style={styles.heroCategoryBadge}>
                 <Text style={styles.heroCategoryTxt}>{meta.label.toUpperCase()}</Text>
               </View>
             </View>
           ) : (
             <LinearGradient colors={meta.gradient} style={[styles.hero, { paddingTop: insets.top + 10 }]} start={{x:0,y:0}} end={{x:1,y:1}}>
-              <BlurView intensity={20} tint="dark" style={styles.backBtn}>
-                <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('NewsFeed')}>
-                  <Ionicons name="chevron-back" size={22} color="#fff" />
-                </TouchableOpacity>
-              </BlurView>
+              <View style={styles.heroTopRow}>
+                <BlurView intensity={20} tint="dark" style={styles.backBtn}>
+                  <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('NewsFeed')}>
+                    <Ionicons name="chevron-back" size={22} color="#fff" />
+                  </TouchableOpacity>
+                </BlurView>
+                {isAdmin && (
+                  <BlurView intensity={20} tint="dark" style={styles.backBtn}>
+                    <TouchableOpacity onPress={() => navigation.navigate('AdminEditNews', { article })}>
+                      <Ionicons name="create-outline" size={20} color="#F4A833" />
+                    </TouchableOpacity>
+                  </BlurView>
+                )}
+              </View>
               <Text style={styles.heroEmoji}>{meta.emoji}</Text>
               <View style={styles.heroCategoryBadge}>
                 <Text style={styles.heroCategoryTxt}>{meta.label.toUpperCase()}</Text>
@@ -225,6 +253,7 @@ export default function NewsDetailScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   hero: { height: 220, paddingHorizontal: spacing.md, justifyContent: 'space-between', paddingBottom: 20 },
+  heroTopRow: { flexDirection: 'row', justifyContent: 'space-between' },
   backBtn: { width: 40, height: 40, borderRadius: 20, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   heroEmoji: { fontSize: 64, textAlign: 'center', marginTop: -10 },
   heroCategoryBadge: { alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: borderRadius.full, paddingHorizontal: 14, paddingVertical: 6 },

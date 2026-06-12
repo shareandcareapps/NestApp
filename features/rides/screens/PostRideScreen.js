@@ -1,5 +1,5 @@
 // features/rides/screens/PostRideScreen.js
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, ActivityIndicator, Keyboard, Image, Animated,
@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import Toast from 'react-native-toast-message';
 import AppModal from '../../../core/components/AppModal';
+import AgeGateModal from '../../../core/components/AgeGateModal';
 import { createRide } from '../services/ridesService';
 import useAppStore from '../../../core/store/index';
 import { awardPoints } from '../../../core/services/pointsService';
@@ -17,6 +18,7 @@ import { DatePicker, TimePicker } from '../../../core/components/DateTimePicker'
 import { useTheme } from '../../../core/theme/ThemeContext';
 import { encodeLongRideNotes, LUGGAGE_OPTIONS, PASSENGER_BAGS_OPTIONS } from '../utils/longRideUtils';
 import { fonts, spacing, borderRadius, shadows } from '../../../core/theme/index';
+import { supabase } from '../../../core/database/index';
 
 const OFFER_COLOR    = '#00C48C';
 const REQUEST_COLOR  = '#9B59B6';
@@ -141,6 +143,10 @@ export default function PostRideScreen({ navigation }) {
   const [lrIsRoundTrip,       setLrIsRoundTrip]       = useState(false);
   const [lrReturnDate,        setLrReturnDate]        = useState(null);
   const [anyTime,             setAnyTime]             = useState(false);
+  const [driverAttested,      setDriverAttested]      = useState(false);
+  const [showAgeGate,         setShowAgeGate]         = useState(false);
+  const [ageGateLoading,      setAgeGateLoading]      = useState(false);
+  const [ageAttested,         setAgeAttested]         = useState(false);
 
   const user      = useAppStore((state) => state.user);
   const theme     = useTheme();
@@ -148,6 +154,27 @@ export default function PostRideScreen({ navigation }) {
   const btnScale  = useRef(new Animated.Value(1)).current;
   const isLongRide = category === 'longride';
   const accent     = postType === 'request' ? REQUEST_COLOR : (isLongRide ? LONGRIDE_COLOR : OFFER_COLOR);
+
+  // Check age attestation once on mount
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase.from('profiles').select('rides_age_attested').eq('id', user.id).maybeSingle()
+      .then(({ data }) => {
+        if (data?.rides_age_attested) {
+          setAgeAttested(true);
+        } else {
+          setShowAgeGate(true);
+        }
+      });
+  }, [user?.id]);
+
+  async function handleAgeConfirmed() {
+    setAgeGateLoading(true);
+    await supabase.from('profiles').update({ rides_age_attested: true }).eq('id', user.id);
+    setAgeAttested(true);
+    setShowAgeGate(false);
+    setAgeGateLoading(false);
+  }
 
   function warn(emoji, title, subtitle) {
     setModal({ visible: true, type: 'warn', emoji, title, subtitle, primaryLabel: 'Got it', onPrimary: () => setModal({ visible: false }) });
@@ -239,7 +266,7 @@ export default function PostRideScreen({ navigation }) {
   const showRoute = !!category && (category !== 'university' || universityDirection) && (category !== 'airport' || airportDirection);
   const fromPrefilled = (category === 'university' && universityDirection === 'from') || (category === 'airport' && airportDirection === 'from');
   const toPrefilled   = (category === 'university' && universityDirection === 'to')   || (category === 'airport' && airportDirection === 'to');
-  const canSubmit = !loading && !!postType && !!category && directionResolved && (isLongRide ? postType === 'request' || !!lrLuggage : true);
+  const canSubmit = !loading && !!postType && !!category && directionResolved && (isLongRide ? postType === 'request' || !!lrLuggage : true) && (postType === 'offer' ? driverAttested : true);
 
   return (
     <View style={[styles.root, { backgroundColor: theme.background }]}>
@@ -589,6 +616,28 @@ export default function PostRideScreen({ navigation }) {
           </Section>
         )}
 
+        {/* ── Driver attestation (offer posts only) ── */}
+        {postType === 'offer' && (
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setDriverAttested(!driverAttested); }}
+            style={[drvS.row, {
+              backgroundColor: driverAttested ? '#00C48C12' : theme.card,
+              borderColor: driverAttested ? '#00C48C' : theme.border,
+            }]}
+          >
+            <View style={[drvS.box, {
+              backgroundColor: driverAttested ? '#00C48C' : 'transparent',
+              borderColor: driverAttested ? '#00C48C' : theme.border,
+            }]}>
+              {driverAttested && <Ionicons name="checkmark" size={14} color="#fff" />}
+            </View>
+            <Text style={[drvS.txt, { color: theme.textSecondary }]}>
+              I hold a valid driver's licence and appropriate insurance, and I am sharing trip costs only — not operating for hire or profit.
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {/* ── Submit ── */}
         <TouchableOpacity
           onPressIn={() => Animated.spring(btnScale, { toValue: 0.96, useNativeDriver: true }).start()}
@@ -620,6 +669,12 @@ export default function PostRideScreen({ navigation }) {
         </TouchableOpacity>
       </ScrollView>
 
+      <AgeGateModal
+        visible={showAgeGate}
+        loading={ageGateLoading}
+        onConfirm={handleAgeConfirmed}
+        onDecline={() => navigation.goBack()}
+      />
       <AppModal
         visible={!!modal.visible}
         type={modal.type}
@@ -715,4 +770,10 @@ const styles = StyleSheet.create({
   submitTxt: { color: '#fff', fontSize: fonts.sizes.lg, fontWeight: '800' },
   cancelBtn: { alignItems: 'center', paddingVertical: 16 },
   cancelTxt: { fontSize: fonts.sizes.md },
+});
+
+const drvS = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: borderRadius.md, padding: 12, borderWidth: 1.5, marginBottom: 14 },
+  box: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginTop: 1, flexShrink: 0 },
+  txt: { flex: 1, fontSize: 12, lineHeight: 18 },
 });

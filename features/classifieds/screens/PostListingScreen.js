@@ -25,6 +25,7 @@ const CATEGORIES = [
   { id: 'jobs',          label: 'Jobs',        emoji: '💼', gradient: ['#00C48C','#007A5E'] },
   { id: 'buysell',       label: 'Buy & Sell',  emoji: '🛍️', gradient: ['#0099FF','#0055CC'] },
   { id: 'food',          label: 'Food & Tiffin',emoji: '🍱', gradient: ['#F4A833','#E68A00'] },
+  { id: 'events',        label: 'Events',      emoji: '🎉', gradient: ['#9B59B6','#6C3483'] },
 ];
 
 const BUY_SELL_CATEGORIES = ['Cars','Furniture','Electronics','Toys & Games','Clothing & Apparel','Books','Appliances','Other'];
@@ -195,6 +196,16 @@ export default function PostListingScreen({ navigation, route }) {
   const [bsCondition, setBsCondition] = useState('used');
   const [bsPickupLocation, setBsPickupLocation] = useState('');
 
+  // Events
+  const [evtTitle,       setEvtTitle]       = useState('');
+  const [evtDescription, setEvtDescription] = useState('');
+  const [evtDate,        setEvtDate]        = useState('');
+  const [evtTime,        setEvtTime]        = useState('');
+  const [evtVenue,       setEvtVenue]       = useState('');
+  const [evtIsFree,      setEvtIsFree]      = useState(true);
+  const [evtTicketPrice, setEvtTicketPrice] = useState('');
+  const [evtOrganizer,   setEvtOrganizer]   = useState('');
+
   // Food
   const [foodTitle, setFoodTitle] = useState('');
   const [foodDescription, setFoodDescription] = useState('');
@@ -257,6 +268,7 @@ export default function PostListingScreen({ navigation, route }) {
     if (category === 'jobs') return { ...base, title: jobRole, description: jobDescription, price: jobSalaryOpen ? null : jobSalary ? parseFloat(jobSalary) : null, metadata: { company: jobCompany, salary_open: jobSalaryOpen, job_type: jobType, hours_per_week: jobHours, location: jobLocation, joining: jobJoining } };
     if (category === 'buysell') return { ...base, title: bsProductName, description: bsDescription, price: bsPrice ? parseFloat(bsPrice) : null, metadata: { negotiable: bsNegotiable, product_category: bsProductCategory, condition: bsCondition, pickup_location: bsPickupLocation } };
     if (category === 'food') return { ...base, title: foodTitle, description: foodDescription, price: foodPrice ? parseFloat(foodPrice) : null, metadata: { negotiable: foodNegotiable, pickup: foodPickup, delivery: foodDelivery, business_name: foodBusinessName.trim() || null, allergens: foodAllergens.trim() || null, attested: true, attested_at: new Date().toISOString() } };
+    if (category === 'events') return { ...base, title: evtTitle, description: evtDescription, price: evtIsFree ? 0 : evtTicketPrice ? parseFloat(evtTicketPrice) : null, metadata: { event_date: evtDate.trim(), event_time: evtTime.trim(), venue: evtVenue.trim(), is_free: evtIsFree, organizer: evtOrganizer.trim() || null } };
   }
 
   function validateForm() {
@@ -265,7 +277,11 @@ export default function PostListingScreen({ navigation, route }) {
     if (category === 'jobs' && (!jobRole || !jobCompany)) { Toast.show({ type: 'warning', text1: 'Add job role and company' }); return false; }
     if (category === 'buysell' && !bsProductName) { Toast.show({ type: 'warning', text1: 'Add product name' }); return false; }
     if (category === 'food' && !foodTitle) { Toast.show({ type: 'warning', text1: 'Add a title' }); return false; }
+    if (category === 'food' && !foodAllergens.trim()) { Toast.show({ type: 'warning', text1: 'Allergen info required', text2: 'List any allergens or write "No known allergens".' }); return false; }
     if (category === 'food' && !foodAttested) { Toast.show({ type: 'warning', text1: 'Confirmation required', text2: 'Please confirm the food responsibility agreement to post.' }); return false; }
+    if (category === 'events' && !evtTitle) { Toast.show({ type: 'warning', text1: 'Add an event title' }); return false; }
+    if (category === 'events' && !evtDate.trim()) { Toast.show({ type: 'warning', text1: 'Add the event date' }); return false; }
+    if (category === 'events' && !evtVenue.trim()) { Toast.show({ type: 'warning', text1: 'Add a venue or location' }); return false; }
     return true;
   }
 
@@ -437,7 +453,7 @@ export default function PostListingScreen({ navigation, route }) {
             <FormLabel theme={theme} optional>Business / Kitchen Name</FormLabel>
             <FormInput theme={theme} value={foodBusinessName} onChangeText={setFoodBusinessName} placeholder="e.g. Sharma's Home Kitchen (if registered)" />
             <FormLabel theme={theme}>Allergen & Ingredient Info</FormLabel>
-            <FormInput theme={theme} value={foodAllergens} onChangeText={setFoodAllergens} placeholder="e.g. Contains dairy, nuts, gluten. Cooked in a kitchen that handles peanuts." multiline />
+            <FormInput theme={theme} value={foodAllergens} onChangeText={setFoodAllergens} placeholder='e.g. Contains dairy, nuts, gluten. Write "No known allergens" if none.' multiline />
             <FormLabel theme={theme} optional>Photos (up to 4)</FormLabel>
             <PhotosSection images={images} uploading={uploading} uploadProgress={uploadProgress} onAdd={pickImage} onRemove={removeImage} accentColor="#F4A833" theme={theme} />
 
@@ -450,6 +466,35 @@ export default function PostListingScreen({ navigation, route }) {
             <AttestRow checked={foodAttested} onToggle={setFoodAttested} color="#F4A833" theme={theme}>
               I confirm that I am solely responsible for complying with all food-safety laws, licenses, and permits that apply to me, and for accurately disclosing ingredients and allergens. I agree that NestApp and Share & Care Labs are not responsible for my food.
             </AttestRow>
+          </View>
+        )}
+
+        {/* ─── EVENTS ─── */}
+        {category === 'events' && (
+          <View style={[styles.formCard, { backgroundColor: theme.card }]}>
+            <View style={styles.formCardHeader}><LinearGradient colors={['#9B59B6','#6C3483']} style={styles.formAccent} /><Text style={[styles.formCardTitle, { color: theme.textPrimary }]}>🎉 Event Details</Text></View>
+            <FormLabel theme={theme}>Event Name / Title</FormLabel>
+            <FormInput theme={theme} value={evtTitle} onChangeText={setEvtTitle} placeholder="e.g. Diwali Celebration, Eid Dinner, Cultural Night" />
+            <FormLabel theme={theme} optional>Description</FormLabel>
+            <FormInput theme={theme} value={evtDescription} onChangeText={setEvtDescription} placeholder="What to expect, dress code, what's included..." multiline />
+            <FormLabel theme={theme}>Event Date</FormLabel>
+            <FormInput theme={theme} value={evtDate} onChangeText={setEvtDate} placeholder="e.g. December 25, 2025  or  2025-12-25" />
+            <FormLabel theme={theme} optional>Event Time</FormLabel>
+            <FormInput theme={theme} value={evtTime} onChangeText={setEvtTime} placeholder="e.g. 6:00 PM – 10:00 PM" />
+            <FormLabel theme={theme}>Venue / Location</FormLabel>
+            <FormInput theme={theme} value={evtVenue} onChangeText={setEvtVenue} placeholder="e.g. Frontenac Hilton, St. Louis, MO" />
+            <FormLabel theme={theme}>Tickets</FormLabel>
+            <ToggleRow options={[{id:true,label:'🎟 Free'},{id:false,label:'💵 Paid'}]} selected={evtIsFree} onSelect={setEvtIsFree} activeColor="#9B59B6" theme={theme} />
+            {!evtIsFree && (
+              <>
+                <FormLabel theme={theme} optional>Ticket Price (USD)</FormLabel>
+                <FormInput theme={theme} value={evtTicketPrice} onChangeText={setEvtTicketPrice} placeholder="e.g. 15" keyboardType="numeric" />
+              </>
+            )}
+            <FormLabel theme={theme} optional>Organizer / Contact</FormLabel>
+            <FormInput theme={theme} value={evtOrganizer} onChangeText={setEvtOrganizer} placeholder="e.g. St. Louis Indian Association" />
+            <FormLabel theme={theme} optional>Photos / Flyer (up to 4)</FormLabel>
+            <PhotosSection images={images} uploading={uploading} uploadProgress={uploadProgress} onAdd={pickImage} onRemove={removeImage} accentColor="#9B59B6" theme={theme} />
           </View>
         )}
 

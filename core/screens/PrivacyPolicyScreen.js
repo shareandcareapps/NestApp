@@ -5,7 +5,7 @@ import { useTheme } from '../theme/ThemeContext';
 const SECTIONS = [
   {
     title: '1. Information We Collect',
-    body: 'We collect information you provide when creating an account (name, email, phone number) and content you post (listings, messages, ride details). We also collect usage data such as screens visited and actions taken within the app.',
+    body: 'We collect information you provide when creating an account (name, email, username) and content you post (listings, messages, ride details). We also collect usage data such as screens visited and actions taken within the app.',
   },
   {
     title: '2. How We Use Your Information',
@@ -17,7 +17,7 @@ const SECTIONS = [
   },
   {
     title: '4. Data Retention',
-    body: 'Your account data is retained as long as your account is active. You may request deletion of your account and associated data by contacting us at support@shareandcareaapps.com. Deleted data may remain in backups for up to 30 days.',
+    body: 'Your account data is retained as long as your account is active. You can delete your account at any time from Settings → Account → Delete Account. All your data is permanently removed. Deleted data may remain in backups for up to 30 days.',
   },
   {
     title: '5. Security',
@@ -41,7 +41,7 @@ export default function PrivacyPolicyScreen() {
   const colors = useTheme();
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={styles.container}>
-      <Text style={[styles.lastUpdated, { color: colors.textLight }]}>Last updated: June 2025</Text>
+      <Text style={[styles.lastUpdated, { color: colors.textLight }]}>Last updated: June 2026</Text>
       <Text style={[styles.intro, { color: colors.textSecondary }]}>
         NestApp ("we", "our", or "us") is committed to protecting your privacy. This policy explains how we collect, use, and safeguard your information when you use our app.
       </Text>

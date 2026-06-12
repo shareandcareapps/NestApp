@@ -215,11 +215,15 @@ export default function SignupScreen({ navigation }) {
                 onRightIconPress={() => setShowConfirm(!showConfirm)}
               />
 
-              {/* Terms note */}
+              {/* Terms note — links are tappable for enforceability */}
               <Text style={styles.termsNote}>
                 By creating an account you agree to our{' '}
-                <Text style={styles.termsLink}>Terms</Text> and{' '}
-                <Text style={styles.termsLink}>Privacy Policy</Text>
+                <Text style={styles.termsLink} onPress={() => navigation.navigate('Terms')}>
+                  Terms & Conditions
+                </Text>{' '}and{' '}
+                <Text style={styles.termsLink} onPress={() => navigation.navigate('PrivacyPolicy')}>
+                  Privacy Policy
+                </Text>
               </Text>
 
               {/* CTA */}

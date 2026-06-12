@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Alert, Switch, Animated, Modal, Pressable, useColorScheme,
+  Alert, Switch, Animated, Modal, Pressable, useColorScheme, ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,13 +23,7 @@ try { SecureStore = require('expo-secure-store'); } catch (_) {}
 const BIOMETRIC_KEY = 'nest_biometric_session';
 const BIOMETRIC_PROMPTED_KEY = '@nest_biometric_prompted';
 
-const LANGUAGES = [
-  { id: 'en',  label: 'English',  code: 'EN' },
-  { id: 'hi',  label: 'हिंदी',    code: 'HI' },
-  { id: 'ur',  label: 'اردو',     code: 'UR' },
-  { id: 'ne',  label: 'नेपाली',   code: 'NE' },
-  { id: 'ar',  label: 'العربية',  code: 'AR' },
-];
+const NOTIF_KEY = '@nest_notif_prefs';
 
 const AVATAR_COLORS = ['#FF6B6B','#2D1B69','#00C48C','#0099FF','#9B59B6','#F4A833'];
 
@@ -74,16 +68,19 @@ export default function SettingsScreen({ navigation }) {
   const user             = useAppStore(s => s.user);
   const themeMode        = useAppStore(s => s.themeMode);
   const setThemeMode     = useAppStore(s => s.setThemeMode);
+  const clearAuth        = useAppStore(s => s.clearAuth);
   const storedProfileName = useAppStore(s => s.profileName);
   const theme            = useTheme();
   const insets           = useSafeAreaInsets();
   const systemTheme      = useColorScheme();
 
-  const [profile,      setProfile]      = useState(null);
-  const [language,     setLanguage]     = useState('en');
-  const [showLangPicker, setShowLangPicker] = useState(false);
-  const [showLogoutSheet, setShowLogoutSheet] = useState(false);
+  const [profile,           setProfile]          = useState(null);
+  const [profileLoading,    setProfileLoading]   = useState(false);
+  const [showLogoutSheet,   setShowLogoutSheet]  = useState(false);
+  const [showDeleteSheet,   setShowDeleteSheet]  = useState(false);
+  const [deleteLoading,     setDeleteLoading]    = useState(false);
   const [notifs, setNotifs] = useState({ listings: true, rides: true, messages: true, news: false });
+  const notifsLoaded = useRef(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricType, setBiometricType] = useState('fingerprint');
@@ -93,6 +90,10 @@ export default function SettingsScreen({ navigation }) {
     navigation.setOptions({ headerShown: false });
     loadProfile();
     checkBiometrics();
+    AsyncStorage.getItem(NOTIF_KEY).then(val => {
+      if (val) { try { setNotifs(JSON.parse(val)); } catch (_) {} }
+      notifsLoaded.current = true;
+    });
   }, []);
 
   async function checkBiometrics() {
@@ -142,11 +143,29 @@ export default function SettingsScreen({ navigation }) {
   }, [themeMode]);
 
   async function loadProfile() {
-    if (!user?.id) { setLoading(false); return; }
+    if (!user?.id) return;
+    setProfileLoading(true);
     try {
       const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
       if (data) setProfile(data);
     } catch (e) { console.error('loadProfile:', e); }
+    finally { setProfileLoading(false); }
+  }
+
+  async function handleDeleteAccount() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    setDeleteLoading(true);
+    try {
+      const { error } = await supabase.functions.invoke('delete-account');
+      if (error) throw error;
+      clearAuth();
+      await supabase.auth.signOut();
+    } catch (e) {
+      Toast.show({ type: 'error', text1: 'Could not delete account', text2: e?.message || 'Please try again or contact support.' });
+    } finally {
+      setDeleteLoading(false);
+      setShowDeleteSheet(false);
+    }
   }
 
   function toggleTheme() {
@@ -160,11 +179,17 @@ export default function SettingsScreen({ navigation }) {
     await supabase.auth.signOut();
   }
 
+  function toggleNotif(key, value) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const next = { ...notifs, [key]: value };
+    setNotifs(next);
+    AsyncStorage.setItem(NOTIF_KEY, JSON.stringify(next));
+  }
+
   const name = profile?.full_name || storedProfileName || user?.email?.split('@')[0] || 'User';
   const username = profile?.username;
   const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   const avatarColor = AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
-  const currentLang = LANGUAGES.find(l => l.id === language);
 
   const moonX = themeAnim.interpolate({ inputRange: [0, 1], outputRange: [2, 26] });
 
@@ -240,7 +265,7 @@ export default function SettingsScreen({ navigation }) {
               right={
                 <Switch
                   value={notifs[n.key]}
-                  onValueChange={v => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setNotifs(p => ({ ...p, [n.key]: v })); }}
+                  onValueChange={v => toggleNotif(n.key, v)}
                   trackColor={{ false: theme.border, true: n.color + '88' }}
                   thumbColor={notifs[n.key] ? n.color : theme.textLight}
                 />
@@ -277,9 +302,10 @@ export default function SettingsScreen({ navigation }) {
         {/* App info */}
         <SectionHeader title="App" theme={theme} />
         <View style={[styles.section, { borderColor: theme.border }]}>
+          <SettingsRow icon="chatbubble-ellipses-outline" iconColor="#F4A833" label="Feedback & Suggestions" sublabel="Tell us what you love or what to fix" onPress={() => navigation.navigate('Feedback')} theme={theme} />
           <SettingsRow icon="document-text-outline" iconColor="#0099FF" label="Privacy Policy"     onPress={() => navigation.navigate('PrivacyPolicy')} theme={theme} />
           <SettingsRow icon="newspaper-outline"    iconColor="#00C48C" label="Terms & Conditions" onPress={() => navigation.navigate('Terms')}         theme={theme} />
-          <SettingsRow icon="warning-outline"      iconColor="#F4A833" label="Disclaimer"         onPress={() => navigation.navigate('Disclaimer')}    theme={theme} last />
+          <SettingsRow icon="warning-outline"      iconColor="#FF6B6B" label="Disclaimer"         onPress={() => navigation.navigate('Disclaimer')}    theme={theme} last />
         </View>
 
         {/* Version card */}
@@ -289,45 +315,64 @@ export default function SettingsScreen({ navigation }) {
           </LinearGradient>
           <View style={{ flex: 1 }}>
             <Text style={[styles.versionName, { color: theme.textPrimary }]}>NestApp</Text>
-            <Text style={[styles.versionMeta, { color: theme.textLight }]}>v1.0.0 Beta · Taru Labs</Text>
+            <Text style={[styles.versionMeta, { color: theme.textLight }]}>v1.0.0 Beta · Share & Care Labs</Text>
           </View>
           <View style={[styles.betaBadge, { backgroundColor: '#F4A83320', borderColor: '#F4A83340' }]}>
             <Text style={styles.betaTxt}>BETA</Text>
           </View>
         </View>
 
-        {/* Logout */}
+        {/* Admin */}
+        {profile?.role === 'admin' && (
+          <>
+            <SectionHeader title="Admin" theme={theme} />
+            <View style={[styles.section, { borderColor: theme.border }]}>
+              <SettingsRow icon="shield-checkmark-outline" iconColor="#9B59B6" label="Moderation Panel" sublabel="Review reports & suspend users" onPress={() => navigation.navigate('AdminPanel')} theme={theme} last />
+            </View>
+          </>
+        )}
+
+        {/* Account */}
         <SectionHeader title="Account" theme={theme} />
         <View style={[styles.section, { borderColor: theme.border }]}>
-          <SettingsRow icon="log-out-outline" iconColor="#FF6B6B" label="Logout" onPress={() => setShowLogoutSheet(true)} theme={theme} last />
+          <SettingsRow icon="log-out-outline" iconColor="#FF6B6B" label="Logout" onPress={() => setShowLogoutSheet(true)} theme={theme} />
+          <SettingsRow icon="trash-outline" iconColor="#FF3B30" label="Delete Account" sublabel="Permanently removes all your data" onPress={() => setShowDeleteSheet(true)} theme={theme} last />
         </View>
 
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={[styles.footerTxt, { color: theme.textLight }]}>Made for South Asian & Arab communities in St. Louis</Text>
-          <Text style={[styles.footerSub, { color: theme.textLight }]}>NestApp · v1.0.0 (Beta) · Taru Labs</Text>
+          <Text style={[styles.footerSub, { color: theme.textLight }]}>NestApp · v1.0.0 (Beta) · Share & Care Labs</Text>
         </View>
       </ScrollView>
 
-      {/* Language picker modal */}
-      <Modal visible={showLangPicker} transparent animationType="slide" onRequestClose={() => setShowLangPicker(false)}>
+      {/* Delete Account confirmation sheet */}
+      <Modal visible={showDeleteSheet} transparent animationType="slide" onRequestClose={() => setShowDeleteSheet(false)}>
         <View style={styles.modalContainer}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowLangPicker(false)} />
-        <View style={[styles.sheet, { backgroundColor: theme.card }]}>
-          <View style={[styles.sheetHandle, { backgroundColor: theme.border }]} />
-          <Text style={[styles.sheetTitle, { color: theme.textPrimary }]}>Select Language</Text>
-          {LANGUAGES.map(lang => (
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowDeleteSheet(false)} />
+          <View style={[styles.sheet, { backgroundColor: theme.card }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: theme.border }]} />
+            <View style={styles.logoutIcon}>
+              <Ionicons name="trash" size={32} color="#FF3B30" />
+            </View>
+            <Text style={[styles.logoutTitle, { color: theme.textPrimary }]}>Delete Account?</Text>
+            <Text style={[styles.logoutBody, { color: theme.textSecondary }]}>
+              This will permanently delete your account, all your listings, rides, and data. This cannot be undone.
+            </Text>
             <TouchableOpacity
-              key={lang.id}
-              style={[styles.langRow, { borderBottomColor: theme.border }, lang.id === language && { backgroundColor: '#F4A83310' }]}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setLanguage(lang.id); setShowLangPicker(false); }}
+              style={[styles.logoutConfirmBtn, { backgroundColor: '#FF3B30', opacity: deleteLoading ? 0.7 : 1 }]}
+              onPress={handleDeleteAccount}
+              disabled={deleteLoading}
             >
-              <Text style={styles.langFlag}>{lang.code}</Text>
-              <Text style={[styles.langLabel, { color: theme.textPrimary }]}>{lang.label}</Text>
-              {lang.id === language && <Ionicons name="checkmark-circle" size={20} color="#F4A833" />}
+              {deleteLoading
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.logoutConfirmTxt}>Yes, Delete Everything</Text>
+              }
             </TouchableOpacity>
-          ))}
-        </View>
+            <TouchableOpacity style={[styles.logoutCancelBtn, { borderColor: theme.border }]} onPress={() => setShowDeleteSheet(false)}>
+              <Text style={[styles.logoutCancelTxt, { color: theme.textSecondary }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
 
@@ -393,10 +438,6 @@ const styles = StyleSheet.create({
   sheet: { borderTopLeftRadius: 34, borderTopRightRadius: 34, padding: 22, paddingBottom: 38 },
   sheetHandle: { width: 38, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   sheetTitle: { fontSize: fonts.sizes.lg, fontWeight: '800', textAlign: 'center', marginBottom: 16 },
-
-  langRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, borderBottomWidth: 0.5, borderRadius: 8, paddingHorizontal: 4 },
-  langFlag: { fontSize: 24 },
-  langLabel: { flex: 1, fontSize: fonts.sizes.md, fontWeight: '500' },
 
   logoutIcon: { alignItems: 'center', marginBottom: 12 },
   logoutTitle: { fontSize: fonts.sizes.xl, fontWeight: '800', textAlign: 'center', marginBottom: 8 },

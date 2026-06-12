@@ -20,8 +20,11 @@ import {
 import { getOrCreateConversation, sendMessage } from '../../messages/services/messagesService';
 import UserProfileModal, { formatDisplayName } from '../../../core/components/UserProfileModal';
 import AppModal from '../../../core/components/AppModal';
+import AgeGateModal from '../../../core/components/AgeGateModal';
+import ReportModal from '../../../core/components/ReportModal';
 import { decodeLongRideNotes, luggageLabel, formatReturnDate } from '../utils/longRideUtils';
 import { fonts, spacing, borderRadius, shadows } from '../../../core/theme/index';
+import { supabase } from '../../../core/database/index';
 
 const AVATAR_COLORS  = ['#FF6B6B','#2D1B69','#00C48C','#0099FF','#9B59B6','#F4A833'];
 const OFFER_GRADIENT   = ['#0099FF', '#0055CC'];
@@ -148,6 +151,9 @@ export default function RideDetailScreen({ route, navigation }) {
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [modal,               setModal]               = useState({ visible: false });
   const [msgLoading,          setMsgLoading]          = useState(false);
+  const [showAgeGate,         setShowAgeGate]         = useState(false);
+  const [showReport,          setShowReport]          = useState(false);
+  const [ageGateLoading,      setAgeGateLoading]      = useState(false);
   // Booking state
   const [bookings,     setBookings]     = useState([]);   // driver: all bookings for this ride
   const [myBooking,    setMyBooking]    = useState(null); // rider: my booking
@@ -254,8 +260,19 @@ export default function RideDetailScreen({ route, navigation }) {
     } finally { setMsgLoading(false); }
   }
 
-  // Rider: just open chat — the Request Seat button lives inside the chat banner
+  // Rider: check age attestation then open chat
   async function handleRequestSeat() {
+    const { data } = await supabase.from('profiles').select('rides_age_attested').eq('id', user.id).maybeSingle();
+    if (!data?.rides_age_attested) { setShowAgeGate(true); return; }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await openChat(posterId);
+  }
+
+  async function handleAgeConfirmed() {
+    setAgeGateLoading(true);
+    await supabase.from('profiles').update({ rides_age_attested: true }).eq('id', user.id);
+    setShowAgeGate(false);
+    setAgeGateLoading(false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await openChat(posterId);
   }
@@ -327,12 +344,19 @@ export default function RideDetailScreen({ route, navigation }) {
             <Ionicons name={catIcon} size={12} color="#fff" />
             <Text style={styles.heroBadgeTxt}>{isRequest ? 'Seat Request' : catLabel}</Text>
           </View>
-          {isOwner && (
-            <TouchableOpacity style={styles.editBtn}
-              onPress={() => navigation.navigate('EditRide', { ride })}>
-              <Ionicons name="create-outline" size={18} color="rgba(255,255,255,0.8)" />
-            </TouchableOpacity>
-          )}
+          {isOwner
+            ? (
+              <TouchableOpacity style={styles.editBtn}
+                onPress={() => navigation.navigate('EditRide', { ride })}>
+                <Ionicons name="create-outline" size={18} color="rgba(255,255,255,0.8)" />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.editBtn}
+                onPress={() => setShowReport(true)}>
+                <Ionicons name="flag-outline" size={17} color="rgba(255,255,255,0.7)" />
+              </TouchableOpacity>
+            )
+          }
         </View>
 
         <View style={styles.routeCard}>
@@ -584,7 +608,19 @@ export default function RideDetailScreen({ route, navigation }) {
         </View>
       )}
 
+      <AgeGateModal
+        visible={showAgeGate}
+        loading={ageGateLoading}
+        onConfirm={handleAgeConfirmed}
+        onDecline={() => setShowAgeGate(false)}
+      />
       <UserProfileModal visible={profileModalVisible} onClose={() => setProfileModalVisible(false)} userId={posterId} />
+      <ReportModal
+        visible={showReport}
+        onClose={() => setShowReport(false)}
+        reportedUserId={posterId}
+        rideId={ride.id}
+      />
       <AppModal visible={!!modal.visible} type={modal.type} title={modal.title}
         subtitle={modal.subtitle} primaryLabel={modal.primaryLabel} onPrimary={modal.onPrimary} />
     </View>

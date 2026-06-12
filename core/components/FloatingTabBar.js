@@ -12,7 +12,7 @@ const TABS = [
   { key: 'Home',        label: 'Home',    filled: 'home',                outline: 'home-outline' },
   { key: 'Classifieds', label: 'Market',  filled: 'storefront',          outline: 'storefront-outline' },
   { key: 'Carpool',     label: 'Carpool', filled: 'car-sport',           outline: 'car-sport-outline' },
-  // { key: 'News', label: 'News', filled: 'newspaper', outline: 'newspaper-outline' }, // News temporarily removed
+  { key: 'News',        label: 'News',    filled: 'newspaper',           outline: 'newspaper-outline' },
   { key: 'Messages',    label: 'Inbox',   filled: 'chatbubble-ellipses', outline: 'chatbubble-ellipses-outline' },
 ];
 

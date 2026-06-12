@@ -21,6 +21,7 @@ import useAppStore from '../../../core/store/index';
 import { useTheme } from '../../../core/theme/ThemeContext';
 import { supabase } from '../../../core/database/index';
 import UserProfileModal from '../../../core/components/UserProfileModal';
+import ReportModal from '../../../core/components/ReportModal';
 import { getRideById } from '../../rides/services/ridesService';
 import { createBooking, confirmBooking, cancelBooking, getBookingById } from '../../rides/services/bookingsService';
 import { fonts, spacing, borderRadius } from '../../../core/theme/index';
@@ -375,6 +376,7 @@ export default function ChatScreen({ route, navigation }) {
   const [locText,         setLocText]         = useState('');
   const [fullImg,         setFullImg]         = useState(null);
   const [showProfile,     setShowProfile]     = useState(false);
+  const [showReport,      setShowReport]      = useState(false);
   const [showPhoneWarn,   setShowPhoneWarn]   = useState(false);
   const [otherTyping,     setOtherTyping]     = useState(false);
   const [voiceHeld,       setVoiceHeld]       = useState(false);
@@ -605,6 +607,9 @@ export default function ChatScreen({ route, navigation }) {
             <Text style={s.headerName} numberOfLines={1}>{otherName}</Text>
             <Text style={s.headerSub} numberOfLines={1}>{productCtx ? productCtx.replace(/^\w+:\s*/, '') : 'Community member'}</Text>
           </TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowReport(true)} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="flag-outline" size={20} color="rgba(255,255,255,0.6)" />
+          </TouchableOpacity>
         </LinearGradient>
       </SafeAreaView>
 
@@ -793,6 +798,11 @@ export default function ChatScreen({ route, navigation }) {
 
       {/* ── User profile modal ── */}
       <UserProfileModal visible={showProfile} userId={otherProfile?.id} onClose={() => setShowProfile(false)} onMessage={null} />
+      <ReportModal
+        visible={showReport}
+        onClose={() => setShowReport(false)}
+        reportedUserId={otherProfile?.id}
+      />
     </View>
   );
 }

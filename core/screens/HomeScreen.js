@@ -26,6 +26,7 @@ const CATEGORIES = [
   { key: 'jobs',          label: 'Jobs',      icon: 'briefcase-outline',   color: '#00C48C', gradient: ['#00C48C', '#007A5E'] },
   { key: 'buysell',       label: 'Buy/Sell',  icon: 'pricetag-outline',    color: '#4DA6FF', gradient: ['#0099FF', '#0055CC'] },
   { key: 'food',          label: 'Food',      icon: 'restaurant-outline',  color: '#F4A833', gradient: ['#F4A833', '#E68A00'] },
+  { key: 'events',        label: 'Events',    icon: 'calendar-outline',    color: '#9B59B6', gradient: ['#9B59B6', '#6C3483'] },
 ];
 
 // ─── Quick actions ────────────────────────────────────────────────────────────
@@ -307,6 +308,88 @@ const nStyles = StyleSheet.create({
   excerpt: { fontSize: fonts.sizes.sm, lineHeight: 19 },
 });
 
+function EventCard({ item, theme, onPress }) {
+  const meta = item.metadata ? (typeof item.metadata === 'string' ? JSON.parse(item.metadata) : item.metadata) : {};
+  const rawDate = meta.event_date || '';
+  const photo = Array.isArray(item.images) && item.images.length > 0 ? item.images[0] : null;
+  const isFree = meta.is_free || item.price === 0 || !item.price;
+
+  // Parse date for the badge
+  let month = '', day = '';
+  if (rawDate) {
+    const d = new Date(rawDate);
+    if (!isNaN(d.getTime())) {
+      month = d.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+      day   = d.getDate().toString();
+    } else {
+      // Try to extract from strings like "December 25, 2025"
+      const parts = rawDate.split(/[\s,]+/);
+      if (parts.length >= 2) { month = parts[0].slice(0,3).toUpperCase(); day = parts[1]; }
+    }
+  }
+
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.88} style={[evStyles.card, { backgroundColor: theme.card, ...shadows.medium }]}>
+      {/* Top image / gradient banner */}
+      <View style={evStyles.banner}>
+        {photo
+          ? <Image source={{ uri: photo }} style={evStyles.bannerImg} />
+          : <LinearGradient colors={['#9B59B6','#6C3483']} style={evStyles.bannerGrad}>
+              <Ionicons name="calendar" size={28} color="rgba(255,255,255,0.5)" />
+            </LinearGradient>
+        }
+        <LinearGradient colors={['transparent','rgba(0,0,0,0.55)']} style={evStyles.bannerOverlay} />
+        {/* Date badge */}
+        {(month || day) && (
+          <View style={evStyles.dateBadge}>
+            <LinearGradient colors={['#9B59B6','#6C3483']} style={evStyles.dateBadgeInner} start={{x:0,y:0}} end={{x:0,y:1}}>
+              <Text style={evStyles.dateMonth}>{month}</Text>
+              <Text style={evStyles.dateDay}>{day}</Text>
+            </LinearGradient>
+          </View>
+        )}
+        {/* Ticket badge */}
+        <View style={[evStyles.ticketBadge, { backgroundColor: isFree ? '#00C48C' : '#F4A833' }]}>
+          <Text style={evStyles.ticketTxt}>{isFree ? 'FREE' : `$${item.price}`}</Text>
+        </View>
+      </View>
+      {/* Body */}
+      <View style={evStyles.body}>
+        <Text style={[evStyles.title, { color: theme.textPrimary }]} numberOfLines={2}>{item.title}</Text>
+        {meta.venue ? (
+          <View style={evStyles.venueRow}>
+            <Ionicons name="location-outline" size={12} color={theme.textLight} />
+            <Text style={[evStyles.venue, { color: theme.textSecondary }]} numberOfLines={1}>{meta.venue}</Text>
+          </View>
+        ) : null}
+        {meta.event_time ? (
+          <View style={evStyles.venueRow}>
+            <Ionicons name="time-outline" size={12} color={theme.textLight} />
+            <Text style={[evStyles.venue, { color: theme.textSecondary }]}>{meta.event_time}</Text>
+          </View>
+        ) : null}
+      </View>
+    </TouchableOpacity>
+  );
+}
+const evStyles = StyleSheet.create({
+  card: { borderRadius: borderRadius.lg, overflow: 'hidden', marginRight: 14, width: width * 0.64 },
+  banner: { position: 'relative', height: 130 },
+  bannerImg: { width: '100%', height: '100%', resizeMode: 'cover' },
+  bannerGrad: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
+  bannerOverlay: { ...StyleSheet.absoluteFillObject },
+  dateBadge: { position: 'absolute', top: 10, left: 10, borderRadius: 10, overflow: 'hidden' },
+  dateBadgeInner: { paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center', minWidth: 42 },
+  dateMonth: { color: 'rgba(255,255,255,0.8)', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+  dateDay:   { color: '#fff', fontSize: 20, fontWeight: '900', lineHeight: 22 },
+  ticketBadge: { position: 'absolute', top: 10, right: 10, borderRadius: borderRadius.full, paddingHorizontal: 9, paddingVertical: 4 },
+  ticketTxt: { color: '#fff', fontSize: 10, fontWeight: '800' },
+  body: { padding: 12 },
+  title: { fontSize: fonts.sizes.sm, fontWeight: '700', lineHeight: 18, marginBottom: 6 },
+  venueRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 3 },
+  venue: { fontSize: 11, flex: 1 },
+});
+
 function PointsCard({ points, name, theme }) {
   const level = points >= 1000 ? 'Diamond' : points >= 500 ? 'Gold' : points >= 200 ? 'Silver' : 'Bronze';
   const nextLevel = points >= 1000 ? 1000 : points >= 500 ? 1000 : points >= 200 ? 500 : 200;
@@ -363,7 +446,8 @@ export default function HomeScreen({ navigation }) {
   const [listings, setListings] = useState([]);
   const [rides, setRides] = useState([]);
   const [myRides, setMyRides] = useState([]);
-  const [news, setNews] = useState([]); // News fetch removed; kept to avoid reference errors
+  const [events, setEvents] = useState([]);
+  const [news, setNews] = useState([]);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -423,12 +507,13 @@ export default function HomeScreen({ navigation }) {
     if (!user?.id) return;
     try {
       setLoading(true);
-      const [listingsRes, ridesRes, profileRes, membersRes, myRidesRes, myBookingsRes] = await Promise.all([
-        supabase.from('listings').select('*').eq('status', 'active').neq('category', 'jobs')
+      const [listingsRes, ridesRes, eventsRes, profileRes, membersRes, myRidesRes, myBookingsRes] = await Promise.all([
+        supabase.from('listings').select('*').eq('status', 'active').neq('category', 'jobs').neq('category', 'events')
           .order('is_boosted', { ascending: false }).order('created_at', { ascending: false }).limit(6),
         supabase.from('rides').select('*').eq('status', 'active')
           .order('created_at', { ascending: false }).limit(5),
-        // supabase.from('news').select('*').order('created_at', { ascending: false }).limit(3), // News removed
+        supabase.from('listings').select('*').eq('status', 'active').eq('category', 'events')
+          .order('created_at', { ascending: false }).limit(6),
         supabase.from('profiles').select('username, points').eq('id', user.id).maybeSingle(),
         supabase.from('profiles').select('full_name').order('created_at', { ascending: false }).limit(8),
         // Rides posted by the user
@@ -442,6 +527,7 @@ export default function HomeScreen({ navigation }) {
 
       if (listingsRes.data) setListings(listingsRes.data);
       if (ridesRes.data) setRides(ridesRes.data);
+      if (eventsRes.data) setEvents(eventsRes.data);
 
       // Merge posted rides + booked rides (deduped)
       const postedRides = myRidesRes.data || [];
@@ -572,6 +658,44 @@ export default function HomeScreen({ navigation }) {
             ))}
           </View>
         </View>
+
+        {/* Upcoming Events */}
+        {(events.length > 0 || loading) && (
+          <View style={[styles.section, { paddingHorizontal: 0 }]}>
+            <View style={{ paddingHorizontal: spacing.md }}>
+              <SectionHeader
+                title="Upcoming Events"
+                theme={theme}
+                onSeeAll={() => navigation.navigate('BrowseListingsByCategory', { category: 'events' })}
+              />
+            </View>
+            {loading ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.md }}>
+                {[0,1,2].map(i => <View key={i} style={{ width: width * 0.64, marginRight: 14 }}><CardSkeleton /></View>)}
+              </ScrollView>
+            ) : (
+              <FlatList
+                horizontal
+                data={events}
+                keyExtractor={i => i.id}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: spacing.md }}
+                renderItem={({ item }) => (
+                  <EventCard
+                    item={item}
+                    theme={theme}
+                    onPress={() => navigation.navigate('ListingDetail', { listing: item })}
+                  />
+                )}
+                ListEmptyComponent={
+                  <View style={{ paddingHorizontal: spacing.md }}>
+                    <EmptyState type="listings" title="No events yet" body="Be the first to post a community event!" ctaLabel="Post Event" onCta={() => navigation.navigate('PostListing', { preselectedCategory: 'events' })} />
+                  </View>
+                }
+              />
+            )}
+          </View>
+        )}
 
         {/* Featured Listings */}
         <View style={[styles.section, { paddingHorizontal: 0 }]}>
