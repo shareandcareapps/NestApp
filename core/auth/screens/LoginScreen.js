@@ -3,15 +3,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
-  Animated, Dimensions, Modal, Pressable,
-} from 'react-native';
+  Animated, Dimensions, Modal, Pressable, Alert,} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Toast from 'react-native-toast-message';
 import { supabase } from '../../database/index';
 import useAppStore from '../../store/index';
 import { fonts, spacing, borderRadius, shadows } from '../../theme/index';
@@ -20,14 +18,15 @@ import { fonts, spacing, borderRadius, shadows } from '../../theme/index';
 let WebBrowser = null;
 let AuthSession = null;
 let LocalAuthentication = null;
-let SecureStore = null;
 try { WebBrowser = require('expo-web-browser'); WebBrowser.maybeCompleteAuthSession(); } catch (_) {}
 try { AuthSession = require('expo-auth-session'); } catch (_) {}
 try { LocalAuthentication = require('expo-local-authentication'); } catch (_) {}
-try { SecureStore = require('expo-secure-store'); } catch (_) {}
+import {
+  biometricStoreAvailable, isBiometricSessionSaved,
+  saveBiometricToken, readBiometricToken, clearBiometricToken,
+} from '../biometricStore';
 
 const { width, height } = Dimensions.get('window');
-const BIOMETRIC_KEY = 'nest_biometric_session';
 const BIOMETRIC_PROMPTED_KEY = '@nest_biometric_prompted';
 const APP_VERSION = '1.0.0';
 
@@ -176,7 +175,7 @@ export default function LoginScreen({ navigation }) {
   useEffect(() => { checkBiometrics(); }, []);
 
   async function checkBiometrics() {
-    if (!LocalAuthentication || !SecureStore) return;
+    if (!LocalAuthentication || !biometricStoreAvailable()) return;
     try {
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
@@ -185,8 +184,7 @@ export default function LoginScreen({ navigation }) {
       const isFaceID = types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION);
       setBiometricType(isFaceID ? 'faceid' : 'fingerprint');
       setBiometricAvailable(true);
-      const saved = await SecureStore.getItemAsync(BIOMETRIC_KEY);
-      if (saved) setHasSavedSession(true);
+      if (await isBiometricSessionSaved()) setHasSavedSession(true);
     } catch (_) {}
   }
 
@@ -196,7 +194,7 @@ export default function LoginScreen({ navigation }) {
   async function handleLogin() {
     if (!email || !password) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      return Toast.show({ type: 'warning', text1: 'Missing fields', text2: 'Please enter your email and password.' });
+      return Alert.alert('Missing fields', 'Please enter your email and password.');
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
@@ -205,14 +203,14 @@ export default function LoginScreen({ navigation }) {
       setLoading(false);
       if (error) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        Toast.show({ type: 'error', text1: 'Login failed', text2: error.message });
+        Alert.alert('Login failed', error.message);
         return;
       }
       await afterLogin(data.user, data.session, true);
     } catch (e) {
       setLoading(false);
       console.error('[Login] unexpected error:', e);
-      Toast.show({ type: 'error', text1: 'Something went wrong', text2: e?.message || 'Please try again.' });
+      Alert.alert('Something went wrong', e?.message || 'Please try again.');
     }
   }
 
@@ -222,7 +220,7 @@ export default function LoginScreen({ navigation }) {
     setSession(session);
 
     // After login, offer biometric setup if available and not yet prompted
-    if (canOfferBiometric && biometricAvailable && !hasSavedSession && SecureStore) {
+    if (canOfferBiometric && biometricAvailable && !hasSavedSession && biometricStoreAvailable()) {
       try {
         const alreadyPrompted = await AsyncStorage.getItem(BIOMETRIC_PROMPTED_KEY);
         if (!alreadyPrompted) {
@@ -238,17 +236,14 @@ export default function LoginScreen({ navigation }) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setShowBiometricPrompt(false);
     await AsyncStorage.setItem(BIOMETRIC_PROMPTED_KEY, 'true');
-    if (SecureStore && pendingSession?.session?.refresh_token) {
-      try {
-        await SecureStore.setItemAsync(BIOMETRIC_KEY, pendingSession.session.refresh_token);
-        setHasSavedSession(true);
-      } catch (_) {}
+    if (pendingSession?.session?.refresh_token) {
+      const ok = await saveBiometricToken(pendingSession.session.refresh_token);
+      if (!ok) {
+        return Alert.alert('Could not enable');
+      }
+      setHasSavedSession(true);
     }
-    Toast.show({
-      type: 'success',
-      text1: `${biometricType === 'faceid' ? 'Face ID' : 'Fingerprint'} enabled 🔐`,
-      text2: 'Quick sign-in is ready for next time.',
-    });
+    Alert.alert(`${biometricType === 'faceid' ? 'Face ID' : 'Fingerprint'} enabled 🔐`, 'You can now sign in with biometrics.');
   }
 
   async function handleSkipBiometric() {
@@ -258,44 +253,36 @@ export default function LoginScreen({ navigation }) {
   }
 
   async function handleBiometricLogin() {
-    if (!biometricAvailable || !hasSavedSession || !LocalAuthentication || !SecureStore) return;
+    if (!biometricAvailable || !hasSavedSession) return;
     setSocialLoading('biometric');
     try {
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Sign in to NestApp',
-        fallbackLabel: 'Use passcode',
-        disableDeviceFallback: false,
-      });
-      if (!result.success) { setSocialLoading(null); return; }
-      const refreshToken = await SecureStore.getItemAsync(BIOMETRIC_KEY);
-      if (!refreshToken) {
-        setSocialLoading(null);
-        try { await SecureStore.deleteItemAsync(BIOMETRIC_KEY); } catch (_) {}
-        setHasSavedSession(false);
-        return Toast.show({ type: 'error', text1: 'Session expired', text2: 'Please sign in again.' });
-      }
+      // Reading the token IS the biometric prompt — enforced by the OS keychain
+      const refreshToken = await readBiometricToken('Sign in to NestApp');
+      if (!refreshToken) { setSocialLoading(null); return; }
       const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
       setSocialLoading(null);
       if (error || !data?.session) {
-        try { await SecureStore.deleteItemAsync(BIOMETRIC_KEY); } catch (_) {}
+        await clearBiometricToken();
         setHasSavedSession(false);
-        return Toast.show({ type: 'error', text1: 'Session expired', text2: 'Please sign in with your password.' });
+        return Alert.alert('Session expired', 'Please sign in with your password.');
       }
+      // The refresh rotated the token — store the new one for next time
+      if (data.session.refresh_token) await saveBiometricToken(data.session.refresh_token);
       setUser(data.user);
       setSession(data.session);
     } catch (err) {
       setSocialLoading(null);
-      Toast.show({ type: 'error', text1: 'Biometric error', text2: 'Please sign in with your password.' });
+      Alert.alert('Session expired', 'Please sign in with your password.');
     }
   }
 
   async function handleGoogleLogin() {
     if (!WebBrowser || !AuthSession) {
-      return Toast.show({ type: 'info', text1: 'Not available in Expo Go', text2: 'Google sign-in requires a dev build.' });
+      return Alert.alert('Not available in Expo Go', 'Google sign-in requires a dev build.');
     }
     setSocialLoading('google');
     try {
-      const redirectUrl = AuthSession.makeRedirectUri({ scheme: 'nestapp', path: 'auth/callback' });
+      const redirectUrl = AuthSession.makeRedirectUri({ scheme: 'nestapp' });
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: redirectUrl, skipBrowserRedirect: true },
@@ -317,17 +304,17 @@ export default function LoginScreen({ navigation }) {
       }
     } catch (err) {
       setSocialLoading(null);
-      Toast.show({ type: 'error', text1: 'Google sign-in failed', text2: err?.message || 'Please try again.' });
+      Alert.alert('Google sign-in failed', err?.message || 'Please try again.');
     }
   }
 
   async function handleAppleLogin() {
     let AppleAuthentication;
     try { AppleAuthentication = require('expo-apple-authentication'); } catch (_) {
-      return Toast.show({ type: 'info', text1: 'Not available', text2: 'Apple Sign-In is only available on iOS.' });
+      return Alert.alert('Not available');
     }
     const isAvailable = await AppleAuthentication.isAvailableAsync();
-    if (!isAvailable) return Toast.show({ type: 'info', text1: 'Not available', text2: 'Apple Sign-In requires iOS 13+.' });
+    if (!isAvailable) return Alert.alert('Not available', 'Apple Sign-In requires iOS 13+.')
     setSocialLoading('apple');
     try {
       const credential = await AppleAuthentication.signInAsync({
@@ -340,7 +327,7 @@ export default function LoginScreen({ navigation }) {
     } catch (err) {
       setSocialLoading(null);
       if (err?.code !== 'ERR_REQUEST_CANCELED') {
-        Toast.show({ type: 'error', text1: 'Apple sign-in failed', text2: err?.message || 'Please try again.' });
+        Alert.alert('Apple sign-in failed');
       }
     }
   }

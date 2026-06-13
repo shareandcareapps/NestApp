@@ -2,14 +2,12 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, Image,
-  ScrollView, ActivityIndicator, Animated, KeyboardAvoidingView, Platform,
-} from 'react-native';
+  ScrollView, ActivityIndicator, Animated, KeyboardAvoidingView, Platform, Alert,} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import Toast from 'react-native-toast-message';
 import { createNews } from '../services/newsService';
 import useAppStore from '../../../core/store/index';
 import { useTheme } from '../../../core/theme/ThemeContext';
@@ -78,30 +76,30 @@ export default function PostNewsScreen({ navigation }) {
       const compressed = await compressImage(coverImage);
       const path = `news/${Date.now()}.jpg`;
       const buf  = await (await fetch(compressed)).arrayBuffer();
-      const { error } = await supabase.storage.from('listings').upload(path, buf, { contentType: 'image/jpg', upsert: false });
+      const { error } = await supabase.storage.from('listings').upload(path, buf, { contentType: 'image/jpeg', upsert: false });
       if (error) throw error;
       const { data: u } = supabase.storage.from('listings').getPublicUrl(path);
       return u.publicUrl;
     } catch (e) {
-      Toast.show({ type: 'error', text1: 'Image upload failed', text2: e?.message });
+      Alert.alert('Image upload failed');
       return null;
     } finally { setUploading(false); }
   }
 
   async function handlePost(draft = false) {
-    if (!category)     { Toast.show({ type: 'warning', text1: 'Select a category' }); return; }
-    if (!title.trim()) { Toast.show({ type: 'warning', text1: 'Add a title' }); return; }
-    if (!body.trim())  { Toast.show({ type: 'warning', text1: 'Add the article body' }); return; }
+    if (!category)     { Alert.alert('Select a category'); return; }
+    if (!title.trim()) { Alert.alert('Add a title'); return; }
+    if (!body.trim())  { Alert.alert('Add the article body'); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     try {
       const imageUrl = await uploadCoverImage();
       await createNews({ admin_id: user.id, title: title.trim(), body: body.trim(), category, image_url: imageUrl, tags: selectedTags, draft }, user.id);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Toast.show({ type: 'success', text1: draft ? 'Saved as draft 📝' : 'Published! 🎉', text2: draft ? 'You can edit and publish it later.' : 'Your news article is now live.' });
+      Alert.alert(draft ? 'Saved as draft 📝' : 'Published! 🎉', draft ? 'You can edit and publish it later.' : 'Your news article is now live.');
       navigation.goBack();
     } catch (error) {
-      Toast.show({ type: 'error', text1: 'Failed to publish', text2: error?.message || 'Please try again.' });
+      Alert.alert('Failed to publish');
     } finally { setLoading(false); }
   }
 

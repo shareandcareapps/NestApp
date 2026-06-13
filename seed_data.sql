@@ -15,6 +15,19 @@
 
 BEGIN;
 
+-- ⚠️ DESTRUCTIVE SAFETY GUARD ⚠️
+-- This script WIPES all listings, rides, bookings and listing/ride chats.
+-- It refuses to run unless you explicitly opt in for this session:
+--   SET app.allow_seed = 'yes-wipe-data';
+-- Never run this against a database with real user content.
+DO $$
+BEGIN
+  IF current_setting('app.allow_seed', true) IS DISTINCT FROM 'yes-wipe-data' THEN
+    RAISE EXCEPTION
+      'Seed blocked: this wipes ALL listings/rides/chats. If you are SURE this is a dev database, first run:  SET app.allow_seed = ''yes-wipe-data'';';
+  END IF;
+END $$;
+
 -- -- CLEANUP -----------------------------------------------------------------
 DELETE FROM ride_bookings;
 DELETE FROM sale_verifications;

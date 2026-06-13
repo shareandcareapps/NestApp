@@ -66,48 +66,19 @@ export async function getMyBooking(rideId, riderId) {
 }
 
 // ─── Driver confirms a booking ────────────────────────────────────────────────
-// Updates status → confirmed, then recounts to keep rides.seats_booked accurate.
-export async function confirmBooking(bookingId, rideId) {
-  const { data, error } = await supabase
-    .from('ride_bookings')
-    .update({ status: 'confirmed' })
-    .eq('id', bookingId)
-    .select()
-    .single();
-
+// Server-side RPC: verifies the caller is the driver, enforces seat capacity
+// atomically (FOR UPDATE), and keeps rides.seats_booked in sync — no client
+// status writes, no overbooking races.
+export async function confirmBooking(bookingId, _rideId) {
+  const { data, error } = await supabase.rpc('confirm_ride_booking', { p_booking_id: bookingId });
   if (error) throw error;
-
-  // Recount so seats_booked never drifts even if rows were cancelled elsewhere
-  const { count } = await supabase
-    .from('ride_bookings')
-    .select('*', { count: 'exact', head: true })
-    .eq('ride_id', rideId)
-    .eq('status', 'confirmed');
-
-  await supabase
-    .from('rides')
-    .update({ seats_booked: count || 0 })
-    .eq('id', rideId);
-
   return data;
 }
 
 // ─── Driver declines / rider cancels a booking ───────────────────────────────
-export async function cancelBooking(bookingId, rideId) {
-  const { error } = await supabase
-    .from('ride_bookings')
-    .update({ status: 'cancelled' })
-    .eq('id', bookingId);
-
+export async function cancelBooking(bookingId, _rideId) {
+  const { error } = await supabase.rpc('cancel_ride_booking', { p_booking_id: bookingId });
   if (error) throw error;
-
-  const { count } = await supabase
-    .from('ride_bookings')
-    .select('*', { count: 'exact', head: true })
-    .eq('ride_id', rideId)
-    .eq('status', 'confirmed');
-
-  await supabase.from('rides').update({ seats_booked: count || 0 }).eq('id', rideId);
 }
 
 // ─── Fetch a single booking by ID ────────────────────────────────────────────
@@ -121,12 +92,11 @@ export async function getBookingById(bookingId) {
 }
 
 // ─── Rider checks in on ride day ──────────────────────────────────────────────
-// status: 'on_my_way'
+// status: 'on_my_way' — RPC verifies the caller is the rider.
 export async function updateCheckinStatus(bookingId, status) {
-  const { error } = await supabase
-    .from('ride_bookings')
-    .update({ checkin_status: status })
-    .eq('id', bookingId);
-
+  const { error } = await supabase.rpc('set_booking_checkin', {
+    p_booking_id: bookingId,
+    p_status: status,
+  });
   if (error) throw error;
 }

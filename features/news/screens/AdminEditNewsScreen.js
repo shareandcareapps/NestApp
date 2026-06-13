@@ -11,7 +11,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import Toast from 'react-native-toast-message';
 import { supabase } from '../../../core/database/index';
 import { useTheme } from '../../../core/theme/ThemeContext';
 import { fonts, spacing, borderRadius, shadows } from '../../../core/theme/index';
@@ -39,8 +38,8 @@ export default function AdminEditNewsScreen({ route, navigation }) {
   const [deleting, setDeleting] = useState(false);
 
   async function handleSave() {
-    if (!title.trim()) { Toast.show({ type: 'warning', text1: 'Title is required' }); return; }
-    if (!body.trim())  { Toast.show({ type: 'warning', text1: 'Body is required' }); return; }
+    if (!title.trim()) { Alert.alert('Title is required'); return; }
+    if (!body.trim())  { Alert.alert('Body is required'); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSaving(true);
     try {
@@ -50,10 +49,10 @@ export default function AdminEditNewsScreen({ route, navigation }) {
         .eq('id', article.id);
       if (error) throw error;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Toast.show({ type: 'success', text1: 'Article updated' });
+      Alert.alert('Article updated');
       navigation.goBack();
     } catch (e) {
-      Toast.show({ type: 'error', text1: 'Save failed', text2: e?.message });
+      Alert.alert('Save failed', e?.message || 'Please try again.');
     } finally {
       setSaving(false);
     }
@@ -77,10 +76,10 @@ export default function AdminEditNewsScreen({ route, navigation }) {
       const { error } = await supabase.from('news').delete().eq('id', article.id);
       if (error) throw error;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Toast.show({ type: 'success', text1: 'Article deleted' });
+      Alert.alert('Article deleted');
       navigation.navigate('NewsFeed');
     } catch (e) {
-      Toast.show({ type: 'error', text1: 'Delete failed', text2: e?.message });
+      Alert.alert('Delete failed', e?.message || 'Please try again.');
       setDeleting(false);
     }
   }

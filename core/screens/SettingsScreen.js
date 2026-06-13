@@ -8,7 +8,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import Toast from 'react-native-toast-message';
 import { supabase } from '../database/index';
 import useAppStore from '../store/index';
 import { useTheme } from '../theme/ThemeContext';
@@ -16,11 +15,12 @@ import { fonts, spacing, borderRadius, shadows } from '../theme/index';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 let LocalAuthentication = null;
-let SecureStore = null;
 try { LocalAuthentication = require('expo-local-authentication'); } catch (_) {}
-try { SecureStore = require('expo-secure-store'); } catch (_) {}
+import {
+  biometricStoreAvailable, isBiometricSessionSaved,
+  saveBiometricToken, clearBiometricToken,
+} from '../auth/biometricStore';
 
-const BIOMETRIC_KEY = 'nest_biometric_session';
 const BIOMETRIC_PROMPTED_KEY = '@nest_biometric_prompted';
 
 const NOTIF_KEY = '@nest_notif_prefs';
@@ -97,7 +97,7 @@ export default function SettingsScreen({ navigation }) {
   }, []);
 
   async function checkBiometrics() {
-    if (!LocalAuthentication || !SecureStore) return;
+    if (!LocalAuthentication || !biometricStoreAvailable()) return;
     try {
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
@@ -106,13 +106,12 @@ export default function SettingsScreen({ navigation }) {
       const isFaceID = types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION);
       setBiometricType(isFaceID ? 'faceid' : 'fingerprint');
       setBiometricAvailable(true);
-      const saved = await SecureStore.getItemAsync(BIOMETRIC_KEY);
-      setBiometricEnabled(!!saved);
+      setBiometricEnabled(await isBiometricSessionSaved());
     } catch (_) {}
   }
 
   async function toggleBiometric(value) {
-    if (!LocalAuthentication || !SecureStore) return;
+    if (!LocalAuthentication || !biometricStoreAvailable()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (value) {
       // Authenticate before enabling
@@ -125,16 +124,19 @@ export default function SettingsScreen({ navigation }) {
       const { data } = await supabase.auth.getSession();
       const refreshToken = data?.session?.refresh_token;
       if (!refreshToken) {
-        return Toast.show({ type: 'error', text1: 'Could not enable', text2: 'Please sign out and sign in again.' });
+        return Alert.alert('Could not enable', 'Please sign out and sign in again.');
       }
-      await SecureStore.setItemAsync(BIOMETRIC_KEY, refreshToken);
+      const ok = await saveBiometricToken(refreshToken);
+      if (!ok) {
+        return Alert.alert('Could not enable', 'Make sure your device has a passcode set.');
+      }
       await AsyncStorage.setItem(BIOMETRIC_PROMPTED_KEY, 'true');
       setBiometricEnabled(true);
-      Toast.show({ type: 'success', text1: `${biometricType === 'faceid' ? 'Face ID' : 'Fingerprint'} enabled 🔐`, text2: 'You can now sign in with biometrics.' });
+      Alert.alert(`${biometricType === 'faceid' ? 'Face ID' : 'Fingerprint'} enabled 🔐`, 'You can now sign in with biometrics.');
     } else {
-      try { await SecureStore.deleteItemAsync(BIOMETRIC_KEY); } catch (_) {}
+      await clearBiometricToken();
       setBiometricEnabled(false);
-      Toast.show({ type: 'info', text1: 'Biometric sign-in disabled', text2: 'Use your password to sign in.' });
+      Alert.alert('Biometric sign-in disabled', 'Use your password to sign in.');
     }
   }
 
@@ -161,7 +163,7 @@ export default function SettingsScreen({ navigation }) {
       clearAuth();
       await supabase.auth.signOut();
     } catch (e) {
-      Toast.show({ type: 'error', text1: 'Could not delete account', text2: e?.message || 'Please try again or contact support.' });
+      Alert.alert('Could not delete account');
     } finally {
       setDeleteLoading(false);
       setShowDeleteSheet(false);

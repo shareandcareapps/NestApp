@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
-import { getRides } from '../services/ridesService';
+import { getRides, PAGE_SIZE } from '../services/ridesService';
 import { useTheme } from '../../../core/theme/ThemeContext';
 import { formatDisplayName } from '../../../core/components/UserProfileModal';
 import { decodeLongRideNotes } from '../utils/longRideUtils';
@@ -219,6 +219,9 @@ export default function BrowseRidesScreen({ navigation }) {
   const [typeFilter, setTypeFilter] = useState(null); // null | 'offer' | 'request'
   const [search, setSearch]         = useState('');
   const [showSearch, setShowSearch] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore]       = useState(true);
+  const pageRef = useRef(0);
   const searchRef = useRef(null);
   const searchHeightAnim = useRef(new Animated.Value(0)).current;
 
@@ -232,11 +235,31 @@ export default function BrowseRidesScreen({ navigation }) {
 
   async function loadRides() {
     try {
-      const data = await getRides(filter);
+      pageRef.current = 0;
+      const data = await getRides(filter, null, null, 0);
       setRides(data);
+      setHasMore(data.length >= PAGE_SIZE);
     } catch (e) {
       console.error(e);
     } finally { setLoading(false); setRefreshing(false); }
+  }
+
+  // Infinite scroll — append the next page (search filters the loaded set)
+  async function loadMoreRides() {
+    if (loading || loadingMore || !hasMore) return;
+    try {
+      setLoadingMore(true);
+      const nextPage = pageRef.current + 1;
+      const data = await getRides(filter, null, null, nextPage);
+      pageRef.current = nextPage;
+      setRides(prev => {
+        const seen = new Set(prev.map(r => r.id));
+        return [...prev, ...data.filter(r => !seen.has(r.id))];
+      });
+      setHasMore(data.length >= PAGE_SIZE);
+    } catch (e) {
+      console.error(e);
+    } finally { setLoadingMore(false); }
   }
 
   useFocusEffect(useCallback(() => { setLoading(true); loadRides(); }, [filter]));
@@ -324,6 +347,9 @@ export default function BrowseRidesScreen({ navigation }) {
             <RideCard item={item} theme={theme} onPress={r => navigation.navigate('RideDetail', { ride: r })} />
           )}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#00C48C" />}
+          onEndReached={loadMoreRides}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={loadingMore ? <ActivityIndicator style={{ marginVertical: 16 }} color="#00C48C" /> : null}
           ListHeaderComponent={
             displayed.length > 0 ? (
               <View style={styles.statsRow}>

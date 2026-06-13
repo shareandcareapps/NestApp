@@ -6,9 +6,11 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 // Native modules not available in Expo Go — lazy-loaded with fallbacks
 let LocalAuthentication = null;
-let SecureStore = null;
 try { LocalAuthentication = require('expo-local-authentication'); } catch (_) {}
-try { SecureStore = require('expo-secure-store'); } catch (_) {}
+import {
+  isBiometricSessionSaved, readBiometricToken,
+  saveBiometricToken, clearBiometricToken,
+} from '../auth/biometricStore';
 import { LinearGradient } from 'expo-linear-gradient';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -238,26 +240,41 @@ export default function RootNavigator() {
   const [hasOnboarded, setHasOnboarded] = useState(true);
 
   async function tryBiometricAutoLogin() {
-    if (!LocalAuthentication || !SecureStore) return;
+    if (!LocalAuthentication) return;
     try {
-      const savedToken = await SecureStore.getItemAsync('nest_biometric_session');
-      if (!savedToken) return;
+      if (!(await isBiometricSessionSaved())) return;
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
       if (!hasHardware || !isEnrolled) return;
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Sign in to NestApp',
-        fallbackLabel: 'Use passcode',
-        disableDeviceFallback: false,
-      });
-      if (!result.success) return;
+      // Reading the token triggers the OS biometric prompt (keychain-enforced)
+      const savedToken = await readBiometricToken('Sign in to NestApp');
+      if (!savedToken) return;
       const { data, error } = await supabase.auth.refreshSession({ refresh_token: savedToken });
       if (error || !data?.session) {
-        await SecureStore.deleteItemAsync('nest_biometric_session');
+        await clearBiometricToken();
         return;
       }
+      // Token rotated on refresh — persist the new one
+      if (data.session.refresh_token) await saveBiometricToken(data.session.refresh_token);
       setUser(data.user);
       setSession(data.session);
+    } catch (_) {}
+  }
+
+  // Suspended users are signed out as soon as their status is known.
+  // (Writes are already blocked server-side by RLS; this makes it visible.)
+  async function enforceSuspension(sessionUser) {
+    if (!sessionUser?.id) return;
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('suspended')
+        .eq('id', sessionUser.id)
+        .maybeSingle();
+      if (data?.suspended) {
+        await supabase.auth.signOut();
+        clearAuth();
+      }
     } catch (_) {}
   }
 
@@ -267,6 +284,7 @@ export default function RootNavigator() {
         if (session) {
           setUser(session.user);
           setSession(session);
+          enforceSuspension(session.user);
         } else {
           // No active session — try biometric auto-login if possible
           await tryBiometricAutoLogin();
@@ -277,8 +295,11 @@ export default function RootNavigator() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        if (session) { setUser(session.user); setSession(session); }
-        else { clearAuth(); }
+        if (session) {
+          setUser(session.user);
+          setSession(session);
+          if (_event === 'SIGNED_IN') enforceSuspension(session.user);
+        } else { clearAuth(); }
       }
     );
     return () => subscription.unsubscribe();
@@ -287,11 +308,14 @@ export default function RootNavigator() {
   if (loading) return <LoadingScreen />;
 
   if (!hasOnboarded) {
+    // Main is only registered when authenticated — onboarding can never
+    // deep-link an anonymous user into the app.
     return (
       <Stack.Navigator screenOptions={{ ...premiumTransition, headerShown: false }}>
         <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-        <Stack.Screen name="Main" component={MainApp} />
-        <Stack.Screen name="Auth" component={AuthStack} />
+        {isAuthenticated
+          ? <Stack.Screen name="Main" component={MainApp} />
+          : <Stack.Screen name="Auth" component={AuthStack} />}
       </Stack.Navigator>
     );
   }

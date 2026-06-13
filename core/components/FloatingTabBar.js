@@ -47,10 +47,13 @@ export default function FloatingTabBar({ state, navigation, unreadMessages = 0 }
     }
   }
 
-  // Hide on sub-screens
+  // Hide on sub-screens and when Chat is the active nested screen
   const activeRoute = state.routes[state.index];
   const nestedState = activeRoute?.state;
   if (nestedState != null && nestedState.index > 0) return null;
+  // Extra guard: hide if any nested route named 'Chat' is currently focused
+  const activNestedName = nestedState?.routes?.[nestedState?.index]?.name;
+  if (activNestedName === 'Chat') return null;
 
   const tabBarTranslateY = chromeAnim.interpolate({
     inputRange:  [0, 1],

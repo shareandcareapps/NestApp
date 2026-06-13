@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { supabase } from '../database/index';
+import useAppStore from '../store/index';
 import { fonts, spacing, borderRadius, shadows } from '../theme/index';
 
 const STATUS_COLORS = {
@@ -97,7 +98,21 @@ function ReportCard({ report, onAction }) {
 
 export default function AdminPanelScreen({ navigation }) {
   const theme = useTheme();
+  const user = useAppStore(s => s.user);
   const [tab, setTab] = useState('reports');
+
+  // Defense in depth: the data is RLS-protected, but don't render the panel
+  // for non-admins who reach this route by name.
+  useEffect(() => {
+    if (!user?.id) { navigation.goBack(); return; }
+    supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+      .then(({ data }) => {
+        if (data?.role !== 'admin') {
+          Alert.alert('Admins only', 'You do not have access to this screen.');
+          navigation.goBack();
+        }
+      });
+  }, []);
   const [reports, setReports] = useState([]);
   const [feedback, setFeedback] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -149,16 +164,29 @@ export default function AdminPanelScreen({ navigation }) {
           {
             text: 'Suspend', style: 'destructive',
             onPress: async () => {
-              await supabase.from('profiles').update({ suspended: true }).eq('id', report.reported_user_id);
-              await supabase.from('reports').update({ status: 'resolved' }).eq('id', report.id);
-              load(true);
+              try {
+                // SECURITY DEFINER RPC — verifies admin role server-side.
+                // (Direct profiles.update is reverted by the protect trigger.)
+                const { error: rpcErr } = await supabase.rpc('admin_set_suspended', {
+                  p_user: report.reported_user_id,
+                  p_suspended: true,
+                });
+                if (rpcErr) throw rpcErr;
+                const { error: repErr } = await supabase
+                  .from('reports').update({ status: 'resolved' }).eq('id', report.id);
+                if (repErr) throw repErr;
+                load(true);
+              } catch (e) {
+                Alert.alert('Suspend failed', e?.message || 'Please try again.');
+              }
             },
           },
         ]
       );
     } else {
       const newStatus = type === 'resolve' ? 'resolved' : 'dismissed';
-      await supabase.from('reports').update({ status: newStatus }).eq('id', report.id);
+      const { error } = await supabase.from('reports').update({ status: newStatus }).eq('id', report.id);
+      if (error) { Alert.alert('Update failed', error.message); return; }
       load(true);
     }
   }

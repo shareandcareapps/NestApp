@@ -8,7 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { getNews } from '../services/newsService';
+import { getNews, PAGE_SIZE } from '../services/newsService';
 import { useTheme } from '../../../core/theme/ThemeContext';
 import EmptyState from '../../../core/components/EmptyState';
 import SkeletonLoader from '../../../core/components/SkeletonLoader';
@@ -166,6 +166,9 @@ export default function NewsFeedScreen({ navigation }) {
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selected,   setSelected]   = useState(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore,    setHasMore]    = useState(true);
+  const pageRef = React.useRef(0);
   const theme  = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -174,10 +177,28 @@ export default function NewsFeedScreen({ navigation }) {
   async function fetchNews() {
     try {
       setLoading(true);
-      const data = await getNews(selected);
+      pageRef.current = 0;
+      const data = await getNews(selected, 0);
       setNews(data);
+      setHasMore(data.length >= PAGE_SIZE);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
+  }
+
+  async function fetchMoreNews() {
+    if (loading || loadingMore || !hasMore) return;
+    try {
+      setLoadingMore(true);
+      const nextPage = pageRef.current + 1;
+      const data = await getNews(selected, nextPage);
+      pageRef.current = nextPage;
+      setNews(prev => {
+        const seen = new Set(prev.map(n => n.id));
+        return [...prev, ...data.filter(n => !seen.has(n.id))];
+      });
+      setHasMore(data.length >= PAGE_SIZE);
+    } catch (e) { console.error(e); }
+    finally { setLoadingMore(false); }
   }
 
   async function handleRefresh() {
@@ -234,6 +255,9 @@ export default function NewsFeedScreen({ navigation }) {
             <NewsCard item={item} theme={theme} onPress={article => navigation.navigate('NewsDetail', { article })} />
           )}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#F4A833" />}
+          onEndReached={fetchMoreNews}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={loadingMore ? <SkeletonLoader type="news" style={{ margin: 14 }} /> : null}
           ListEmptyComponent={
             <EmptyState type="news" title="No stories yet" body="Community news and updates for St. Louis will appear here." />
           }

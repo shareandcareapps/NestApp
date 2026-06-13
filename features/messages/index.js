@@ -24,7 +24,7 @@ export default function MessagesNavigator() {
       <Stack.Screen
         name="Chat"
         component={ChatScreen}
-        options={{ headerShown: false }}
+        options={{ headerShown: false, tabBarStyle: { display: 'none' } }}
       />
     </Stack.Navigator>
   );

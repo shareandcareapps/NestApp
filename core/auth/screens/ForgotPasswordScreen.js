@@ -3,14 +3,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
-  Animated, Dimensions,
-} from 'react-native';
+  Animated, Dimensions, Alert,} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import Toast from 'react-native-toast-message';
 import { supabase } from '../../database/index';
 import { fonts, spacing, borderRadius, shadows } from '../../theme/index';
 
@@ -157,7 +155,7 @@ export default function ForgotPasswordScreen({ navigation }) {
   async function handleSendOTP() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      return Toast.show({ type: 'warning', text1: 'Invalid email', text2: 'Enter a valid email address.' });
+      return Alert.alert('Invalid email', 'Enter a valid email address.');
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
@@ -168,10 +166,10 @@ export default function ForgotPasswordScreen({ navigation }) {
     setLoading(false);
     if (error) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      return Toast.show({ type: 'error', text1: 'Failed to send OTP', text2: error.message });
+      return Alert.alert('Failed to send OTP', error.message);
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Toast.show({ type: 'success', text1: 'Code sent!', text2: `Check your inbox at ${email.trim()}` });
+    Alert.alert('Code sent!', `Check your inbox at ${email.trim()}`);;
     setResendCooldown(60);
     animateStep(1);
   }
@@ -179,19 +177,18 @@ export default function ForgotPasswordScreen({ navigation }) {
   async function handleVerifyOTP() {
     if (otp.length !== 6) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      return Toast.show({ type: 'warning', text1: 'Enter 6-digit code', text2: 'Check your email for the code.' });
+      return Alert.alert('Enter 6-digit code');
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     const { error } = await supabase.auth.verifyOtp({
       email: email.trim(),
       token: otp,
-      type: 'email',
-    });
+      type: 'email' });
     setLoading(false);
     if (error) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      return Toast.show({ type: 'error', text1: 'Invalid code', text2: 'The code is wrong or expired. Try resending.' });
+      return Alert.alert('Invalid code', 'The code is wrong or expired. Try resending.');
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     animateStep(2);
@@ -199,11 +196,11 @@ export default function ForgotPasswordScreen({ navigation }) {
 
   async function handleResetPassword() {
     if (password.length < 8) {
-      return Toast.show({ type: 'warning', text1: 'Password too short', text2: 'Use at least 8 characters.' });
+      return Alert.alert('Password too short', 'Use at least 8 characters.');
     }
     if (password !== confirmPassword) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      return Toast.show({ type: 'error', text1: "Passwords don't match", text2: 'Please re-enter your new password.' });
+      return Alert.alert("Passwords don't match", 'Please re-enter your new password.');
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
@@ -211,10 +208,10 @@ export default function ForgotPasswordScreen({ navigation }) {
     setLoading(false);
     if (error) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      return Toast.show({ type: 'error', text1: 'Failed to update password', text2: error.message });
+      return Alert.alert('Failed to update password', error.message);
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Toast.show({ type: 'success', text1: 'Password updated! 🎉', text2: 'You can now sign in with your new password.' });
+    Alert.alert('Password updated! 🎉');
     // Sign out so user goes to login screen cleanly
     await supabase.auth.signOut();
     navigation.navigate('Login');

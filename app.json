@@ -13,7 +13,8 @@
       "bundleIdentifier": "com.nestapp.community",
       "buildNumber": "1",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSFaceIDUsageDescription": "NestApp uses Face ID to securely sign you in."
       },
       "entitlements": {
         "com.apple.developer.applesignin": ["Default"]

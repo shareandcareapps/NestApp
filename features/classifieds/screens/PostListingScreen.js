@@ -10,13 +10,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import Toast from 'react-native-toast-message';
 import { compressImage } from '../../../core/utils/imageUtils';
 import { createListing } from '../services/listingsService';
 import useAppStore from '../../../core/store/index';
 import { supabase } from '../../../core/database/index';
 import { useTheme } from '../../../core/theme/ThemeContext';
-import { awardPoints } from '../../../core/services/pointsService';
+import { refreshMyPoints } from '../../../core/services/pointsService';
 import StepProgress from '../../../core/components/StepProgress';
 import { fonts, spacing, borderRadius, shadows } from '../../../core/theme/index';
 
@@ -221,17 +220,17 @@ export default function PostListingScreen({ navigation, route }) {
   const accentColor = activeCat?.gradient?.[0] || '#F4A833';
 
   async function pickImage() {
-    if (images.length >= 4) { Toast.show({ type: 'warning', text1: 'Max 4 photos' }); return; }
+    if (images.length >= 4) { Alert.alert('Max 4 photos'); return; }
     Alert.alert('Add Photo', 'Choose a source', [
       { text: '📷 Camera', onPress: async () => {
         const p = await ImagePicker.requestCameraPermissionsAsync();
-        if (!p.granted) { Toast.show({ type: 'error', text1: 'Permission needed', text2: 'Allow camera access.' }); return; }
+        if (!p.granted) { Alert.alert('Permission needed'); return; }
         const r = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
         if (!r.canceled) await uploadImage(r.assets[0]);
       }},
       { text: '🖼️ Photo Library', onPress: async () => {
         const p = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!p.granted) { Toast.show({ type: 'error', text1: 'Permission needed', text2: 'Allow photo access.' }); return; }
+        if (!p.granted) { Alert.alert('Permission needed'); return; }
         const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
         if (!r.canceled) await uploadImage(r.assets[0]);
       }},
@@ -249,14 +248,14 @@ export default function PostListingScreen({ navigation, route }) {
       const blob = await response.blob();
       const arrayBuffer = await new Response(blob).arrayBuffer();
       setUploadProgress(60);
-      const { error } = await supabase.storage.from('listings').upload(fileName, arrayBuffer, { contentType: 'image/jpg' });
+      const { error } = await supabase.storage.from('listings').upload(fileName, arrayBuffer, { contentType: 'image/jpeg' });
       if (error) throw error;
       setUploadProgress(90);
       const { data: urlData } = supabase.storage.from('listings').getPublicUrl(fileName);
       setImages(prev => [...prev, urlData.publicUrl]);
       setUploadProgress(100);
     } catch (error) {
-      Toast.show({ type: 'error', text1: 'Upload failed', text2: error.message });
+      Alert.alert('Upload failed', error.message);
     } finally { setUploading(false); setUploadProgress(0); }
   }
 
@@ -272,16 +271,16 @@ export default function PostListingScreen({ navigation, route }) {
   }
 
   function validateForm() {
-    if (!category) { Toast.show({ type: 'warning', text1: 'Select a category' }); return false; }
-    if (category === 'accommodation' && !acTitle) { Toast.show({ type: 'warning', text1: 'Add a title' }); return false; }
-    if (category === 'jobs' && (!jobRole || !jobCompany)) { Toast.show({ type: 'warning', text1: 'Add job role and company' }); return false; }
-    if (category === 'buysell' && !bsProductName) { Toast.show({ type: 'warning', text1: 'Add product name' }); return false; }
-    if (category === 'food' && !foodTitle) { Toast.show({ type: 'warning', text1: 'Add a title' }); return false; }
-    if (category === 'food' && !foodAllergens.trim()) { Toast.show({ type: 'warning', text1: 'Allergen info required', text2: 'List any allergens or write "No known allergens".' }); return false; }
-    if (category === 'food' && !foodAttested) { Toast.show({ type: 'warning', text1: 'Confirmation required', text2: 'Please confirm the food responsibility agreement to post.' }); return false; }
-    if (category === 'events' && !evtTitle) { Toast.show({ type: 'warning', text1: 'Add an event title' }); return false; }
-    if (category === 'events' && !evtDate.trim()) { Toast.show({ type: 'warning', text1: 'Add the event date' }); return false; }
-    if (category === 'events' && !evtVenue.trim()) { Toast.show({ type: 'warning', text1: 'Add a venue or location' }); return false; }
+    if (!category) { Alert.alert('Select a category'); return false; }
+    if (category === 'accommodation' && !acTitle) { Alert.alert('Add a title'); return false; }
+    if (category === 'jobs' && (!jobRole || !jobCompany)) { Alert.alert('Add job role and company'); return false; }
+    if (category === 'buysell' && !bsProductName) { Alert.alert('Add product name'); return false; }
+    if (category === 'food' && !foodTitle) { Alert.alert('Add a title'); return false; }
+    if (category === 'food' && !foodAllergens.trim()) { Alert.alert('Allergen info required', 'List any allergens or write "No known allergens".'); return false; }
+    if (category === 'food' && !foodAttested) { Alert.alert('Confirmation required', 'Please confirm the food responsibility agreement to post.'); return false; }
+    if (category === 'events' && !evtTitle) { Alert.alert('Add an event title'); return false; }
+    if (category === 'events' && !evtDate.trim()) { Alert.alert('Add the event date'); return false; }
+    if (category === 'events' && !evtVenue.trim()) { Alert.alert('Add a venue or location'); return false; }
     return true;
   }
 
@@ -290,15 +289,16 @@ export default function PostListingScreen({ navigation, route }) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     try {
-      const newListing = await createListing(buildListingData());
-      const { count } = await supabase.from('listings').select('id', { count: 'exact', head: true }).eq('user_id', user.id);
-      await awardPoints(user.id, count === 1 ? 'first_listing' : 'post_listing', newListing.id);
+      await createListing(buildListingData());
+      // Points are awarded by the DB trigger on insert — just re-read the total
+      const { count } = await supabase.from('listings').select('id').eq('user_id', user.id);
+      await refreshMyPoints(user.id);
       const pts = count === 1 ? 20 : 5;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Toast.show({ type: 'success', text1: 'Posted! 🎉', text2: `Your listing is live. +${pts} community points earned!` });
+      Alert.alert('Posted! 🎉', `Your listing is live. +${pts} community points earned!`);
       navigation.goBack();
     } catch (error) {
-      Toast.show({ type: 'error', text1: 'Error', text2: error?.message || 'Failed to post listing.' });
+      Alert.alert('Error', error?.message || 'Failed to post listing.');
     } finally { setLoading(false); }
   }
 

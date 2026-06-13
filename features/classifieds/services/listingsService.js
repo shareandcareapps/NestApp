@@ -4,15 +4,25 @@
 
 import { supabase } from '../../../core/database/index';
 
-// ─── Fetch all active listings ─────────────────
-export async function getListings(category = null) {
+export const PAGE_SIZE = 30;
+
+// Strip characters that have meaning in PostgREST .or() filter strings and
+// ilike patterns — raw user input must never alter the filter structure.
+export function sanitizeSearchTerm(q) {
+  return String(q || '').replace(/[,()%_\\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+}
+
+// ─── Fetch active listings (paginated) ─────────
+// page 0 = first PAGE_SIZE rows. Screens append pages via onEndReached.
+export async function getListings(category = null, page = 0) {
   let query = supabase
     .from('listings')
     .select('*')
     .in('status', ['active', 'out_of_stock'])
     .order('status', { ascending: true })   // 'active' sorts before 'out_of_stock' → in-stock first
     .order('is_boosted', { ascending: false })
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
 
   if (category) {
     query = query.eq('category', category);
@@ -160,14 +170,17 @@ export async function setListingStock(id, outOfStock) {
 
 // ─── Search listings ───────────────────────────
 export async function searchListings(query, category = null) {
+  const safe = sanitizeSearchTerm(query);
+  if (!safe) return [];
   let dbQuery = supabase
     .from('listings')
     .select('*')
     .in('status', ['active', 'out_of_stock'])
-    .or(`title.ilike.%${query}%,description.ilike.%${query}%`)
+    .or(`title.ilike.%${safe}%,description.ilike.%${safe}%`)
     .order('status', { ascending: true })
     .order('is_boosted', { ascending: false })
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(100);
 
   if (category) {
     dbQuery = dbQuery.eq('category', category);

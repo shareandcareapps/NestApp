@@ -9,7 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { getListings, searchListings } from '../services/listingsService';
+import { getListings, searchListings, PAGE_SIZE } from '../services/listingsService';
 import { useTheme } from '../../../core/theme/ThemeContext';
 import EmptyState from '../../../core/components/EmptyState';
 import { CardSkeleton, ListItemSkeleton } from '../../../core/components/SkeletonLoader';
@@ -234,6 +234,9 @@ export default function BrowseListingsScreen({ navigation, route }) {
   const [selectedCategory, setSelectedCategory] = useState(route.params?.category ?? null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const pageRef = useRef(0);
   const searchRef = useRef(null);
   const searchHeightAnim = useRef(new Animated.Value(0)).current;
   const theme = useTheme();
@@ -258,12 +261,32 @@ export default function BrowseListingsScreen({ navigation, route }) {
     try {
       setLoading(true);
       setFetchError(false);
-      const data = await getListings(selectedCategory);
+      pageRef.current = 0;
+      const data = await getListings(selectedCategory, 0);
       setListings(data);
+      setHasMore(data.length >= PAGE_SIZE);
     } catch {
       setFetchError(true);
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Infinite scroll — append the next page (disabled while searching)
+  async function fetchMoreListings() {
+    if (loading || loadingMore || !hasMore || searchQuery.length > 2) return;
+    try {
+      setLoadingMore(true);
+      const nextPage = pageRef.current + 1;
+      const data = await getListings(selectedCategory, nextPage);
+      pageRef.current = nextPage;
+      setListings(prev => {
+        const seen = new Set(prev.map(l => l.id));
+        return [...prev, ...data.filter(l => !seen.has(l.id))];
+      });
+      setHasMore(data.length >= PAGE_SIZE);
+    } catch {} finally {
+      setLoadingMore(false);
     }
   }
 
@@ -435,6 +458,9 @@ export default function BrowseListingsScreen({ navigation, route }) {
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#F4A833" colors={['#F4A833']} />}
+          onEndReached={fetchMoreListings}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={loadingMore ? <ActivityIndicator style={{ marginVertical: 16 }} color="#F4A833" /> : null}
         />
       )}
     </View>

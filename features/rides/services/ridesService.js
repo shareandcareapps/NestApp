@@ -5,6 +5,13 @@
 
 import { supabase } from '../../../core/database/index';
 
+export const PAGE_SIZE = 30;
+
+// Strip ilike/filter metacharacters from user-typed search terms
+function sanitizeSearchTerm(q) {
+  return String(q || '').replace(/[,()%_\\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+}
+
 // Attach the poster profile (driver for offers, requester for requests) to each
 // ride in one batched query — so cards/detail can show who & their rating.
 async function attachPosters(rides) {
@@ -33,15 +40,16 @@ export async function getRidePoster(userId) {
   return data || null;
 }
 
-// ─── Fetch all active rides ────────────────────
+// ─── Fetch active rides (paginated) ────────────
 // tab: null = all, 'offers' = driver offers, 'requests' = rider requests
-export async function getRides(category = null, tab = null, university = null) {
+export async function getRides(category = null, tab = null, university = null, page = 0) {
   let query = supabase
     .from('rides')
     .select('*')
     .eq('is_active', true)
     .gte('ride_date', new Date().toISOString())
-    .order('ride_date', { ascending: true });
+    .order('ride_date', { ascending: true })
+    .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
 
   if (tab === 'offers') query = query.eq('ride_type', 'offer');
   else if (tab === 'requests') query = query.eq('ride_type', 'request');
@@ -111,11 +119,13 @@ export async function searchRides(from, to) {
     .gte('ride_date', new Date().toISOString())
     .order('ride_date', { ascending: true });
 
-  if (from) {
-    query = query.ilike('from_location', `%${from}%`);
+  const safeFrom = sanitizeSearchTerm(from);
+  const safeTo = sanitizeSearchTerm(to);
+  if (safeFrom) {
+    query = query.ilike('from_location', `%${safeFrom}%`);
   }
-  if (to) {
-    query = query.ilike('to_location', `%${to}%`);
+  if (safeTo) {
+    query = query.ilike('to_location', `%${safeTo}%`);
   }
 
   const { data, error } = await query;

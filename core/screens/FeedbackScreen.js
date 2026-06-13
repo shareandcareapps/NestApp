@@ -1,13 +1,11 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, ActivityIndicator, Animated, KeyboardAvoidingView, Platform,
-} from 'react-native';
+  ScrollView, ActivityIndicator, Animated, KeyboardAvoidingView, Platform, Alert,} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import Toast from 'react-native-toast-message';
 import { supabase } from '../database/index';
 import useAppStore from '../store/index';
 import { useTheme } from '../theme/ThemeContext';
@@ -48,7 +46,7 @@ export default function FeedbackScreen({ navigation }) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setDone(true);
     } catch (e) {
-      Toast.show({ type: 'error', text1: 'Could not submit', text2: e?.message || 'Please try again.' });
+      Alert.alert('Could not submit');
     } finally {
       setLoading(false);
     }

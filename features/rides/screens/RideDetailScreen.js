@@ -9,7 +9,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import Toast from 'react-native-toast-message';
 import useAppStore from '../../../core/store/index';
 import { useTheme } from '../../../core/theme/ThemeContext';
 import { deleteRide, getRidePoster } from '../services/ridesService';
@@ -231,32 +230,28 @@ export default function RideDetailScreen({ route, navigation }) {
       const rideTitle = `ride:${ride.from_location} → ${ride.to_location}, ${dateLabel} · ${timeLabel}`;
 
       const conversation = await getOrCreateConversation(
-        user.id, otherUserId, null, rideTitle, ride.ride_date
+        user.id, otherUserId, null, rideTitle, ride.ride_date, ride.id
       );
 
-      navigation.navigate('Messages', {
-        screen: 'Chat',
-        params: {
-          conversation,
-          otherProfile: otherProfileOverride || poster || null,
-          listingTitle: rideTitle,
-          contextType: 'ride',
-          rideContext: {
-            from:     ride.from_location,
-            to:       ride.to_location,
-            date:     dateLabel,
-            time:     timeLabel,
-            seats:    seatTotal,
-            poster:   posterName,
-            rideId:    ride.id,
-            bookingId: bookingId || null,
-            // driverId enables manage/request UI in chat
-            driverId:  isRequest ? null : ride.driver_id,
-          },
+      navigation.navigate('Chat', {
+        conversation,
+        otherProfile: otherProfileOverride || poster || null,
+        listingTitle: rideTitle,
+        contextType: 'ride',
+        rideContext: {
+          from:     ride.from_location,
+          to:       ride.to_location,
+          date:     dateLabel,
+          time:     timeLabel,
+          seats:    seatTotal,
+          poster:   posterName,
+          rideId:    ride.id,
+          bookingId: bookingId || null,
+          driverId:  isRequest ? null : ride.driver_id,
         },
       });
     } catch (err) {
-      Toast.show({ type: 'error', text1: 'Could not open chat', text2: err.message });
+      Alert.alert('Could not open chat');
     } finally { setMsgLoading(false); }
   }
 
@@ -285,17 +280,17 @@ export default function RideDetailScreen({ route, navigation }) {
       await confirmBooking(booking.id, ride.id);
       setBookings(prev => prev.map(b => b.id === booking.id ? { ...b, status: 'confirmed' } : b));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Toast.show({ type: 'success', text1: `${formatDisplayName(booking.riderProfile?.username)} confirmed!` });
+      Alert.alert(`${formatDisplayName(booking.riderProfile?.username)} confirmed!`);
 
       // Send an automated message from the driver so the rider gets notified in chat
       const rideTitle = `ride:${ride.from_location} → ${ride.to_location}, ${dateLabel} · ${timeLabel}`;
-      const conv = await getOrCreateConversation(user.id, booking.rider_id, null, rideTitle, ride.ride_date);
+      const conv = await getOrCreateConversation(user.id, booking.rider_id, null, rideTitle, ride.ride_date, ride.id);
       await sendMessage(
         conv.id, user.id,
         `✅ Your seat is confirmed! See you on ${dateLabel} at ${timeLabel}. Feel free to coordinate pickup details here.`
       );
     } catch (err) {
-      Toast.show({ type: 'error', text1: 'Could not confirm', text2: err.message });
+      Alert.alert('Could not confirm');
     } finally { setConfirmingId(null); }
   }
 
@@ -308,7 +303,7 @@ export default function RideDetailScreen({ route, navigation }) {
       await updateCheckinStatus(myBooking.id, 'on_my_way');
     } catch {
       setCheckedIn(false);
-      Toast.show({ type: 'error', text1: 'Check-in failed — try again' });
+      Alert.alert('Check-in failed — try again');
     }
   }
 
@@ -317,11 +312,10 @@ export default function RideDetailScreen({ route, navigation }) {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try {
-          await deleteRide(ride.id);
-          Toast.show({ type: 'success', text1: 'Ride deleted' });
+          await supabase.from('rides').delete().eq('id', ride.id);
           navigation.goBack();
         } catch {
-          Toast.show({ type: 'error', text1: 'Could not delete ride' });
+          Alert.alert('Could not delete ride');
         }
       }},
     ]);
@@ -347,7 +341,7 @@ export default function RideDetailScreen({ route, navigation }) {
           {isOwner
             ? (
               <TouchableOpacity style={styles.editBtn}
-                onPress={() => navigation.navigate('EditRide', { ride })}>
+                onPress={() => navigation.navigate('EditRide')}>
                 <Ionicons name="create-outline" size={18} color="rgba(255,255,255,0.8)" />
               </TouchableOpacity>
             ) : (

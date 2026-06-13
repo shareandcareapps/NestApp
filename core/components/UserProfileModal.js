@@ -5,7 +5,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import Toast from 'react-native-toast-message';
 import { useTheme } from '../theme/ThemeContext';
 import { getPublicProfile } from '../services/ratingsService';
 import { getTier } from '../services/pointsService';
@@ -110,18 +109,18 @@ export default function UserProfileModal({ visible, userId, onClose, onMessage }
                   .eq('blocker_id', currentUser.id)
                   .eq('blocked_id', userId);
                 setIsBlocked(false);
-                Toast.show({ type: 'info', text1: 'User unblocked' });
+                Alert.alert('User unblocked');
               } else {
                 await supabase.from('blocked_users').insert({
                   blocker_id: currentUser.id,
                   blocked_id: userId,
                 });
                 setIsBlocked(true);
-                Toast.show({ type: 'success', text1: 'User blocked', text2: 'You will no longer see their content.' });
+                Alert.alert('User blocked');
                 onClose();
               }
             } catch (e) {
-              Toast.show({ type: 'error', text1: 'Could not update block', text2: e?.message });
+              Alert.alert('Could not update block', e?.message || 'Please try again.');
             } finally {
               setBlockLoading(false);
             }

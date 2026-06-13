@@ -3,14 +3,13 @@ import React, { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
-  Animated, Dimensions,
+  Animated, Dimensions, Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import Toast from 'react-native-toast-message';
 import { supabase } from '../../database/index';
 import useAppStore from '../../store/index';
 import { fonts, spacing, borderRadius, shadows } from '../../theme/index';
@@ -100,6 +99,7 @@ export default function SignupScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [phone, setPhone] = useState('');
+  const [zipCode, setZipCode] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -113,37 +113,62 @@ export default function SignupScreen({ navigation }) {
 
   async function handleSignup() {
     if (!fullName.trim()) {
-      return Toast.show({ type: 'warning', text1: 'Name required', text2: 'Please enter your full name.' });
+      return Alert.alert('Name required', 'Please enter your full name.');
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      return Toast.show({ type: 'error', text1: 'Invalid email', text2: 'Please enter a valid email address.' });
+      return Alert.alert('Invalid email', 'Please enter a valid email address.');
     }
     if (password.length < 8) {
-      return Toast.show({ type: 'warning', text1: 'Password too short', text2: 'Use at least 8 characters.' });
+      return Alert.alert('Password too short', 'Use at least 8 characters.');
     }
     if (password !== confirmPassword) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      return Toast.show({ type: 'error', text1: 'Passwords don\'t match', text2: 'Please re-enter your password.' });
+      return Alert.alert("Passwords don't match", 'Please re-enter your password.');
+    }
+    const zip = zipCode.trim().replace(/\D/g, '');
+    if (!zip || zip.length !== 5) {
+      return Alert.alert('Zip code required', 'Enter your 5-digit zip code.');
     }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
-    const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
-    if (error) {
+
+    // Check service area before creating the account
+    const { data: isServed, error: areaError } = await supabase.rpc('check_service_area', { p_zip: zip });
+    if (areaError || !isServed) {
       setLoading(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      return Toast.show({ type: 'error', text1: 'Signup failed', text2: error.message });
-    }
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .insert({ id: data.user.id, full_name: fullName.trim(), phone, city: 'St. Louis', state: 'Missouri', is_verified: false });
-    setLoading(false);
-    if (profileError) {
-      Toast.show({ type: 'warning', text1: 'Almost there!', text2: 'Account created but profile setup failed.' });
+      Alert.alert(
+        'Not available in your area yet',
+        'NestApp is currently live in the St. Louis, MO area. We\'re expanding soon — check back!',
+        [{ text: 'Got it', style: 'default' }]
+      );
       return;
     }
+
+    // The profile row is created server-side by the handle_new_user trigger —
+    // full_name, phone, and zip_code travel via user metadata.
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { data: { full_name: fullName.trim(), phone: phone.trim() || null, zip_code: zip } },
+    });
+    setLoading(false);
+    if (error) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return Alert.alert('Signup failed', error.message);
+    }
+
+    if (!data.session) {
+      // Email confirmation is enabled — no session until the link is clicked
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Check your email 📬', 'Confirm your address, then sign in.');
+      navigation.navigate('Login');
+      return;
+    }
+
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Toast.show({ type: 'success', text1: 'Welcome to NestApp! 🎉', text2: 'Your community awaits.' });
+    Alert.alert('Welcome to NestApp! 🎉', 'Your community awaits.');
     setUser(data.user);
     setSession(data.session);
   }
@@ -193,6 +218,7 @@ export default function SignupScreen({ navigation }) {
               <InputField label="Full Name" value={fullName} onChangeText={setFullName} placeholder="Your full name" icon="person-outline" />
               <InputField label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" icon="mail-outline" />
               <InputField label="Phone" value={phone} onChangeText={setPhone} placeholder="+1 (555) 000-0000" keyboardType="phone-pad" icon="call-outline" optional />
+              <InputField label="Zip Code" value={zipCode} onChangeText={setZipCode} placeholder="63101" keyboardType="number-pad" icon="location-outline" maxLength={5} />
               <InputField
                 label="Password"
                 value={password}

@@ -2,13 +2,11 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, ActivityIndicator, Keyboard, Animated,
-} from 'react-native';
+  ScrollView, ActivityIndicator, Keyboard, Animated, Alert,} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import Toast from 'react-native-toast-message';
 import AppModal from '../../../core/components/AppModal';
 import { updateRide } from '../services/ridesService';
 import { useTheme } from '../../../core/theme/ThemeContext';
@@ -108,10 +106,10 @@ export default function EditRideScreen({ route, navigation }) {
         notes:           finalNotes,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Toast.show({ type: 'success', text1: 'Ride updated! ✅', text2: 'Your changes are now live.' });
+      Alert.alert('Ride updated! ✅', 'Your changes are now live.');
       navigation.goBack();
     } catch (err) {
-      Toast.show({ type: 'error', text1: 'Could Not Save', text2: 'Something went wrong. Please try again.' });
+      Alert.alert('Could Not Save', 'Something went wrong. Please try again.');
     } finally { setLoading(false); }
   }
 

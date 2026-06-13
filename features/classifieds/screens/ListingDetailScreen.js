@@ -9,7 +9,6 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import Toast from 'react-native-toast-message';
 import { getProfile, deleteListing, setListingStatus, setListingStock } from '../services/listingsService';
 import { getOrCreateConversation, isUserActive } from '../../messages/services/messagesService';
 import useAppStore from '../../../core/store/index';
@@ -97,6 +96,8 @@ export default function ListingDetailScreen({ route, navigation }) {
         otherProfile: poster || { id: listing.user_id, username: 'Community Member' },
         listingTitle: listing.title,
         contextType: 'listing',
+        sourceScreen: 'ListingDetail',
+        sourceParams: { listing },
       });
     } catch (error) {
       Alert.alert('Could not open chat', error?.message || 'Please try again.');
@@ -107,9 +108,9 @@ export default function ListingDetailScreen({ route, navigation }) {
     try {
       await setListingStatus(listing.id, 'archived');
       setStatus('archived');
-      Toast.show({ type: 'success', text1: 'Archived', text2: 'Listing moved to your archive.' });
+      Alert.alert('Archived', 'Listing moved to your archive.');
     } catch (e) {
-      Toast.show({ type: 'error', text1: 'Error', text2: e?.message || 'Could not archive.' });
+      Alert.alert('Error', e?.message || 'Could not relist.');
     }
   }
 
@@ -117,9 +118,9 @@ export default function ListingDetailScreen({ route, navigation }) {
     try {
       await setListingStatus(listing.id, 'active');
       setStatus('active');
-      Toast.show({ type: 'success', text1: 'Relisted!', text2: 'Your listing is live again.' });
+      Alert.alert('Relisted!', 'Your listing is live again.');
     } catch (e) {
-      Toast.show({ type: 'error', text1: 'Error', text2: e?.message || 'Could not relist.' });
+      Alert.alert('Error', e?.message || 'Could not update stock status.');
     }
   }
 
@@ -129,15 +130,9 @@ export default function ListingDetailScreen({ route, navigation }) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       await setListingStock(listing.id, goingOut);
       setStatus(goingOut ? 'out_of_stock' : 'active');
-      Toast.show({
-        type: 'success',
-        text1: goingOut ? 'Marked out of stock' : 'Back in stock!',
-        text2: goingOut
-          ? 'Hidden from the top of search. Auto-removed after 30 days if not restocked.'
-          : 'Your listing is live again for another 60 days.',
-      });
+      Alert.alert(goingOut ? 'Marked out of stock' : 'Back in stock!', goingOut ? 'Hidden from the top of search. Auto-removed after 30 days if not restocked.' : 'Your listing is live again for another 60 days.');
     } catch (e) {
-      Toast.show({ type: 'error', text1: 'Error', text2: e?.message || 'Could not update stock status.' });
+      Alert.alert('Error', e?.message || 'Could not update stock status.');
     }
   }
 
@@ -147,10 +142,10 @@ export default function ListingDetailScreen({ route, navigation }) {
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try {
           await deleteListing(listing.id);
-          Toast.show({ type: 'success', text1: 'Deleted', text2: 'Your listing has been removed.' });
+          Alert.alert('Deleted');
           navigation.goBack();
         } catch {
-          Toast.show({ type: 'error', text1: 'Error', text2: 'Could not delete. Try again.' });
+          Alert.alert('Error', 'Could not delete. Try again.');
         }
       }},
     ]);
@@ -171,7 +166,7 @@ export default function ListingDetailScreen({ route, navigation }) {
           const url = `mailto:support@shareandcareapps.com?subject=${subject}&body=${body}`;
           const ok = await Linking.canOpenURL(url);
           if (ok) Linking.openURL(url);
-          else Toast.show({ type: 'info', text1: 'Email us to report', text2: 'support@shareandcareapps.com' });
+          else Alert.alert('Email us to report', 'support@shareandcareapps.com');
         }},
       ],
     );
@@ -395,7 +390,7 @@ export default function ListingDetailScreen({ route, navigation }) {
                     </LinearGradient>
                   </TouchableOpacity>
                   <View style={styles.ownerRow}>
-                    <TouchableOpacity onPress={() => navigation.navigate('EditListing', { listing })} style={[styles.ownerSecBtn, { backgroundColor: '#0099FF15', borderColor: '#0099FF' }]}>
+                    <TouchableOpacity onPress={() => navigation.navigate('EditListing')} style={[styles.ownerSecBtn, { backgroundColor: '#0099FF15', borderColor: '#0099FF' }]}>
                       <Ionicons name="create-outline" size={16} color="#0099FF" />
                       <Text style={[styles.ownerSecBtnText, { color: '#0099FF' }]}>Edit</Text>
                     </TouchableOpacity>

@@ -12,12 +12,10 @@
 import React, { useState } from 'react';
 import {
   Modal, View, Text, StyleSheet, TouchableOpacity,
-  TextInput, ActivityIndicator, Pressable, ScrollView,
-} from 'react-native';
+  TextInput, ActivityIndicator, Pressable, ScrollView, Alert,} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import Toast from 'react-native-toast-message';
 import { supabase } from '../database/index';
 import useAppStore from '../store/index';
 import { useTheme } from '../theme/ThemeContext';
@@ -57,7 +55,7 @@ export default function ReportModal({ visible, onClose, reportedUserId, listingI
 
   async function handleSubmit() {
     if (!selectedReason) {
-      Toast.show({ type: 'warning', text1: 'Select a reason' });
+      Alert.alert('Select a reason');
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -75,7 +73,7 @@ export default function ReportModal({ visible, onClose, reportedUserId, listingI
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setSubmitted(true);
     } catch (e) {
-      Toast.show({ type: 'error', text1: 'Report failed', text2: e?.message || 'Please try again.' });
+      Alert.alert('Report failed', e?.message || 'Please try again.');
     } finally {
       setLoading(false);
     }

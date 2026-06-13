@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity,
   KeyboardAvoidingView, Platform, ActivityIndicator, Modal, Image,
-  Linking, Alert, Pressable, Animated,
+  Linking, Alert, Pressable, Animated, BackHandler,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -350,7 +350,7 @@ function ActionMenu({ visible, message, isMe, onClose, onReact, onCopy, onDelete
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function ChatScreen({ route, navigation }) {
-  const { conversation, otherProfile, listingTitle, contextType, rideContext: rawRideContext } = route.params;
+  const { conversation, otherProfile, listingTitle, contextType, rideContext: rawRideContext, sourceScreen, sourceParams } = route.params;
   const productCtx = listingTitle ?? conversation?.listing_title ?? null;
 
   const rideContext = rawRideContext ? (() => {
@@ -383,9 +383,10 @@ export default function ChatScreen({ route, navigation }) {
   const [resolvedRideContext,  setResolvedRideContext]  = useState(rideContext);
   const [bookingStatus,        setBookingStatus]        = useState(null); // null | 'requesting' | 'pending' | 'confirmed'
   const [driverBookingStatus,  setDriverBookingStatus]  = useState(null); // driver's view: null | 'pending' | 'confirmed' | 'cancelled'
-  const pendingRef  = useRef('');
-  const msgIdsRef   = useRef(new Set());
-  const voiceTimer  = useRef(null);
+  const pendingRef    = useRef('');
+  const msgIdsRef     = useRef(new Set());
+  const voiceTimer    = useRef(null);
+  const channelSuffix = useRef(`${Date.now()}-${Math.random()}`).current;
 
   const user       = useAppStore(s => s.user);
   const clearUnread = useAppStore(s => s.clearUnreadConversation);
@@ -396,6 +397,15 @@ export default function ChatScreen({ route, navigation }) {
   const otherName  = displayName(otherProfile?.username);
   const otherInit  = otherName.charAt(0).toUpperCase();
   const otherClr   = avatarColor(otherName);
+
+  // Hide the floating tab bar while this screen is mounted
+  useEffect(() => {
+    const parent = navigation.getParent();
+    if (parent) parent.setOptions({ tabBarStyle: { display: 'none' } });
+    return () => {
+      if (parent) parent.setOptions({ tabBarStyle: undefined });
+    };
+  }, []);
 
   useEffect(() => {
     if (contextType !== 'ride' || !rideContext || (rideContext.seats != null && rideContext.rideId)) return;
@@ -419,7 +429,7 @@ export default function ChatScreen({ route, navigation }) {
   useEffect(() => {
     fetchMsgs();
     markRead();
-    const ch = supabase.channel(`chat:${conversation.id}`)
+    const ch = supabase.channel(`chat:${conversation.id}:${channelSuffix}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversation.id}` }, ({ new: msg }) => {
         setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
         scrollEnd();
@@ -451,6 +461,15 @@ export default function ChatScreen({ route, navigation }) {
 
   useEffect(() => { msgIdsRef.current = new Set(messages.map(m => m.id)); }, [messages]);
 
+  // Android hardware back — go to source screen, not conversations list
+  useEffect(() => {
+    const handler = BackHandler.addEventListener('hardwareBackPress', () => {
+      navigation.goBack();
+      return true;
+    });
+    return () => handler.remove();
+  }, [sourceScreen, sourceParams]);
+
   async function markRead() {
     try { await markMessagesAsRead(conversation.id, user.id); } catch (_) {}
     clearUnread(conversation.id);
@@ -478,7 +497,17 @@ export default function ChatScreen({ route, navigation }) {
       const msg = await sendMessage(conversation.id, user.id, body);
       setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
       scrollEnd();
-    } catch (e) { console.error('send:', e); }
+    } catch (e) {
+      console.error('send:', e);
+      // RLS rejects sends when a block exists between participants or the
+      // sender is suspended — surface it instead of silently dropping the text
+      const blocked = e?.code === '42501' || /row-level security/i.test(e?.message || '');
+      Alert.alert(
+        'Message not sent',
+        blocked ? 'You can\'t message this person right now.' : (e?.message || 'Please try again.')
+      );
+      setText(body); // restore the draft
+    }
     finally { setSending(false); }
   }
 
@@ -500,7 +529,7 @@ export default function ChatScreen({ route, navigation }) {
       const compressedUri = await compressImage(asset.uri);
       const path  = `chat/${conversation.id}_${Date.now()}.jpg`;
       const buf   = await (await fetch(compressedUri)).arrayBuffer();
-      const { error } = await supabase.storage.from('listings').upload(path, buf, { contentType: 'image/jpg', upsert: false });
+      const { error } = await supabase.storage.from('listings').upload(path, buf, { contentType: 'image/jpeg', upsert: false });
       if (error) throw error;
       const { data: u } = supabase.storage.from('listings').getPublicUrl(path);
       await doSend(`[image]:${u.publicUrl}`);

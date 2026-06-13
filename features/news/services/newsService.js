@@ -5,12 +5,15 @@
 
 import { supabase } from '../../../core/database/index';
 
-// ─── Fetch all news ────────────────────────────
-export async function getNews(category = null) {
+export const PAGE_SIZE = 30;
+
+// ─── Fetch news (paginated) ────────────────────
+export async function getNews(category = null, page = 0) {
   let query = supabase
     .from('news')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
 
   if (category) {
     query = query.eq('category', category);

@@ -1,3 +1,13 @@
+// core/services/pointsService.js
+// Points are awarded SERVER-SIDE ONLY (SECURITY DEFINER triggers in
+// supabase/migrations/001_security_hardening.sql):
+//   - post_listing / first_listing  → trigger on listings insert
+//   - share_ride                    → trigger on rides insert
+//   - sale_verified                 → trigger on sale_verifications update
+//   - received_5star                → trigger on ratings insert
+// The client only READS points. profiles.points is a protected column —
+// direct client writes are reverted by trg_protect_profile_columns.
+
 import { supabase } from '../database/index';
 import useAppStore from '../store/index';
 
@@ -24,31 +34,6 @@ export function getTier(points = 0) {
   return TIERS[0];
 }
 
-export async function awardPoints(userId, action, referenceId = null) {
-  const points = POINT_VALUES[action];
-  if (!points) return;
-
-  const { error: txErr } = await supabase
-    .from('point_transactions')
-    .insert({ user_id: userId, points, action, reference_id: referenceId });
-  if (txErr) { console.error('point_transactions insert:', txErr); return; }
-
-  const { error: updateErr } = await supabase.rpc('increment_points', {
-    uid: userId,
-    amount: points,
-  });
-  if (updateErr) {
-    const { data } = await supabase.from('profiles').select('points').eq('id', userId).single();
-    await supabase.from('profiles').update({ points: (data?.points || 0) + points }).eq('id', userId);
-  }
-
-  // Update store instantly if awarding to the current user
-  const store = useAppStore.getState();
-  if (store.user?.id === userId) {
-    store.setProfilePoints((store.profilePoints ?? 0) + points);
-  }
-}
-
 export async function getUserPoints(userId) {
   const { data } = await supabase
     .from('profiles')
@@ -56,4 +41,14 @@ export async function getUserPoints(userId) {
     .eq('id', userId)
     .maybeSingle();
   return data?.points || 0;
+}
+
+// Re-read the current user's points after an action that earns them
+// (the DB trigger has already credited the account by the time this runs).
+export async function refreshMyPoints(userId) {
+  if (!userId) return 0;
+  const points = await getUserPoints(userId);
+  const store = useAppStore.getState();
+  if (store.user?.id === userId) store.setProfilePoints(points);
+  return points;
 }

@@ -1,4 +1,10 @@
 -- ═══════════════════════════════════════════════════════════════════════════
+-- ⚠️ DEPRECATED — DO NOT RE-RUN ⚠️
+-- Superseded by supabase/migrations/001_security_hardening.sql, which covers
+-- everything here plus full RLS, fixes the trigger-name bug in section 4
+-- (re-running this file double-awards listing points), and moves points to
+-- point_transactions. Kept for historical reference only.
+-- ═══════════════════════════════════════════════════════════════════════════
 -- NestApp Safety & Moderation — Run once in Supabase SQL Editor
 -- ═══════════════════════════════════════════════════════════════════════════
 

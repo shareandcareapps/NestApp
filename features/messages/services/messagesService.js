@@ -70,29 +70,26 @@ export async function unpersistedDeletedConversation(userId, conversationId) {
 // ─── Get or create conversation ───────────────
 // Per-listing threading (Facebook Marketplace model): a conversation is scoped
 // to a listing. The same two people can have separate threads per item.
-// listingId === null is used for non-listing chats (e.g. rides, direct).
-export async function getOrCreateConversation(userId, otherUserId, listingId = null, listingTitle = null, contextDate = null) {
-  let query = supabase
-    .from('conversations')
-    .select('*')
-    .or(
-      `and(participant_1.eq.${userId},participant_2.eq.${otherUserId}),and(participant_1.eq.${otherUserId},participant_2.eq.${userId})`
-    );
+// listingId === null is used for non-listing chats (rides, direct). Ride chats
+// pass rideId so retention can key off the actual ride instead of title text.
+export async function getOrCreateConversation(userId, otherUserId, listingId = null, listingTitle = null, contextDate = null, rideId = null) {
+  const type = listingId ? 'listing' : (rideId || (listingTitle || '').includes('→')) ? 'ride' : 'direct';
 
-  // Scope to the listing thread. For null-listing threads (ride fallback), also
-  // scope by listing_title so each ride gets its own separate conversation.
-  if (listingId) {
-    query = query.eq('listing_id', listingId);
-  } else if (listingTitle) {
-    query = query.is('listing_id', null).eq('listing_title', listingTitle);
-  } else {
-    query = query.is('listing_id', null).is('listing_title', null);
+  function exactQuery() {
+    let q = supabase
+      .from('conversations')
+      .select('*')
+      .or(
+        `and(participant_1.eq.${userId},participant_2.eq.${otherUserId}),and(participant_1.eq.${otherUserId},participant_2.eq.${userId})`
+      );
+    if (listingId) q = q.eq('listing_id', listingId);
+    else if (listingTitle) q = q.is('listing_id', null).eq('listing_title', listingTitle);
+    else q = q.is('listing_id', null).is('listing_title', null);
+    return q.order('created_at', { ascending: true }).limit(1);
   }
 
   // .limit(1) instead of .maybeSingle() — never throws if duplicates exist
-  const { data: rows, error: selErr } = await query
-    .order('created_at', { ascending: true })
-    .limit(1);
+  const { data: rows, error: selErr } = await exactQuery();
   if (selErr) throw selErr;
   if (rows && rows.length > 0) return rows[0];
 
@@ -104,53 +101,19 @@ export async function getOrCreateConversation(userId, otherUserId, listingId = n
       listing_id: listingId,
       listing_title: listingTitle,
       context_date: contextDate || null,
+      type,
+      ride_id: rideId,
     })
     .select()
     .single();
 
   if (error) {
-    // Unique-violation: the DB constraint blocked the INSERT because a row already exists.
-    // This happens when the constraint doesn't yet include listing_title (old schema).
-    // Strategy: try the exact-match query first; if that returns nothing (the conflicting
-    // row has a different listing_title), upsert a new row using listing_title as the
-    // discriminator by falling back to the broadest possible fetch.
+    // Unique violation: another device/request created the thread between our
+    // SELECT and INSERT — fetch and return it. (The DB index now includes
+    // listing_title, so this is a plain race, never a different thread.)
     if (error.code === '23505') {
-      const pairFilter = `and(participant_1.eq.${userId},participant_2.eq.${otherUserId}),and(participant_1.eq.${otherUserId},participant_2.eq.${userId})`;
-
-      // Pass 1: exact match (works after the SQL migration lands)
-      let exactQ = supabase.from('conversations').select('*').or(pairFilter);
-      if (listingId) {
-        exactQ = exactQ.eq('listing_id', listingId);
-      } else if (listingTitle) {
-        exactQ = exactQ.is('listing_id', null).eq('listing_title', listingTitle);
-      } else {
-        exactQ = exactQ.is('listing_id', null).is('listing_title', null);
-      }
-      const { data: exact } = await exactQ.order('created_at', { ascending: true }).limit(1);
+      const { data: exact } = await exactQuery();
       if (exact && exact.length > 0) return exact[0];
-
-      // Pass 2: the old constraint didn't include listing_title — the conflicting row has
-      // a different listing_title. Find that row and update it so this ride gets its thread.
-      const { data: any } = await supabase
-        .from('conversations')
-        .select('*')
-        .or(pairFilter)
-        .is('listing_id', null)
-        .order('created_at', { ascending: true })
-        .limit(1);
-      if (any && any.length > 0) {
-        // Update listing_title so the thread now belongs to this ride
-        await supabase
-          .from('conversations')
-          .update({ listing_title: listingTitle, context_date: contextDate || null })
-          .eq('id', any[0].id);
-        return { ...any[0], listing_title: listingTitle };
-      }
-    }
-    // Foreign-key violation: listing_id references listings table but this ID is a ride.
-    // Fall back to a null-scoped thread keyed by listing_title so ride chats are isolated.
-    if (error.code === '23503' && listingId) {
-      return getOrCreateConversation(userId, otherUserId, null, listingTitle, contextDate);
     }
     throw error;
   }
@@ -215,41 +178,50 @@ export async function getConversations(userId) {
   if (error) throw error;
   if (!data || data.length === 0) return [];
 
-  // Fetch other user's profile + last message sender + listing image for each conversation.
-  const enriched = await Promise.all(
-    data.map(async (conv) => {
-      const otherUserId = conv.participant_1 === userId
-        ? conv.participant_2
-        : conv.participant_1;
+  // Enrich with 3 batched queries total (was 2-3 queries PER conversation):
+  // other-participant profiles, last-message senders, and listing images.
+  const otherIds = [...new Set(
+    data.map(c => (c.participant_1 === userId ? c.participant_2 : c.participant_1)).filter(Boolean)
+  )];
+  const convIds = data.map(c => c.id);
+  const listingIds = [...new Set(data.map(c => c.listing_id).filter(Boolean))];
 
-      const queries = [
-        supabase.from('profiles').select('id, username, avatar_url').eq('id', otherUserId).maybeSingle(),
-        supabase.from('messages').select('sender_id').eq('conversation_id', conv.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-      ];
+  const [profilesRes, messagesRes, listingsRes] = await Promise.all([
+    otherIds.length
+      ? supabase.from('profiles').select('id, username, avatar_url').in('id', otherIds)
+      : Promise.resolve({ data: [] }),
+    supabase
+      .from('messages')
+      .select('conversation_id, sender_id, created_at')
+      .in('conversation_id', convIds)
+      .order('created_at', { ascending: false }),
+    listingIds.length
+      ? supabase.from('listings').select('id, images').in('id', listingIds)
+      : Promise.resolve({ data: [] }),
+  ]);
 
-      // For classifieds (listing_id is a real listing FK), fetch the first photo from the images array
-      if (conv.listing_id) {
-        queries.push(
-          supabase.from('listings').select('images').eq('id', conv.listing_id).maybeSingle()
-        );
-      }
+  const profileMap = {};
+  (profilesRes.data || []).forEach(p => { profileMap[p.id] = p; });
 
-      const results = await Promise.all(queries);
-      const profile    = results[0]?.data;
-      const lastMsg    = results[1]?.data;
-      const listing    = conv.listing_id ? results[2]?.data : null;
-      const listingImg = listing?.images?.[0] || null;
+  // First row per conversation = latest message (rows are sorted desc)
+  const lastSenderMap = {};
+  (messagesRes.data || []).forEach(m => {
+    if (!(m.conversation_id in lastSenderMap)) lastSenderMap[m.conversation_id] = m.sender_id;
+  });
 
-      return {
-        ...conv,
-        otherProfile:  profile,
-        lastSenderId:  lastMsg?.sender_id || null,
-        listingTitle:  conv.listing_title || null,
-        listingImage:  listingImg,
-      };
-    })
-  );
-  return enriched;
+  const listingImgMap = {};
+  (listingsRes.data || []).forEach(l => { listingImgMap[l.id] = l.images?.[0] || null; });
+
+  return data.map(conv => {
+    const otherUserId = conv.participant_1 === userId ? conv.participant_2 : conv.participant_1;
+    return {
+      ...conv,
+      otherProfile:  profileMap[otherUserId] || null,
+      lastSenderId:  lastSenderMap[conv.id] || null,
+      listingTitle:  conv.listing_title || null,
+      listingImage:  conv.listing_id ? (listingImgMap[conv.listing_id] || null) : null,
+    };
+  });
 }
 
 // ─── Get messages in conversation ─────────────

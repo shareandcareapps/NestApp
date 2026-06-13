@@ -9,7 +9,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import Toast from 'react-native-toast-message';
 import { compressImage } from '../../../core/utils/imageUtils';
 import { updateListing } from '../services/listingsService';
 import useAppStore from '../../../core/store/index';
@@ -210,17 +209,17 @@ export default function EditListingScreen({ route, navigation }) {
   const [foodAttested, setFoodAttested] = useState(!!meta.attested);
 
   async function pickImage() {
-    if (images.length >= 4) { Toast.show({ type: 'warning', text1: 'Max 4 photos' }); return; }
+    if (images.length >= 4) { Alert.alert('Max 4 photos'); return; }
     Alert.alert('Add Photo', 'Choose a source', [
       { text: '📷 Camera', onPress: async () => {
         const p = await ImagePicker.requestCameraPermissionsAsync();
-        if (!p.granted) { Toast.show({ type: 'error', text1: 'Permission needed' }); return; }
+        if (!p.granted) { Alert.alert('Permission needed'); return; }
         const r = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
         if (!r.canceled) await uploadImage(r.assets[0]);
       }},
       { text: '🖼️ Photo Library', onPress: async () => {
         const p = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!p.granted) { Toast.show({ type: 'error', text1: 'Permission needed' }); return; }
+        if (!p.granted) { Alert.alert('Permission needed'); return; }
         const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
         if (!r.canceled) await uploadImage(r.assets[0]);
       }},
@@ -238,14 +237,14 @@ export default function EditListingScreen({ route, navigation }) {
       const blob = await response.blob();
       const arrayBuffer = await new Response(blob).arrayBuffer();
       setUploadProgress(60);
-      const { error } = await supabase.storage.from('listings').upload(fileName, arrayBuffer, { contentType: 'image/jpg' });
+      const { error } = await supabase.storage.from('listings').upload(fileName, arrayBuffer, { contentType: 'image/jpeg' });
       if (error) throw error;
       setUploadProgress(90);
       const { data: urlData } = supabase.storage.from('listings').getPublicUrl(fileName);
       setImages(prev => [...prev, urlData.publicUrl]);
       setUploadProgress(100);
     } catch (error) {
-      Toast.show({ type: 'error', text1: 'Upload failed', text2: error.message });
+      Alert.alert('Upload failed');
     } finally { setUploading(false); setUploadProgress(0); }
   }
 
@@ -259,11 +258,11 @@ export default function EditListingScreen({ route, navigation }) {
   }
 
   function validate() {
-    if (category === 'accommodation' && !acTitle) { Toast.show({ type: 'warning', text1: 'Add a title' }); return false; }
-    if (category === 'jobs' && (!jobRole || !jobCompany)) { Toast.show({ type: 'warning', text1: 'Add job role and company' }); return false; }
-    if (category === 'buysell' && !bsProductName) { Toast.show({ type: 'warning', text1: 'Add product name' }); return false; }
-    if (category === 'food' && !foodTitle) { Toast.show({ type: 'warning', text1: 'Add a title' }); return false; }
-    if (category === 'food' && !foodAttested) { Toast.show({ type: 'warning', text1: 'Confirmation required', text2: 'Please confirm the food responsibility agreement to save.' }); return false; }
+    if (category === 'accommodation' && !acTitle) { Alert.alert('Add a title'); return false; }
+    if (category === 'jobs' && (!jobRole || !jobCompany)) { Alert.alert('Add job role and company'); return false; }
+    if (category === 'buysell' && !bsProductName) { Alert.alert('Add product name'); return false; }
+    if (category === 'food' && !foodTitle) { Alert.alert('Add a title'); return false; }
+    if (category === 'food' && !foodAttested) { Alert.alert('Confirmation required'); return false; }
     return true;
   }
 
@@ -274,10 +273,10 @@ export default function EditListingScreen({ route, navigation }) {
     try {
       await updateListing(listing.id, buildUpdateData());
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Toast.show({ type: 'success', text1: 'Listing updated! ✅', text2: 'Your changes are now live.' });
+      Alert.alert('Listing updated! ✅', 'Your changes are now live.');
       navigation.goBack();
     } catch (error) {
-      Toast.show({ type: 'error', text1: 'Update failed', text2: error?.message || 'Please try again.' });
+      Alert.alert('Update failed');
     } finally { setLoading(false); }
   }
 

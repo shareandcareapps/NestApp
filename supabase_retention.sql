@@ -1,4 +1,10 @@
 -- ═══════════════════════════════════════════════════════════════════════════
+-- ⚠️ DEPRECATED — DO NOT RE-RUN ⚠️
+-- Superseded by supabase/migrations/002_conversations_and_retention.sql.
+-- The cron jobs here identified ride chats by "title contains →" and deleted
+-- them 7 days after creation (could wipe active chats). The migration
+-- unschedules these jobs and replaces them with type/ride_id-based cleanup.
+-- ═══════════════════════════════════════════════════════════════════════════
 -- NestApp Data Retention — Run this entire script once in Supabase SQL Editor
 -- ═══════════════════════════════════════════════════════════════════════════
 

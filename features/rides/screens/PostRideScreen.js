@@ -2,18 +2,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, ActivityIndicator, Keyboard, Image, Animated,
-} from 'react-native';
+  ScrollView, ActivityIndicator, Keyboard, Image, Animated, Alert,} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import Toast from 'react-native-toast-message';
 import AppModal from '../../../core/components/AppModal';
 import AgeGateModal from '../../../core/components/AgeGateModal';
 import { createRide } from '../services/ridesService';
 import useAppStore from '../../../core/store/index';
-import { awardPoints } from '../../../core/services/pointsService';
+import { refreshMyPoints } from '../../../core/services/pointsService';
 import { DatePicker, TimePicker } from '../../../core/components/DateTimePicker';
 import { useTheme } from '../../../core/theme/ThemeContext';
 import { encodeLongRideNotes, LUGGAGE_OPTIONS, PASSENGER_BAGS_OPTIONS } from '../utils/longRideUtils';
@@ -227,7 +225,8 @@ export default function PostRideScreen({ navigation }) {
         notes:           finalNotes,
         is_active:       true,
       });
-      await awardPoints(user.id, 'share_ride');
+      // Points awarded by the DB trigger on ride insert — re-read the total
+      await refreshMyPoints(user.id);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setModal({
         visible: true,
@@ -241,7 +240,7 @@ export default function PostRideScreen({ navigation }) {
         onPrimary: () => { setModal({ visible: false }); navigation.goBack(); },
       });
     } catch (err) {
-      Toast.show({ type: 'error', text1: 'Something went wrong', text2: 'Failed to post your ride. Please try again.' });
+      Alert.alert('Something went wrong');
     } finally { setLoading(false); }
   }
 
